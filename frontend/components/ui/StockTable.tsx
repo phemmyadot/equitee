@@ -3,7 +3,8 @@
 import { useState } from 'react';
 import clsx from 'clsx';
 
-export interface ColDef<T> {
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export interface ColDef<T extends Record<string, any>> {
   key:     keyof T | string;
   label:   string;
   right?:  boolean;
@@ -12,13 +13,15 @@ export interface ColDef<T> {
   sortValue?: (row: T) => number | string;
 }
 
-interface StockTableProps<T> {
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+interface StockTableProps<T extends Record<string, any>> {
   rows:  T[];
   cols:  ColDef<T>[];
   maxH?: string;
 }
 
-export default function StockTable<T extends Record<string, unknown>>({
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export default function StockTable<T extends Record<string, any>>({
   rows, cols, maxH = '420px',
 }: StockTableProps<T>) {
   const [sortKey,  setSortKey]  = useState<string | null>(null);
