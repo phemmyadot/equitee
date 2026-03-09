@@ -1,138 +1,246 @@
 """
 NGX Portfolio Analyzer — FastAPI Backend
-========================================
+=========================================
+Data sources:
+  - Portfolio holdings  : portfolio.json  (edit to update positions)
+  - NGX live prices     : doclib.ngxgroup.com REST API  (30-min delayed)
+  - US live prices      : Yahoo Finance query API       (real-time)
+  - USD/NGN FX rate     : open.er-api.com → Google Finance → Wise (fallback chain)
+
 Run:
     uvicorn app:app --reload --port 8000
-Then open:
-    http://localhost:8000
-
-Features:
-  - Live NGX prices scraped from ngxgroup.com (30-min delayed, cached 15min)
-  - Live USD/NGN FX rate from multiple sources (cached 10min)
-  - Portfolio data from Google Sheets
-  - /api/prices  — raw NGX price table
-  - /api/fx      — live exchange rate
-  - /api/data    — full portfolio payload (prices auto-injected)
 """
 
-import os, json, re, time, logging
+import os, json, re, time, logging, ssl, math
+from pathlib import Path
 from dotenv import load_dotenv
+
 from fastapi import FastAPI, HTTPException
 from fastapi.responses import HTMLResponse
 from fastapi.templating import Jinja2Templates
 from fastapi.requests import Request
-import pandas as pd
-import urllib.request
-import urllib.parse
 
-from google.oauth2 import service_account
-from googleapiclient.discovery import build
+import urllib.request, urllib.parse
 
 load_dotenv()
 logging.basicConfig(level=logging.INFO)
 log = logging.getLogger("portfolio")
 
-SPREADSHEET_ID = os.getenv("SPREADSHEET_ID", "1kkZt2s-c1EmDXsoArth5IwwLRwxEEqW9XaoEcnPACpY")
-SCOPES         = ["https://www.googleapis.com/auth/spreadsheets.readonly"]
+# ── Config ────────────────────────────────────────────────────────────────────
+PORTFOLIO_FILE = Path(__file__).parent / "portfolio.json"
+NGX_API_BASE   = "https://doclib.ngxgroup.com/REST/api/statistics/equities/"
+YAHOO_API      = "https://query1.finance.yahoo.com/v8/finance/chart/{ticker}"
+NGX_PRICE_TTL  = 900   # 15 min
+US_PRICE_TTL   = 120   # 2 min  (real-time)
+FX_TTL         = 600   # 10 min
 
-SHEET_NGX      = "NGX_Portfolio"
-SHEET_NGX_SEC  = "NGX Sector Allocation"
-SHEET_US       = "US_Portfolio"
-SHEET_US_SEC   = "US Sector Allocation"
+# ── SSL: skip verification for NGX doclib (broken cert chain on many systems) ─
+_SSL_UNVERIFIED = ssl.create_default_context()
+_SSL_UNVERIFIED.check_hostname = False
+_SSL_UNVERIFIED.verify_mode    = ssl.CERT_NONE
 
-NGX_PRICE_URL  = "https://ngxgroup.com/exchange/data/equities-price-list/"
-NGX_PRICE_TTL  = 900   # cache 15 minutes (data is 30-min delayed anyway)
-FX_TTL         = 600   # cache FX 10 minutes
-
-_price_cache   = {"data": {}, "ts": 0}
-_fx_cache      = {"rate": None, "source": None, "ts": 0}
+# ── Caches ────────────────────────────────────────────────────────────────────
+_ngx_cache = {"data": {}, "ts": 0}
+_us_cache  = {"data": {}, "ts": 0}
+_fx_cache  = {"rate": None, "source": None, "ts": 0}
 
 app       = FastAPI(title="Portfolio Analyzer")
 templates = Jinja2Templates(directory="templates")
 
 
 # ══════════════════════════════════════════════════════════════════════════════
-# Shared HTTP helper
+# HTTP helper
 # ══════════════════════════════════════════════════════════════════════════════
-def _http_get(url, timeout=10):
-    req = urllib.request.Request(url, headers={
-        "User-Agent": (
-            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
-            "AppleWebKit/537.36 (KHTML, like Gecko) "
-            "Chrome/124.0 Safari/537.36"
-        ),
-        "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
-        "Accept-Language": "en-US,en;q=0.5",
-    })
-    with urllib.request.urlopen(req, timeout=timeout) as r:
+def _http_get(url, timeout=10, verify_ssl=True, extra_headers=None):
+    headers = {
+        "User-Agent":      "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
+        "Accept":          "application/json, text/html, */*",
+        "Accept-Language": "en-US,en;q=0.9",
+    }
+    if extra_headers:
+        headers.update(extra_headers)
+    req = urllib.request.Request(url, headers=headers)
+    ctx = _SSL_UNVERIFIED if not verify_ssl else None
+    with urllib.request.urlopen(req, timeout=timeout, context=ctx) as r:
         return r.read().decode("utf-8", errors="ignore")
 
 
 # ══════════════════════════════════════════════════════════════════════════════
-# NGX Price Scraper
+# Portfolio loader
 # ══════════════════════════════════════════════════════════════════════════════
-def _parse_ngx_prices(html: str) -> dict:
-    """
-    Parse the NGX equities price list HTML.
-
-    Each listed security appears as:
-        ?symbol=TICKER&directory=companydirectory...
-        N1234.56
-        -1.23 %
-
-    Returns { "TICKER": {"price": float, "change_pct": float} }
-    """
-    pattern = re.compile(
-        r'\?symbol=([A-Z0-9]+)&directory=companydirectory[^\n]*\n'
-        r'[^\n]*?([0-9][0-9,\.]+)\s*\n'
-        r'\s*([-+]?[0-9]+\.?[0-9]*)\s*%'
-    )
-    prices = {}
-    for m in pattern.finditer(html):
-        ticker  = m.group(1)
-        price   = float(m.group(2).replace(",", ""))
-        chg_pct = float(m.group(3))
-        # Keep first occurrence only (page has equities + bonds sections)
-        if ticker not in prices:
-            prices[ticker] = {"price": price, "change_pct": chg_pct}
-    return prices
+def load_portfolio():
+    with open(PORTFOLIO_FILE) as f:
+        return json.load(f)
 
 
-def get_ngx_prices() -> dict:
-    """
-    Fetch and cache the full NGX price table.
-    Returns dict of { TICKER: {price, change_pct} }
-    """
-    global _price_cache
+# ══════════════════════════════════════════════════════════════════════════════
+# NGX Price API
+# ══════════════════════════════════════════════════════════════════════════════
+def _normalise_ngx(rec):
+    SYMBOL_KEYS = ("SYMBOL","Symbol","symbol","Ticker","TICKER")
+    PRICE_KEYS  = ("PRICE","Price","price","LAST_PRICE","LastPrice","CLOSE_PRICE",
+                   "ClosePrice","CurrentPrice","CURRENT_PRICE")
+    CLOSE_KEYS  = ("CLOSE","Close","close","PREV_CLOSE","PrevClose","PREVIOUS_CLOSE",
+                   "YesterdayPrice","YESTERDAY_PRICE")
+    CHANGE_KEYS = ("CHANGE","Change","change","PRICE_CHANGE","PriceChange")
+    PCT_KEYS    = ("PERCENT_CHANGE","PercentChange","percent_change","PCT_CHANGE",
+                   "ChangePercent","CHANGE_PERCENT","PERC_CHANGE","%CHANGE")
+    HIGH_KEYS   = ("HIGH","High","high","DAY_HIGH","DayHigh")
+    LOW_KEYS    = ("LOW","Low","low","DAY_LOW","DayLow")
+    VOL_KEYS    = ("VOLUME","Volume","volume","TOTAL_VOLUME","TotalVolume",
+                   "QTY_TRADED","TradeVolume")
+    VALUE_KEYS  = ("VALUE","Value","value","TOTAL_VALUE","TotalValue","TRADE_VALUE","ValueTraded")
+
+    def pick(keys):
+        for k in keys:
+            v = rec.get(k)
+            if v is not None and v != "":
+                try: return float(str(v).replace(",",""))
+                except: pass
+        return None
+
+    def pick_str(keys):
+        for k in keys:
+            v = rec.get(k)
+            if v: return str(v).strip()
+        return None
+
+    symbol = pick_str(SYMBOL_KEYS)
+    price  = pick(PRICE_KEYS)
+    if not symbol or price is None:
+        return None
+
+    close  = pick(CLOSE_KEYS)
+    change = pick(CHANGE_KEYS)
+    pct    = pick(PCT_KEYS)
+
+    if change is None and close is not None:
+        change = round(price - close, 4)
+    if pct is None and close and close != 0 and change is not None:
+        pct = round(change / close * 100, 4)
+
+    return {
+        "symbol":     symbol,
+        "price":      price,
+        "close":      close,
+        "change":     change,
+        "change_pct": pct,
+        "high":       pick(HIGH_KEYS),
+        "low":        pick(LOW_KEYS),
+        "volume":     pick(VOL_KEYS),
+        "value":      pick(VALUE_KEYS),
+    }
+
+
+def get_ngx_prices():
+    global _ngx_cache
     now = time.time()
+    if _ngx_cache["data"] and (now - _ngx_cache["ts"]) < NGX_PRICE_TTL:
+        log.info(f"[NGX] cache hit — {len(_ngx_cache['data'])} tickers, {int(now-_ngx_cache['ts'])}s old")
+        return _ngx_cache["data"]
 
-    if _price_cache["data"] and (now - _price_cache["ts"]) < NGX_PRICE_TTL:
-        age = int(now - _price_cache["ts"])
-        log.info(f"[NGX prices] cache hit — {len(_price_cache['data'])} tickers, {age}s old")
-        return _price_cache["data"]
-
-    log.info("[NGX prices] fetching from ngxgroup.com...")
+    log.info("[NGX] fetching from doclib.ngxgroup.com...")
+    prices, page, page_size = {}, 0, 300
     try:
-        html   = _http_get(NGX_PRICE_URL, timeout=12)
-        prices = _parse_ngx_prices(html)
+        while True:
+            url  = f"{NGX_API_BASE}?market=&sector=&orderby=&pageSize={page_size}&pageNo={page}"
+            raw  = _http_get(url, timeout=12, verify_ssl=False,
+                             extra_headers={"Referer": "https://ngxgroup.com/",
+                                            "Origin":  "https://ngxgroup.com"})
+            data = json.loads(raw)
+
+            # Handle multiple response shapes
+            if isinstance(data, list):
+                records = data
+            else:
+                records = next(
+                    (data[k] for k in ("d","data","result","items","equities","Data")
+                     if k in data and isinstance(data[k], list)),
+                    next((v for v in data.values() if isinstance(v, list) and v), [])
+                )
+
+            if not records:
+                break
+            for rec in records:
+                n = _normalise_ngx(rec)
+                if n and n["symbol"] not in prices:
+                    prices[n["symbol"]] = n
+
+            log.info(f"[NGX] page {page}: {len(records)} records")
+            if len(records) < page_size:
+                break
+            page += 1
+
         if not prices:
-            raise ValueError("Parsed 0 prices — HTML structure may have changed")
-        log.info(f"[NGX prices] scraped {len(prices)} tickers successfully")
-        _price_cache = {"data": prices, "ts": now}
+            raise ValueError("0 parseable records returned")
+
+        log.info(f"[NGX] total: {len(prices)} tickers")
+        _ngx_cache = {"data": prices, "ts": now}
         return prices
+
     except Exception as e:
-        log.error(f"[NGX prices] scrape failed: {e}")
-        # Return stale cache if available, else empty
-        if _price_cache["data"]:
-            log.warning("[NGX prices] returning stale cache")
-            return _price_cache["data"]
+        log.error(f"[NGX] fetch failed: {e}")
+        if _ngx_cache["data"]:
+            log.warning("[NGX] returning stale cache")
+            return _ngx_cache["data"]
         return {}
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# US Prices — Yahoo Finance
+# ══════════════════════════════════════════════════════════════════════════════
+def _fetch_yahoo(ticker):
+    try:
+        url  = YAHOO_API.format(ticker=ticker)
+        raw  = _http_get(url, timeout=8, extra_headers={"Accept": "application/json"})
+        meta = json.loads(raw)["chart"]["result"][0]["meta"]
+
+        price = meta.get("regularMarketPrice") or meta.get("currentPrice")
+        close = meta.get("previousClose") or meta.get("chartPreviousClose")
+        if price is None:
+            return None
+
+        change     = round(price - close, 4)  if close                            else None
+        change_pct = round(change/close*100,4) if (close and close!=0 and change is not None) else None
+
+        return {
+            "symbol":     ticker,
+            "price":      float(price),
+            "close":      float(close) if close else None,
+            "change":     change,
+            "change_pct": change_pct,
+            "high":       meta.get("regularMarketDayHigh"),
+            "low":        meta.get("regularMarketDayLow"),
+            "volume":     meta.get("regularMarketVolume"),
+            "currency":   meta.get("currency", "USD"),
+        }
+    except Exception as e:
+        log.warning(f"[Yahoo] {ticker} failed: {e}")
+        return None
+
+
+def get_us_prices(tickers):
+    global _us_cache
+    now   = time.time()
+    stale = [t for t in tickers
+             if t not in _us_cache["data"] or (now - _us_cache["ts"]) > US_PRICE_TTL]
+
+    if stale:
+        log.info(f"[Yahoo] fetching {len(stale)} tickers: {stale}")
+        for t in stale:
+            r = _fetch_yahoo(t)
+            if r:
+                _us_cache["data"][t] = r
+                log.info(f"[Yahoo] {t} → ${r['price']}")
+        _us_cache["ts"] = now
+
+    return _us_cache["data"]
 
 
 # ══════════════════════════════════════════════════════════════════════════════
 # FX Rate — USD/NGN
 # ══════════════════════════════════════════════════════════════════════════════
-def _try_exchangerate_api() -> float | None:
+def _try_er_api():
     try:
         data = json.loads(_http_get("https://open.er-api.com/v6/latest/USD", timeout=6))
         rate = float(data["rates"]["NGN"])
@@ -140,46 +248,38 @@ def _try_exchangerate_api() -> float | None:
         return rate
     except Exception as e:
         log.warning(f"[FX] exchangerate-api failed: {e}")
-        return None
 
-def _try_google_finance() -> float | None:
+def _try_google_finance():
     try:
         q    = urllib.parse.quote("USD to NGN exchange rate")
         html = _http_get(f"https://www.google.com/search?q={q}&hl=en&gl=us", timeout=8)
-        for pat in [
-            r'(\d{1,4}[,.]?\d{2,3}[,.]?\d{0,3})\s*Nigerian Naira',
-            r'1 US Dollar\s*=\s*([\d,]+\.?\d*)\s*Nigerian',
-            r'([\d,]+\.\d+)\s*NGN',
-        ]:
+        for pat in [r'([\d,]+\.?\d*)\s*Nigerian Naira',
+                    r'1 US Dollar\s*=\s*([\d,]+\.?\d*)\s*Nigerian']:
             m = re.search(pat, html, re.IGNORECASE)
             if m:
-                rate = float(m.group(1).replace(",", ""))
+                rate = float(m.group(1).replace(",",""))
                 if 500 < rate < 5000:
-                    log.info(f"[FX] google-finance → {rate}")
+                    log.info(f"[FX] google → {rate}")
                     return rate
-        return None
     except Exception as e:
-        log.warning(f"[FX] google-finance failed: {e}")
-        return None
+        log.warning(f"[FX] google failed: {e}")
 
-def _try_wise() -> float | None:
+def _try_wise():
     try:
         data = json.loads(_http_get("https://wise.com/rates/live?source=USD&target=NGN", timeout=6))
         rate = float(data["value"])
         if 500 < rate < 5000:
             log.info(f"[FX] wise → {rate}")
             return rate
-        return None
     except Exception as e:
         log.warning(f"[FX] wise failed: {e}")
-        return None
 
-def get_usdngn() -> dict:
+def get_usdngn():
     global _fx_cache
     now = time.time()
     if _fx_cache["rate"] and (now - _fx_cache["ts"]) < FX_TTL:
         return _fx_cache
-    for name, fn in [("exchangerate-api", _try_exchangerate_api),
+    for name, fn in [("exchangerate-api", _try_er_api),
                      ("google-finance",   _try_google_finance),
                      ("wise",             _try_wise)]:
         rate = fn()
@@ -187,121 +287,76 @@ def get_usdngn() -> dict:
             _fx_cache = {"rate": rate, "source": name, "ts": now}
             return _fx_cache
     fallback = float(os.getenv("USDNGN", "1580"))
-    log.warning(f"[FX] all sources failed, using fallback {fallback}")
+    log.warning(f"[FX] all sources failed — fallback {fallback}")
     _fx_cache = {"rate": fallback, "source": "fallback (.env)", "ts": now}
     return _fx_cache
 
 
 # ══════════════════════════════════════════════════════════════════════════════
-# Google Sheets helpers
+# Portfolio computation
 # ══════════════════════════════════════════════════════════════════════════════
-def get_service():
-    json_str  = os.getenv("GOOGLE_SERVICE_ACCOUNT_JSON_STR")
-    json_file = os.getenv("GOOGLE_SERVICE_ACCOUNT_JSON")
-    if json_str:
-        creds = service_account.Credentials.from_service_account_info(
-            json.loads(json_str), scopes=SCOPES)
-    elif json_file:
-        creds = service_account.Credentials.from_service_account_file(
-            json_file, scopes=SCOPES)
-    else:
-        raise RuntimeError("No Google credentials found in environment.")
-    return build("sheets", "v4", credentials=creds)
-
-def fetch_sheet(service, name):
-    return (service.spreadsheets().values()
-            .get(spreadsheetId=SPREADSHEET_ID, range=f"'{name}'")
-            .execute().get("values", []))
-
-def _clean(val):
-    if val is None or str(val).strip() == "":
-        return 0.0
+def _safe(v):
+    if v is None: return None
     try:
-        return float(re.sub(r"[^\d.\-]", "", str(val)))
+        return None if (math.isnan(v) or math.isinf(v)) else round(v, 4)
     except:
-        return 0.0
+        return v
 
-def to_df(values, header_row=0):
-    headers = values[header_row]
-    rows    = [r + [""] * (len(headers) - len(r)) for r in values[header_row + 1:]]
-    return pd.DataFrame(rows, columns=headers)
+def build_stocks(holdings, prices, price_source_label):
+    rows = []
+    for h in holdings:
+        ticker     = h["ticker"]
+        shares     = h["shares"]
+        cost_ps    = h["avg_cost"]
+        total_cost = shares * cost_ps
 
-def coerce(df, cols):
-    for c in cols:
-        if c in df.columns:
-            df[c] = df[c].apply(_clean)
-    return df
+        p          = prices.get(ticker, {})
+        price      = p.get("price")
+        equity     = price * shares      if price is not None else None
+        unreal     = equity - total_cost if equity is not None else None
+        ret_pct    = unreal / total_cost * 100 if (unreal is not None and total_cost) else None
 
-NUM_COLS = [
-    "Shares Bought", "Avg Cost", "Current Price",
-    "Sold Units", "Sold Price", "Remaining Shares",
-    "Remaining Cost", "Current Equity",
-    "Realized P/L", "Unrealized P/L", "Total P/L",
-    "% Return (Unrealized)", "Sale Comm",
-    "Cash Received From Sale", "Original Total Cost",
-]
-
-def parse_portfolio(values):
-    hi  = next(i for i, r in enumerate(values) if r and r[0] == "Stock Name")
-    df  = to_df(values, header_row=hi)
-    df  = df[df["Stock Name"].str.strip() != ""].copy()
-    df  = coerce(df, NUM_COLS)
-    df["Return Pct"] = df["% Return (Unrealized)"]
-    df.rename(columns={
-        "Stock Name":          "Stock",
-        "Unrealized P/L":      "Unrealized PL",
-        "Realized P/L":        "Realized PL",
-        "Total P/L":           "Total PL",
-        "Original Total Cost": "Original Cost",
-    }, inplace=True)
-    return df
-
-def parse_sector(values):
-    df = to_df(values, header_row=0)
-    df = coerce(df, ["Equity", "% of Portfolio", "Gain (%)", "Count"])
-    df = df[df["Equity"] > 0].copy()
-    df["Gain Pct"] = df["Gain (%)"]
-    return df
-
-def df_records(df):
-    return df.where(pd.notnull(df), None).to_dict(orient="records")
+        rows.append({
+            "Stock":          h["name"],
+            "Ticker":         ticker,
+            "Sector":         h.get("sector", ""),
+            "Shares":         shares,
+            "Avg Cost":       _safe(cost_ps),
+            "Remaining Cost": _safe(total_cost),
+            "Current Equity": _safe(equity),
+            "Unrealized PL":  _safe(unreal),
+            "Realized PL":    0.0,
+            "Total PL":       _safe(unreal),
+            "Return Pct":     _safe(ret_pct),
+            "Original Cost":  _safe(total_cost),
+            "Live Price":     _safe(price),
+            "Live Change":    _safe(p.get("change")),
+            "Live Change%":   _safe(p.get("change_pct")),
+            "Day High":       _safe(p.get("high")),
+            "Day Low":        _safe(p.get("low")),
+            "Volume":         _safe(p.get("volume")),
+            "Price Source":   price_source_label if price is not None else "no-data",
+        })
+    return rows
 
 
-# ══════════════════════════════════════════════════════════════════════════════
-# Inject live prices into portfolio DataFrame
-# ══════════════════════════════════════════════════════════════════════════════
-def inject_live_prices(df: pd.DataFrame, prices: dict) -> pd.DataFrame:
-    """
-    For each active holding, replace Current Equity / Unrealized PL / Return Pct
-    with values computed from the live scraped price.
-    Adds columns: Live Price, Live Change%, Price Source.
-    """
-    df = df.copy()
-    df["Live Price"]   = None
-    df["Live Change%"] = None
-    df["Price Source"] = "spreadsheet"
-
-    for idx, row in df.iterrows():
-        ticker = str(row.get("Ticker", "")).strip()
-        if ticker in prices:
-            live     = prices[ticker]["price"]
-            shares   = row["Remaining Shares"]
-            cost     = row["Remaining Cost"]
-
-            live_equity    = live * shares
-            live_unreal    = live_equity - cost
-            live_return    = (live_unreal / cost * 100) if cost else 0
-
-            df.at[idx, "Current Price"]  = live
-            df.at[idx, "Current Equity"] = live_equity
-            df.at[idx, "Unrealized PL"]  = live_unreal
-            df.at[idx, "Total PL"]       = live_unreal + row["Realized PL"]
-            df.at[idx, "Return Pct"]     = live_return
-            df.at[idx, "Live Price"]     = live
-            df.at[idx, "Live Change%"]   = prices[ticker]["change_pct"]
-            df.at[idx, "Price Source"]   = "ngx-live"
-
-    return df
+def build_sectors(stocks):
+    sectors = {}
+    for s in stocks:
+        sec  = s["Sector"] or "Other"
+        eq   = s["Current Equity"] or 0
+        cost = s["Remaining Cost"] or 0
+        if sec not in sectors:
+            sectors[sec] = {"Sector": sec, "Equity": 0, "Cost": 0, "Count": 0}
+        sectors[sec]["Equity"] += eq
+        sectors[sec]["Cost"]   += cost
+        sectors[sec]["Count"]  += 1
+    result = []
+    for v in sectors.values():
+        gain_pct = (v["Equity"] - v["Cost"]) / v["Cost"] * 100 if v["Cost"] else 0
+        result.append({"Sector": v["Sector"], "Equity": round(v["Equity"],2),
+                        "Gain Pct": round(gain_pct,4), "Count": v["Count"]})
+    return sorted(result, key=lambda x: -x["Equity"])
 
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -312,25 +367,36 @@ async def index(request: Request):
     return templates.TemplateResponse("index.html", {"request": request})
 
 
-@app.get("/api/prices")
-async def prices_endpoint():
-    """Returns the full NGX price table scraped from ngxgroup.com."""
+@app.get("/.well-known/appspecific/com.chrome.devtools.json")
+async def chrome_devtools():
+    """Suppress Chrome DevTools 404 noise."""
+    return {}
+
+
+@app.get("/api/prices/ngx")
+async def ngx_prices_endpoint():
     try:
-        prices = get_ngx_prices()
-        age    = int(time.time() - _price_cache["ts"])
-        return {
-            "count":   len(prices),
-            "age_sec": age,
-            "source":  NGX_PRICE_URL,
-            "prices":  prices,
-        }
+        p = get_ngx_prices()
+        return {"count": len(p), "age_sec": int(time.time()-_ngx_cache["ts"]),
+                "source": NGX_API_BASE, "prices": p}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/prices/us")
+async def us_prices_endpoint():
+    try:
+        portfolio = load_portfolio()
+        tickers   = [h["ticker"] for h in portfolio["us"]]
+        p         = get_us_prices(tickers)
+        return {"count": len(p), "age_sec": int(time.time()-_us_cache["ts"]),
+                "source": "Yahoo Finance", "prices": p}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
 
 @app.get("/api/fx")
 async def fx_endpoint():
-    """Returns live USD/NGN rate and the source it came from."""
     try:
         return get_usdngn()
     except Exception as e:
@@ -340,103 +406,91 @@ async def fx_endpoint():
 @app.get("/api/data")
 async def get_data():
     try:
-        # ── Fetch everything in parallel-ish ──────────────────────────────
-        fx     = get_usdngn()
-        prices = get_ngx_prices()
-        usdngn = fx["rate"]
+        portfolio  = load_portfolio()
+        fx         = get_usdngn()
+        ngx_prices = get_ngx_prices()
+        us_tickers = [h["ticker"] for h in portfolio["us"]]
+        us_prices  = get_us_prices(us_tickers)
+        usdngn     = fx["rate"]
 
-        service       = get_service()
-        df_ngx        = parse_portfolio(fetch_sheet(service, SHEET_NGX))
-        df_ngx_active = inject_live_prices(
-            df_ngx[df_ngx["Remaining Shares"] > 0].copy(), prices)
-        df_ngx_sold   = df_ngx[(df_ngx["Sold Units"] > 0) &
-                                (df_ngx["Remaining Shares"] == 0)].copy()
+        ngx_stocks = build_stocks(portfolio["ngx"], ngx_prices, "ngx-api")
+        us_stocks  = build_stocks(portfolio["us"],  us_prices,  "yahoo")
 
-        df_ngx_sec    = parse_sector(fetch_sheet(service, SHEET_NGX_SEC))
+        sold = [{"Stock": s["name"], "Ticker": s["ticker"],
+                 "Market": s["market"].upper(), "Realized PL": s["realized_pl"]}
+                for s in portfolio.get("sold", [])]
+        total_realized = sum(s["realized_pl"] for s in portfolio.get("sold", [])
+                             if s.get("market","ngx") == "ngx")
 
-        df_us         = parse_portfolio(fetch_sheet(service, SHEET_US))
-        df_us_active  = df_us[df_us["Remaining Shares"] > 0].copy()
-        df_us_sec     = parse_sector(fetch_sheet(service, SHEET_US_SEC))
+        def ss(rows, key):
+            return sum(r[key] for r in rows if r.get(key) is not None)
 
-        # ── KPIs ──────────────────────────────────────────────────────────
-        ngx_equity   = df_ngx_active["Current Equity"].sum()
-        ngx_cost     = df_ngx_active["Remaining Cost"].sum()
-        ngx_gain     = df_ngx_active["Unrealized PL"].sum()
-        ngx_ret      = (ngx_gain / ngx_cost * 100) if ngx_cost else 0
-        realized_pl  = df_ngx["Realized PL"].sum()
-        total_cost   = df_ngx["Original Cost"].sum()
+        ngx_equity = ss(ngx_stocks, "Current Equity")
+        ngx_cost   = ss(ngx_stocks, "Remaining Cost")
+        ngx_unreal = ss(ngx_stocks, "Unrealized PL")
+        ngx_ret    = (ngx_unreal / ngx_cost * 100) if ngx_cost else 0
 
-        us_equity    = df_us_active["Current Equity"].sum()
-        us_cost      = df_us_active["Remaining Cost"].sum()
-        us_gain      = df_us_active["Unrealized PL"].sum()
-        us_ret       = (us_gain / us_cost * 100) if us_cost else 0
+        us_equity  = ss(us_stocks, "Current Equity")
+        us_cost    = ss(us_stocks, "Remaining Cost")
+        us_unreal  = ss(us_stocks, "Unrealized PL")
+        us_ret     = (us_unreal / us_cost * 100) if us_cost else 0
 
-        ngx_usd      = ngx_equity / usdngn
-        total_usd    = ngx_usd + us_equity
+        ngx_usd    = ngx_equity / usdngn if usdngn else 0
+        total_usd  = ngx_usd + us_equity
 
-        weights      = df_ngx_active["Current Equity"] / ngx_equity
-        hhi          = float((weights ** 2).sum() * 10000)
-
-        # ── Price coverage summary ────────────────────────────────────────
-        live_count  = int((df_ngx_active["Price Source"] == "ngx-live").sum())
-        total_pos   = len(df_ngx_active)
+        hhi = (sum((s["Current Equity"]/ngx_equity)**2
+                   for s in ngx_stocks if s.get("Current Equity")) * 10000
+               if ngx_equity > 0 else 0)
 
         return {
             "meta": {
-                "usdngn":       round(usdngn, 2),
-                "fx_source":    fx["source"],
-                "hhi":          round(hhi, 1),
-                "hhi_label":    "LOW" if hhi < 1000 else ("MODERATE" if hhi < 1800 else "HIGH"),
-                "price_source": "ngxgroup.com (30-min delayed)",
-                "prices_live":  live_count,
-                "prices_total": total_pos,
-                "price_age_sec": int(time.time() - _price_cache["ts"]) if _price_cache["ts"] else None,
+                "usdngn":           round(usdngn, 2),
+                "fx_source":        fx["source"],
+                "hhi":              round(hhi, 1),
+                "hhi_label":        "LOW" if hhi<1000 else ("MODERATE" if hhi<1800 else "HIGH"),
+                "ngx_price_source": "NGX REST API (30-min delayed)",
+                "us_price_source":  "Yahoo Finance",
+                "ngx_prices_live":  sum(1 for s in ngx_stocks if s["Price Source"]=="ngx-api"),
+                "ngx_prices_total": len(ngx_stocks),
+                "us_prices_live":   sum(1 for s in us_stocks  if s["Price Source"]=="yahoo"),
+                "us_prices_total":  len(us_stocks),
+                "ngx_price_age":    int(time.time()-_ngx_cache["ts"]) if _ngx_cache["ts"] else None,
+                "us_price_age":     int(time.time()-_us_cache["ts"])  if _us_cache["ts"]  else None,
             },
             "ngx_kpis": {
                 "equity":      round(ngx_equity, 2),
                 "cost":        round(ngx_cost, 2),
-                "gain":        round(ngx_gain, 2),
+                "gain":        round(ngx_unreal, 2),
                 "return_pct":  round(ngx_ret, 2),
-                "realized_pl": round(realized_pl, 2),
-                "total_cost":  round(total_cost, 2),
-                "positions":   total_pos,
+                "realized_pl": round(total_realized, 2),
+                "total_cost":  round(ngx_cost, 2),
+                "positions":   len(ngx_stocks),
             },
             "us_kpis": {
                 "equity":     round(us_equity, 4),
                 "cost":       round(us_cost, 4),
-                "gain":       round(us_gain, 4),
+                "gain":       round(us_unreal, 4),
                 "return_pct": round(us_ret, 2),
-                "positions":  len(df_us_active),
+                "positions":  len(us_stocks),
             },
             "combined_kpis": {
                 "ngx_usd":   round(ngx_usd, 2),
                 "us_usd":    round(us_equity, 2),
                 "total_usd": round(total_usd, 2),
             },
-            "ngx_stocks": df_records(df_ngx_active[[
-                "Stock", "Ticker", "Sector",
-                "Remaining Cost", "Current Equity",
-                "Unrealized PL", "Realized PL", "Total PL",
-                "Return Pct", "Original Cost",
-                "Live Price", "Live Change%", "Price Source",
-            ]]),
-            "ngx_sold":    df_records(df_ngx_sold[[
-                "Stock", "Ticker", "Sector", "Realized PL", "Original Cost"
-            ]]),
-            "ngx_sectors": df_records(df_ngx_sec[["Sector","Equity","Gain Pct","Count"]]),
-            "us_stocks":   df_records(df_us_active[[
-                "Stock", "Ticker", "Sector",
-                "Remaining Cost", "Current Equity",
-                "Unrealized PL", "Return Pct", "Original Cost",
-            ]]),
-            "us_sectors":  df_records(df_us_sec[["Sector","Equity","Gain Pct","Count"]]),
+            "ngx_stocks":  ngx_stocks,
+            "ngx_sold":    sold,
+            "ngx_sectors": build_sectors(ngx_stocks),
+            "us_stocks":   us_stocks,
+            "us_sectors":  build_sectors(us_stocks),
             "waterfall": {
-                "total_cost":     round(total_cost, 2),
-                "realized_pl":    round(realized_pl, 2),
-                "unrealized_pl":  round(ngx_gain, 2),
+                "total_cost":     round(ngx_cost, 2),
+                "realized_pl":    round(total_realized, 2),
+                "unrealized_pl":  round(ngx_unreal, 2),
                 "current_equity": round(ngx_equity, 2),
             },
         }
+
     except Exception as e:
         log.error(f"/api/data error: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=str(e))
