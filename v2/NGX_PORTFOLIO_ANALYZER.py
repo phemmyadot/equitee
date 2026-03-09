@@ -26,7 +26,7 @@ SHEET_NGX_SEC = "NGX Sector Allocation"
 
 now = datetime.datetime.now()
 formatted_date = now.strftime("%m_%d_%Y")
-OUTPUT_FILE = f'./outputs/NGX_Portfolio_Dashboard_{formatted_date}.png'
+OUTPUT_FILE = f'./v2/outputs/NGX_Portfolio_Dashboard_{formatted_date}.png'
 
 
 # ── Auth ──────────────────────────────────────────────────────────────────────

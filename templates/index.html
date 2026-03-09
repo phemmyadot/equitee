@@ -1,0 +1,1052 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>Portfolio Analyzer</title>
+<link href="https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet"/>
+<script src="https://cdn.plot.ly/plotly-2.27.0.min.js"></script>
+<style>
+  :root {
+    --bg:       #080b14;
+    --surface:  #0f1420;
+    --panel:    #151b2e;
+    --border:   #1e2640;
+    --green:    #00e87a;
+    --red:      #ff3d5a;
+    --gold:     #f5c842;
+    --blue:     #4d8eff;
+    --purple:   #a78bfa;
+    --white:    #e2e8f8;
+    --grey:     #4a5578;
+    --grey2:    #2a3050;
+    --font-mono: 'Space Mono', monospace;
+    --font-body: 'DM Sans', sans-serif;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    background: var(--bg);
+    color: var(--white);
+    font-family: var(--font-body);
+    min-height: 100vh;
+    overflow-x: hidden;
+  }
+
+  /* subtle grid texture */
+  body::before {
+    content: '';
+    position: fixed;
+    inset: 0;
+    background-image:
+      linear-gradient(rgba(77,142,255,0.03) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(77,142,255,0.03) 1px, transparent 1px);
+    background-size: 40px 40px;
+    pointer-events: none;
+    z-index: 0;
+  }
+
+  /* ── Header ── */
+  header {
+    position: sticky;
+    top: 0;
+    z-index: 100;
+    background: rgba(8,11,20,0.92);
+    backdrop-filter: blur(12px);
+    border-bottom: 1px solid var(--border);
+    padding: 0 32px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    height: 60px;
+  }
+
+  .logo {
+    font-family: var(--font-mono);
+    font-size: 13px;
+    font-weight: 700;
+    letter-spacing: 0.15em;
+    color: var(--blue);
+    text-transform: uppercase;
+  }
+  .logo span { color: var(--gold); }
+
+  .header-right {
+    display: flex;
+    align-items: center;
+    gap: 20px;
+  }
+
+  #last-updated {
+    font-size: 11px;
+    color: var(--grey);
+    font-family: var(--font-mono);
+  }
+
+  #refresh-btn {
+    background: transparent;
+    border: 1px solid var(--blue);
+    color: var(--blue);
+    padding: 6px 16px;
+    border-radius: 4px;
+    font-family: var(--font-mono);
+    font-size: 11px;
+    letter-spacing: 0.1em;
+    cursor: pointer;
+    transition: all 0.2s;
+  }
+  #refresh-btn:hover { background: var(--blue); color: var(--bg); }
+  #refresh-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+
+  /* ── Nav tabs ── */
+  nav {
+    display: flex;
+    gap: 0;
+    padding: 0 32px;
+    border-bottom: 1px solid var(--border);
+    background: var(--surface);
+    position: relative;
+    z-index: 10;
+  }
+
+  .tab {
+    padding: 14px 24px;
+    font-size: 12px;
+    font-family: var(--font-mono);
+    letter-spacing: 0.08em;
+    color: var(--grey);
+    cursor: pointer;
+    border-bottom: 2px solid transparent;
+    transition: all 0.2s;
+    white-space: nowrap;
+  }
+  .tab:hover { color: var(--white); }
+  .tab.active { color: var(--blue); border-bottom-color: var(--blue); }
+
+  /* ── Main layout ── */
+  main {
+    position: relative;
+    z-index: 1;
+    padding: 28px 32px;
+    max-width: 1600px;
+    margin: 0 auto;
+  }
+
+  .tab-content { display: none; }
+  .tab-content.active { display: block; }
+
+  /* ── KPI strip ── */
+  .kpi-strip {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+    gap: 12px;
+    margin-bottom: 24px;
+  }
+
+  .kpi-card {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 16px 20px;
+    position: relative;
+    overflow: hidden;
+    animation: fadeUp 0.4s ease both;
+  }
+  .kpi-card::before {
+    content: '';
+    position: absolute;
+    top: 0; left: 0; right: 0;
+    height: 2px;
+  }
+  .kpi-card.green::before  { background: var(--green); }
+  .kpi-card.gold::before   { background: var(--gold); }
+  .kpi-card.blue::before   { background: var(--blue); }
+  .kpi-card.red::before    { background: var(--red); }
+  .kpi-card.purple::before { background: var(--purple); }
+
+  .kpi-label {
+    font-family: var(--font-mono);
+    font-size: 9px;
+    letter-spacing: 0.15em;
+    color: var(--grey);
+    text-transform: uppercase;
+    margin-bottom: 8px;
+  }
+  .kpi-value {
+    font-family: var(--font-mono);
+    font-size: 20px;
+    font-weight: 700;
+    line-height: 1;
+  }
+  .kpi-value.green  { color: var(--green); }
+  .kpi-value.gold   { color: var(--gold); }
+  .kpi-value.blue   { color: var(--blue); }
+  .kpi-value.red    { color: var(--red); }
+  .kpi-value.white  { color: var(--white); }
+  .kpi-sub {
+    font-size: 11px;
+    color: var(--grey);
+    margin-top: 4px;
+  }
+
+  /* ── Chart grids ── */
+  .grid-2 {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 16px;
+    margin-bottom: 16px;
+  }
+  .grid-3 {
+    display: grid;
+    grid-template-columns: 1fr 1fr 1fr;
+    gap: 16px;
+    margin-bottom: 16px;
+  }
+  .grid-2-1 {
+    display: grid;
+    grid-template-columns: 2fr 1fr;
+    gap: 16px;
+    margin-bottom: 16px;
+  }
+  .grid-1-2 {
+    display: grid;
+    grid-template-columns: 1fr 2fr;
+    gap: 16px;
+    margin-bottom: 16px;
+  }
+  .full-row { margin-bottom: 16px; }
+
+  /* ── Chart card ── */
+  .chart-card {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 20px;
+    animation: fadeUp 0.5s ease both;
+  }
+  .chart-title {
+    font-family: var(--font-mono);
+    font-size: 10px;
+    letter-spacing: 0.12em;
+    color: var(--grey);
+    text-transform: uppercase;
+    margin-bottom: 16px;
+  }
+  .chart-title span {
+    color: var(--blue);
+  }
+
+  /* ── Loading / Error ── */
+  #loading-overlay {
+    position: fixed;
+    inset: 0;
+    background: var(--bg);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    z-index: 999;
+    transition: opacity 0.4s;
+  }
+  #loading-overlay.hidden { opacity: 0; pointer-events: none; }
+
+  .spinner {
+    width: 40px; height: 40px;
+    border: 2px solid var(--border);
+    border-top-color: var(--blue);
+    border-radius: 50%;
+    animation: spin 0.8s linear infinite;
+    margin-bottom: 16px;
+  }
+  .loading-text {
+    font-family: var(--font-mono);
+    font-size: 11px;
+    color: var(--grey);
+    letter-spacing: 0.15em;
+  }
+
+  #error-banner {
+    display: none;
+    background: rgba(255,61,90,0.1);
+    border: 1px solid var(--red);
+    color: var(--red);
+    padding: 12px 20px;
+    border-radius: 6px;
+    font-family: var(--font-mono);
+    font-size: 12px;
+    margin-bottom: 20px;
+  }
+
+  /* ── Table ── */
+  .data-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 12px;
+  }
+  .data-table th {
+    font-family: var(--font-mono);
+    font-size: 9px;
+    letter-spacing: 0.1em;
+    color: var(--grey);
+    text-transform: uppercase;
+    padding: 8px 12px;
+    text-align: right;
+    border-bottom: 1px solid var(--border);
+  }
+  .data-table th:first-child { text-align: left; }
+  .data-table td {
+    padding: 8px 12px;
+    text-align: right;
+    border-bottom: 1px solid rgba(30,38,64,0.5);
+    color: var(--white);
+  }
+  .data-table td:first-child { text-align: left; color: var(--grey); }
+  .data-table tr:hover td { background: rgba(77,142,255,0.04); }
+  .pos { color: var(--green); }
+  .neg { color: var(--red); }
+  .sector-dot {
+    display: inline-block;
+    width: 8px; height: 8px;
+    border-radius: 50%;
+    margin-right: 6px;
+  }
+
+  /* ── Gauge ── */
+  .gauge-container {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 10px 0;
+  }
+
+  /* ── Animations ── */
+  @keyframes spin { to { transform: rotate(360deg); } }
+  @keyframes fadeUp {
+    from { opacity: 0; transform: translateY(12px); }
+    to   { opacity: 1; transform: translateY(0); }
+  }
+
+  /* ── Responsive ── */
+  @media (max-width: 1100px) {
+    .grid-2, .grid-2-1, .grid-1-2 { grid-template-columns: 1fr; }
+    .grid-3 { grid-template-columns: 1fr 1fr; }
+  }
+  @media (max-width: 700px) {
+    main { padding: 16px; }
+    header { padding: 0 16px; }
+    nav { padding: 0 16px; overflow-x: auto; }
+    .grid-3 { grid-template-columns: 1fr; }
+  }
+</style>
+</head>
+<body>
+
+<!-- Loading overlay -->
+<div id="loading-overlay">
+  <div class="spinner"></div>
+  <div class="loading-text">FETCHING LIVE DATA...</div>
+</div>
+
+<!-- Header -->
+<header>
+  <div class="logo">NGX <span>//</span> Portfolio Analyzer</div>
+  <div class="header-right">
+    <div id="last-updated"></div>
+    <button id="refresh-btn" onclick="loadData()">⟳ REFRESH</button>
+  </div>
+</header>
+
+<!-- Nav tabs -->
+<nav>
+  <div class="tab active" data-tab="ngx-overview">NGX Overview</div>
+  <div class="tab" data-tab="ngx-advanced">NGX Advanced</div>
+  <div class="tab" data-tab="us-portfolio">US Portfolio</div>
+  <div class="tab" data-tab="combined">Combined (FX)</div>
+</nav>
+
+<main>
+  <div id="error-banner"></div>
+
+  <!-- ════════════════════════════════════════════════════
+       TAB 1 — NGX OVERVIEW
+  ════════════════════════════════════════════════════ -->
+  <div class="tab-content active" id="tab-ngx-overview">
+    <div class="kpi-strip" id="ngx-kpis"></div>
+    <div class="grid-2-1">
+      <div class="chart-card">
+        <div class="chart-title">Portfolio Equity by Stock</div>
+        <div id="chart-ngx-equity" style="height:340px"></div>
+      </div>
+      <div class="chart-card">
+        <div class="chart-title">Sector Allocation</div>
+        <div id="chart-ngx-sector-donut" style="height:340px"></div>
+      </div>
+    </div>
+    <div class="grid-2">
+      <div class="chart-card">
+        <div class="chart-title">Unrealized Return % <span>per stock</span></div>
+        <div id="chart-ngx-return" style="height:360px"></div>
+      </div>
+      <div class="chart-card">
+        <div class="chart-title">Gain % <span>by sector</span></div>
+        <div id="chart-ngx-sector-gain" style="height:360px"></div>
+      </div>
+    </div>
+    <div class="chart-card full-row">
+      <div class="chart-title">Portfolio Treemap <span>size = equity · colour = return</span></div>
+      <div id="chart-ngx-treemap" style="height:320px"></div>
+    </div>
+    <div class="chart-card full-row">
+      <div class="chart-title">Holdings Detail</div>
+      <div id="ngx-table"></div>
+    </div>
+  </div>
+
+  <!-- ════════════════════════════════════════════════════
+       TAB 2 — NGX ADVANCED
+  ════════════════════════════════════════════════════ -->
+  <div class="tab-content" id="tab-ngx-advanced">
+    <div class="chart-card full-row" style="margin-bottom:16px">
+      <div class="chart-title">Cost Basis vs Current Value <span>grey = cost · colour = G/L</span></div>
+      <div id="chart-cost-basis" style="height:400px"></div>
+    </div>
+    <div class="grid-2">
+      <div class="chart-card">
+        <div class="chart-title">Portfolio Value Waterfall</div>
+        <div id="chart-waterfall" style="height:380px"></div>
+      </div>
+      <div class="chart-card">
+        <div class="chart-title">Concentration Risk <span>HHI gauge</span></div>
+        <div id="chart-hhi" style="height:380px"></div>
+      </div>
+    </div>
+    <div class="chart-card full-row">
+      <div class="chart-title">Risk-Return Scatter <span>size = equity weight</span></div>
+      <div id="chart-scatter" style="height:420px"></div>
+    </div>
+  </div>
+
+  <!-- ════════════════════════════════════════════════════
+       TAB 3 — US PORTFOLIO
+  ════════════════════════════════════════════════════ -->
+  <div class="tab-content" id="tab-us-portfolio">
+    <div class="kpi-strip" id="us-kpis"></div>
+    <div class="grid-2-1">
+      <div class="chart-card">
+        <div class="chart-title">Portfolio Equity by Stock</div>
+        <div id="chart-us-equity" style="height:300px"></div>
+      </div>
+      <div class="chart-card">
+        <div class="chart-title">Sector Allocation</div>
+        <div id="chart-us-sector-donut" style="height:300px"></div>
+      </div>
+    </div>
+    <div class="grid-2">
+      <div class="chart-card">
+        <div class="chart-title">Return % <span>per stock</span></div>
+        <div id="chart-us-return" style="height:300px"></div>
+      </div>
+      <div class="chart-card">
+        <div class="chart-title">Cost Basis vs Value</div>
+        <div id="chart-us-cost-basis" style="height:300px"></div>
+      </div>
+    </div>
+    <div class="chart-card full-row">
+      <div class="chart-title">US Holdings Detail</div>
+      <div id="us-table"></div>
+    </div>
+  </div>
+
+  <!-- ════════════════════════════════════════════════════
+       TAB 4 — COMBINED FX VIEW
+  ════════════════════════════════════════════════════ -->
+  <div class="tab-content" id="tab-combined">
+    <div class="kpi-strip" id="combined-kpis"></div>
+    <div class="chart-card full-row">
+      <div class="chart-title">FX-Adjusted Unified View <span>all positions in USD</span></div>
+      <div id="chart-unified" style="height:500px"></div>
+    </div>
+    <div class="grid-2">
+      <div class="chart-card">
+        <div class="chart-title">NGX vs US Split <span>by USD value</span></div>
+        <div id="chart-split-donut" style="height:340px"></div>
+      </div>
+      <div class="chart-card">
+        <div class="chart-title">Return Comparison <span>NGX vs US stocks</span></div>
+        <div id="chart-return-compare" style="height:340px"></div>
+      </div>
+    </div>
+  </div>
+</main>
+
+<script>
+// ── Theme constants ──────────────────────────────────────────────────────────
+const T = {
+  bg:     '#080b14',
+  panel:  '#151b2e',
+  border: '#1e2640',
+  green:  '#00e87a',
+  red:    '#ff3d5a',
+  gold:   '#f5c842',
+  blue:   '#4d8eff',
+  purple: '#a78bfa',
+  white:  '#e2e8f8',
+  grey:   '#4a5578',
+  grey2:  '#2a3050',
+  font:   'DM Sans, sans-serif',
+  mono:   'Space Mono, monospace',
+};
+
+const SECTOR_COLORS = {
+  Healthcare:'#00c2a8', Telecom:'#4d8eff', Agro:'#7ec850',
+  Energy:'#ff9f43', Construction:'#a29bfe', Insurance:'#fd79a8',
+  Manufacturing:'#f5c842', Banking:'#6c5ce7', Consumer:'#b2bec3',
+  Technology:'#00cec9', Media:'#fd79a8',
+};
+
+const PLOTLY_LAYOUT = (extra={}) => ({
+  paper_bgcolor: 'rgba(0,0,0,0)',
+  plot_bgcolor:  'rgba(0,0,0,0)',
+  font:  { family: T.font, color: T.white, size: 11 },
+  margin: { t: 10, b: 40, l: 60, r: 20 },
+  xaxis: { gridcolor: T.border, zerolinecolor: T.border, tickfont: { size: 10 } },
+  yaxis: { gridcolor: T.border, zerolinecolor: T.border, tickfont: { size: 10 } },
+  legend: { bgcolor: 'rgba(0,0,0,0)', font: { size: 10 } },
+  hoverlabel: { bgcolor: T.panel, bordercolor: T.border, font: { family: T.mono, size: 11 } },
+  ...extra
+});
+
+const PLOTLY_CONFIG = { displayModeBar: false, responsive: true };
+
+// ── Formatters ───────────────────────────────────────────────────────────────
+const fmtN = (v) => {
+  const a = Math.abs(v);
+  if (a >= 1e6) return `₦${(v/1e6).toFixed(1)}M`;
+  if (a >= 1e3) return `₦${(v/1e3).toFixed(0)}K`;
+  return `₦${v.toFixed(0)}`;
+};
+const fmtUSD = (v) => {
+  const a = Math.abs(v);
+  if (a >= 1e3) return `$${(v/1e3).toFixed(1)}K`;
+  return `$${v.toFixed(2)}`;
+};
+const fmtPct = (v, plus=true) => `${plus&&v>0?'+':''}${v.toFixed(1)}%`;
+const colorPct = (v) => v >= 0 ? T.green : T.red;
+
+// ── Tab navigation ───────────────────────────────────────────────────────────
+document.querySelectorAll('.tab').forEach(tab => {
+  tab.addEventListener('click', () => {
+    document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+    document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+    tab.classList.add('active');
+    document.getElementById('tab-' + tab.dataset.tab).classList.add('active');
+    // trigger plotly resize
+    setTimeout(() => window.dispatchEvent(new Event('resize')), 50);
+  });
+});
+
+// ── KPI strip renderer ───────────────────────────────────────────────────────
+function renderKPIs(containerId, cards) {
+  document.getElementById(containerId).innerHTML = cards.map((c, i) => `
+    <div class="kpi-card ${c.accent}" style="animation-delay:${i*0.06}s">
+      <div class="kpi-label">${c.label}</div>
+      <div class="kpi-value ${c.accent}">${c.value}</div>
+      ${c.sub ? `<div class="kpi-sub">${c.sub}</div>` : ''}
+    </div>
+  `).join('');
+}
+
+// ── Main data loader ─────────────────────────────────────────────────────────
+let DATA = null;
+
+async function loadData() {
+  const btn = document.getElementById('refresh-btn');
+  btn.disabled = true;
+  btn.textContent = 'LOADING...';
+  document.getElementById('error-banner').style.display = 'none';
+  document.getElementById('loading-overlay').classList.remove('hidden');
+
+  try {
+    const res = await fetch('/api/data');
+    if (!res.ok) {
+      const err = await res.json();
+      throw new Error(err.detail || res.statusText);
+    }
+    DATA = await res.json();
+    document.getElementById('last-updated').textContent =
+      'UPDATED ' + new Date().toLocaleTimeString();
+    renderAll(DATA);
+  } catch (e) {
+    const banner = document.getElementById('error-banner');
+    banner.style.display = 'block';
+    banner.textContent = '⚠ ' + e.message;
+  } finally {
+    document.getElementById('loading-overlay').classList.add('hidden');
+    btn.disabled = false;
+    btn.textContent = '⟳ REFRESH';
+  }
+}
+
+// ── Render everything ────────────────────────────────────────────────────────
+function renderAll(d) {
+  renderNGXOverview(d);
+  renderNGXAdvanced(d);
+  renderUSPortfolio(d);
+  renderCombined(d);
+}
+
+// ════════════════════════════════════════════════════════════════════════════
+// TAB 1 — NGX OVERVIEW
+// ════════════════════════════════════════════════════════════════════════════
+function renderNGXOverview(d) {
+  const k = d.ngx_kpis;
+  renderKPIs('ngx-kpis', [
+    { label:'Total Equity',    value: fmtN(k.equity),           accent:'gold' },
+    { label:'Total Cost',      value: fmtN(k.cost),             accent:'blue' },
+    { label:'Unrealized Gain', value: fmtN(k.gain),             accent: k.gain>=0?'green':'red' },
+    { label:'Return',          value: fmtPct(k.return_pct),     accent: k.return_pct>=0?'green':'red' },
+    { label:'Realized P/L',    value: fmtN(k.realized_pl),      accent: k.realized_pl>=0?'green':'red' },
+    { label:'Positions',       value: k.positions,              accent:'purple' },
+  ]);
+
+  const stocks  = [...d.ngx_stocks].sort((a,b) => a['Current Equity']-b['Current Equity']);
+  const sectors = d.ngx_sectors;
+
+  // Equity bar
+  Plotly.newPlot('chart-ngx-equity', [{
+    type: 'bar', orientation: 'h',
+    x: stocks.map(s => s['Current Equity']),
+    y: stocks.map(s => s.Ticker),
+    marker: { color: stocks.map(s => SECTOR_COLORS[s.Sector] || T.blue) },
+    text: stocks.map(s => fmtN(s['Current Equity'])),
+    textposition: 'outside',
+    hovertemplate: '<b>%{y}</b><br>Equity: %{x:,.0f}<extra></extra>',
+  }], PLOTLY_LAYOUT({
+    margin: { t:10, b:40, l:70, r:80 },
+    xaxis: { tickformat: ',.0f', gridcolor: T.border },
+  }), PLOTLY_CONFIG);
+
+  // Sector donut
+  Plotly.newPlot('chart-ngx-sector-donut', [{
+    type: 'pie', hole: 0.6,
+    labels: sectors.map(s => s.Sector),
+    values: sectors.map(s => s.Equity),
+    marker: { colors: sectors.map(s => SECTOR_COLORS[s.Sector] || T.blue),
+              line: { color: T.panel, width: 2 } },
+    textinfo: 'percent',
+    textfont: { size: 10 },
+    hovertemplate: '<b>%{label}</b><br>%{percent}<br>₦%{value:,.0f}<extra></extra>',
+  }], PLOTLY_LAYOUT({ margin:{t:10,b:10,l:10,r:10},
+    legend: { orientation:'v', x:1.0, y:0.5, font:{size:10} }
+  }), PLOTLY_CONFIG);
+
+  // Return % bar (diverging)
+  const rStocks = [...d.ngx_stocks].sort((a,b) => a['Return Pct']-b['Return Pct']);
+  Plotly.newPlot('chart-ngx-return', [{
+    type: 'bar', orientation: 'h',
+    x: rStocks.map(s => s['Return Pct']),
+    y: rStocks.map(s => s.Ticker),
+    marker: { color: rStocks.map(s => s['Return Pct']>=0 ? T.green : T.red) },
+    text: rStocks.map(s => fmtPct(s['Return Pct'])),
+    textposition: 'outside',
+    hovertemplate: '<b>%{y}</b><br>Return: %{x:.1f}%<extra></extra>',
+  }], PLOTLY_LAYOUT({
+    margin: { t:10, b:40, l:70, r:70 },
+    xaxis: { ticksuffix:'%', gridcolor: T.border, zerolinecolor: T.grey },
+  }), PLOTLY_CONFIG);
+
+  // Sector gain %
+  const secSorted = [...sectors].sort((a,b) => a['Gain Pct']-b['Gain Pct']);
+  Plotly.newPlot('chart-ngx-sector-gain', [{
+    type:'bar', orientation:'h',
+    x: secSorted.map(s => s['Gain Pct']),
+    y: secSorted.map(s => s.Sector),
+    marker: { color: secSorted.map(s => s['Gain Pct']>=0 ? T.green : T.red) },
+    text: secSorted.map(s => fmtPct(s['Gain Pct'])),
+    textposition:'outside',
+    hovertemplate:'<b>%{y}</b><br>Gain: %{x:.1f}%<extra></extra>',
+  }], PLOTLY_LAYOUT({
+    margin:{t:10,b:40,l:110,r:70},
+    xaxis:{ticksuffix:'%', gridcolor:T.border, zerolinecolor:T.grey},
+  }), PLOTLY_CONFIG);
+
+  // Treemap
+  const tm = d.ngx_stocks;
+  Plotly.newPlot('chart-ngx-treemap', [{
+    type: 'treemap',
+    labels: tm.map(s => `${s.Ticker}<br>${fmtPct(s['Return Pct'])}`),
+    parents: tm.map(() => ''),
+    values: tm.map(s => s['Current Equity']),
+    customdata: tm.map(s => [s.Stock, fmtN(s['Current Equity']), fmtPct(s['Return Pct'])]),
+    hovertemplate: '<b>%{customdata[0]}</b><br>Equity: %{customdata[1]}<br>Return: %{customdata[2]}<extra></extra>',
+    marker: {
+      colors: tm.map(s => s['Return Pct']),
+      colorscale: [
+        [0,   '#ff3d5a'],
+        [0.18,'#ff9f43'],
+        [0.35,'#f5c842'],
+        [0.55,'#7ec850'],
+        [1,   '#00e87a'],
+      ],
+      cmin: -30, cmax: 130,
+      showscale: true,
+      colorbar: { thickness:10, len:0.5, tickfont:{size:9}, ticksuffix:'%' },
+      line: { width: 1.5, color: T.panel },
+    },
+    textfont: { size: 11 },
+    tiling: { packing: 'squarify' },
+  }], PLOTLY_LAYOUT({ margin:{t:10,b:10,l:10,r:10} }), PLOTLY_CONFIG);
+
+  // Holdings table
+  renderTable('ngx-table', d.ngx_stocks, [
+    { key:'Ticker', label:'Ticker', fmt: v => v },
+    { key:'Stock',  label:'Name',   fmt: v => v },
+    { key:'Sector', label:'Sector', fmt: v =>
+      `<span class="sector-dot" style="background:${SECTOR_COLORS[v]||T.blue}"></span>${v}` },
+    { key:'Remaining Cost',  label:'Cost',    fmt: fmtN },
+    { key:'Current Equity',  label:'Equity',  fmt: fmtN },
+    { key:'Unrealized PL',   label:'Unreal. G/L', fmt: v =>
+      `<span class="${v>=0?'pos':'neg'}">${fmtN(v)}</span>` },
+    { key:'Return Pct',      label:'Return',  fmt: v =>
+      `<span class="${v>=0?'pos':'neg'}">${fmtPct(v)}</span>` },
+  ]);
+}
+
+// ════════════════════════════════════════════════════════════════════════════
+// TAB 2 — NGX ADVANCED
+// ════════════════════════════════════════════════════════════════════════════
+function renderNGXAdvanced(d) {
+  const stocks = d.ngx_stocks;
+  const wf     = d.waterfall;
+  const meta   = d.meta;
+
+  // Cost basis stacked bar
+  const cbStocks = [...stocks].sort((a,b) => a['Unrealized PL']-b['Unrealized PL']);
+  Plotly.newPlot('chart-cost-basis', [
+    {
+      type:'bar', orientation:'h', name:'Cost Basis',
+      x: cbStocks.map(s => s['Remaining Cost']),
+      y: cbStocks.map(s => s.Ticker),
+      marker:{ color: '#2a3050' },
+      hovertemplate:'<b>%{y}</b><br>Cost: ₦%{x:,.0f}<extra></extra>',
+    },
+    {
+      type:'bar', orientation:'h', name:'Unrealized G/L',
+      x: cbStocks.map(s => s['Unrealized PL']),
+      y: cbStocks.map(s => s.Ticker),
+      marker:{ color: cbStocks.map(s => s['Unrealized PL']>=0 ? T.green : T.red) },
+      text: cbStocks.map(s => fmtN(s['Unrealized PL'])),
+      textposition:'inside',
+      hovertemplate:'<b>%{y}</b><br>G/L: ₦%{x:,.0f}<extra></extra>',
+    }
+  ], PLOTLY_LAYOUT({
+    barmode:'stack',
+    margin:{t:10,b:40,l:70,r:20},
+    xaxis:{tickformat:',.0f', gridcolor:T.border},
+    legend:{orientation:'h', y:-0.12},
+  }), PLOTLY_CONFIG);
+
+  // Waterfall
+  const net = wf.current_equity - wf.total_cost;
+  Plotly.newPlot('chart-waterfall', [{
+    type: 'waterfall',
+    orientation: 'v',
+    measure: ['absolute','relative','relative','total'],
+    x: ['Total Cost','Realized P/L','Unrealized P/L','Current Equity'],
+    y: [wf.total_cost, wf.realized_pl, wf.unrealized_pl, wf.current_equity],
+    text: [fmtN(wf.total_cost),
+           (wf.realized_pl>=0?'+':'')+fmtN(wf.realized_pl),
+           (wf.unrealized_pl>=0?'+':'')+fmtN(wf.unrealized_pl),
+           fmtN(wf.current_equity)],
+    textposition:'outside',
+    connector:{ line:{ color: T.grey, width:1, dash:'dot' } },
+    increasing:{ marker:{ color: T.green } },
+    decreasing:{ marker:{ color: T.red   } },
+    totals:    { marker:{ color: T.gold  } },
+    hovertemplate:'<b>%{x}</b><br>₦%{y:,.0f}<extra></extra>',
+  }], PLOTLY_LAYOUT({
+    margin:{t:40,b:40,l:80,r:20},
+    yaxis:{tickformat:',.0f', gridcolor:T.border},
+    annotations:[{
+      x: 3, y: wf.current_equity * 1.08,
+      text: `Net: ${fmtN(net)} (${fmtPct(net/wf.total_cost*100)})`,
+      showarrow:false, font:{color:T.gold, size:12, family:T.mono},
+    }],
+  }), PLOTLY_CONFIG);
+
+  // HHI Gauge
+  const hhi   = meta.hhi;
+  const hlbl  = meta.hhi_label;
+  const hcol  = hhi<1000 ? T.green : (hhi<1800 ? T.gold : T.red);
+  Plotly.newPlot('chart-hhi', [{
+    type: 'indicator', mode: 'gauge+number+delta',
+    value: hhi,
+    title: { text: `<b>${hlbl} CONCENTRATION</b>`, font:{size:13, color:hcol, family:T.mono} },
+    gauge: {
+      axis: { range:[0,3000], tickcolor:T.grey, tickfont:{size:9},
+              tickvals:[0,1000,1800,3000], ticktext:['0','1K','1.8K','3K'] },
+      bar:  { color: hcol, thickness:0.25 },
+      bgcolor: T.panel,
+      bordercolor: T.border,
+      steps: [
+        { range:[0,1000],    color:'rgba(0,232,122,0.12)' },
+        { range:[1000,1800], color:'rgba(245,200,66,0.12)' },
+        { range:[1800,3000], color:'rgba(255,61,90,0.12)' },
+      ],
+      threshold:{ line:{ color:T.white, width:2 }, thickness:0.7, value:hhi },
+    },
+    number: { font:{family:T.mono, size:36, color:T.white}, suffix:'' },
+  }], PLOTLY_LAYOUT({
+    margin:{t:60,b:20,l:30,r:30},
+  }), PLOTLY_CONFIG);
+
+  // Risk-Return scatter
+  const total_eq = stocks.reduce((s,r) => s+r['Current Equity'], 0);
+  Plotly.newPlot('chart-scatter', [{
+    type:'scatter', mode:'markers+text',
+    x: stocks.map(s => s['Current Equity']/total_eq*100),
+    y: stocks.map(s => s['Return Pct']),
+    text: stocks.map(s => s.Ticker),
+    textposition:'top center',
+    textfont:{ size:10, color:T.white },
+    marker:{
+      size: stocks.map(s => Math.max(12, s['Current Equity']/total_eq*180)),
+      color: stocks.map(s => SECTOR_COLORS[s.Sector]||T.blue),
+      line:{ color:'white', width:1 },
+      opacity:0.85,
+    },
+    customdata: stocks.map(s => [s.Stock, fmtN(s['Current Equity']), fmtPct(s['Return Pct'])]),
+    hovertemplate:'<b>%{customdata[0]}</b><br>Weight: %{x:.1f}%<br>Return: %{customdata[2]}<br>Equity: %{customdata[1]}<extra></extra>',
+  }], PLOTLY_LAYOUT({
+    margin:{t:20,b:60,l:70,r:20},
+    xaxis:{ title:{text:'Portfolio Weight (%)', font:{size:11,color:T.grey}},
+            ticksuffix:'%', gridcolor:T.border, zerolinecolor:T.border },
+    yaxis:{ title:{text:'Return (%)', font:{size:11,color:T.grey}},
+            ticksuffix:'%', gridcolor:T.border, zerolinecolor:T.grey2 },
+    shapes:[
+      { type:'line', x0:0,x1:1,xref:'paper', y0:0,y1:0,
+        line:{color:T.grey, width:1, dash:'dash'} },
+    ],
+    annotations:[
+      { x:0.98,y:0.98,xref:'paper',yref:'paper',text:'High Weight · High Return',
+        showarrow:false,font:{color:T.green,size:10},xanchor:'right',yanchor:'top'},
+      { x:0.02,y:0.98,xref:'paper',yref:'paper',text:'Low Weight · High Return',
+        showarrow:false,font:{color:T.blue,size:10},xanchor:'left',yanchor:'top'},
+      { x:0.98,y:0.02,xref:'paper',yref:'paper',text:'High Weight · Low Return',
+        showarrow:false,font:{color:T.gold,size:10},xanchor:'right',yanchor:'bottom'},
+      { x:0.02,y:0.02,xref:'paper',yref:'paper',text:'Low Weight · Low Return',
+        showarrow:false,font:{color:T.red,size:10},xanchor:'left',yanchor:'bottom'},
+    ],
+  }), PLOTLY_CONFIG);
+}
+
+// ════════════════════════════════════════════════════════════════════════════
+// TAB 3 — US PORTFOLIO
+// ════════════════════════════════════════════════════════════════════════════
+function renderUSPortfolio(d) {
+  const k = d.us_kpis;
+  renderKPIs('us-kpis', [
+    { label:'Total Equity',    value: fmtUSD(k.equity),      accent:'gold'  },
+    { label:'Total Cost',      value: fmtUSD(k.cost),        accent:'blue'  },
+    { label:'Unrealized Gain', value: fmtUSD(k.gain),        accent: k.gain>=0?'green':'red' },
+    { label:'Return',          value: fmtPct(k.return_pct),  accent: k.return_pct>=0?'green':'red' },
+    { label:'Positions',       value: k.positions,           accent:'purple' },
+  ]);
+
+  const stocks  = [...d.us_stocks].sort((a,b) => a['Current Equity']-b['Current Equity']);
+  const sectors = d.us_sectors;
+
+  // Equity bar
+  Plotly.newPlot('chart-us-equity', [{
+    type:'bar', orientation:'h',
+    x: stocks.map(s => s['Current Equity']),
+    y: stocks.map(s => s.Ticker),
+    marker:{ color: stocks.map(s => SECTOR_COLORS[s.Sector]||T.blue) },
+    text: stocks.map(s => fmtUSD(s['Current Equity'])),
+    textposition:'outside',
+    hovertemplate:'<b>%{y}</b><br>Equity: $%{x:,.2f}<extra></extra>',
+  }], PLOTLY_LAYOUT({ margin:{t:10,b:40,l:60,r:80} }), PLOTLY_CONFIG);
+
+  // Sector donut
+  Plotly.newPlot('chart-us-sector-donut', [{
+    type:'pie', hole:0.6,
+    labels: sectors.map(s => s.Sector),
+    values: sectors.map(s => s.Equity),
+    marker:{ colors: sectors.map(s => SECTOR_COLORS[s.Sector]||T.blue),
+             line:{color:T.panel, width:2} },
+    textinfo:'percent',
+    hovertemplate:'<b>%{label}</b><br>%{percent}<br>$%{value:,.2f}<extra></extra>',
+  }], PLOTLY_LAYOUT({ margin:{t:10,b:10,l:10,r:10},
+    legend:{orientation:'v', x:1.0, y:0.5}
+  }), PLOTLY_CONFIG);
+
+  // Return bar
+  const rs = [...d.us_stocks].sort((a,b) => a['Return Pct']-b['Return Pct']);
+  Plotly.newPlot('chart-us-return', [{
+    type:'bar', orientation:'h',
+    x: rs.map(s => s['Return Pct']),
+    y: rs.map(s => s.Ticker),
+    marker:{ color: rs.map(s => s['Return Pct']>=0?T.green:T.red) },
+    text: rs.map(s => fmtPct(s['Return Pct'])),
+    textposition:'outside',
+    hovertemplate:'<b>%{y}</b><br>Return: %{x:.1f}%<extra></extra>',
+  }], PLOTLY_LAYOUT({
+    margin:{t:10,b:40,l:70,r:70},
+    xaxis:{ticksuffix:'%', gridcolor:T.border, zerolinecolor:T.grey},
+  }), PLOTLY_CONFIG);
+
+  // Cost basis
+  Plotly.newPlot('chart-us-cost-basis', [
+    {
+      type:'bar', orientation:'h', name:'Cost',
+      x: stocks.map(s => s['Remaining Cost']),
+      y: stocks.map(s => s.Ticker),
+      marker:{ color:'#2a3050' },
+    },
+    {
+      type:'bar', orientation:'h', name:'G/L',
+      x: stocks.map(s => s['Unrealized PL']),
+      y: stocks.map(s => s.Ticker),
+      marker:{ color: stocks.map(s => s['Unrealized PL']>=0?T.green:T.red) },
+      text: stocks.map(s => fmtUSD(s['Unrealized PL'])),
+      textposition:'inside',
+    }
+  ], PLOTLY_LAYOUT({
+    barmode:'stack',
+    margin:{t:10,b:40,l:70,r:20},
+    legend:{orientation:'h',y:-0.12},
+  }), PLOTLY_CONFIG);
+
+  // Table
+  renderTable('us-table', d.us_stocks, [
+    { key:'Ticker', label:'Ticker', fmt: v => v },
+    { key:'Stock',  label:'Name',   fmt: v => v },
+    { key:'Sector', label:'Sector', fmt: v =>
+      `<span class="sector-dot" style="background:${SECTOR_COLORS[v]||T.blue}"></span>${v}` },
+    { key:'Remaining Cost', label:'Cost',   fmt: fmtUSD },
+    { key:'Current Equity', label:'Equity', fmt: fmtUSD },
+    { key:'Unrealized PL',  label:'G/L',    fmt: v =>
+      `<span class="${v>=0?'pos':'neg'}">${fmtUSD(v)}</span>` },
+    { key:'Return Pct',     label:'Return', fmt: v =>
+      `<span class="${v>=0?'pos':'neg'}">${fmtPct(v)}</span>` },
+  ]);
+}
+
+// ════════════════════════════════════════════════════════════════════════════
+// TAB 4 — COMBINED FX VIEW
+// ════════════════════════════════════════════════════════════════════════════
+function renderCombined(d) {
+  const ck = d.combined_kpis;
+  const uk = d.us_kpis;
+  const nk = d.ngx_kpis;
+  const usdngn = d.meta.usdngn;
+
+  renderKPIs('combined-kpis', [
+    { label:'NGX (USD)',     value: fmtUSD(ck.ngx_usd),   accent:'blue',   sub:`@ ₦${usdngn.toLocaleString()}/USD` },
+    { label:'US Portfolio',  value: fmtUSD(ck.us_usd),    accent:'gold'  },
+    { label:'Total USD',     value: fmtUSD(ck.total_usd), accent:'green' },
+    { label:'NGX Weight',    value: fmtPct(ck.ngx_usd/ck.total_usd*100, false), accent:'purple' },
+    { label:'US Weight',     value: fmtPct(ck.us_usd/ck.total_usd*100, false),  accent:'purple' },
+  ]);
+
+  // Build unified list
+  const ngx_usd = d.ngx_stocks.map(s => ({
+    Ticker: s.Ticker, Stock: s.Stock, Sector: s.Sector, Market: 'NGX',
+    Equity_USD: s['Current Equity'] / usdngn,
+    Cost_USD:   s['Remaining Cost'] / usdngn,
+    GL_USD:     s['Unrealized PL']  / usdngn,
+    Return_Pct: s['Return Pct'],
+  }));
+  const us_usd = d.us_stocks.map(s => ({
+    Ticker: s.Ticker, Stock: s.Stock, Sector: s.Sector, Market: 'US',
+    Equity_USD: s['Current Equity'],
+    Cost_USD:   s['Remaining Cost'],
+    GL_USD:     s['Unrealized PL'],
+    Return_Pct: s['Return Pct'],
+  }));
+  const all = [...ngx_usd, ...us_usd].sort((a,b) => a.Equity_USD - b.Equity_USD);
+
+  // Unified bar
+  Plotly.newPlot('chart-unified', [
+    {
+      type:'bar', orientation:'h', name:'Cost',
+      x: all.map(s => s.Cost_USD),
+      y: all.map(s => `[${s.Market}] ${s.Ticker}`),
+      marker:{ color:'#2a3050' },
+      hovertemplate:'<b>%{y}</b><br>Cost: $%{x:,.2f}<extra></extra>',
+    },
+    {
+      type:'bar', orientation:'h', name:'G/L',
+      x: all.map(s => s.GL_USD),
+      y: all.map(s => `[${s.Market}] ${s.Ticker}`),
+      marker:{ color: all.map(s => s.GL_USD>=0?T.green:T.red) },
+      text: all.map(s => fmtUSD(s.Equity_USD)),
+      textposition:'outside',
+      hovertemplate:'<b>%{y}</b><br>G/L: $%{x:,.2f}<extra></extra>',
+    }
+  ], PLOTLY_LAYOUT({
+    barmode:'stack',
+    margin:{t:10,b:40,l:150,r:80},
+    xaxis:{ tickprefix:'$', gridcolor:T.border },
+    legend:{orientation:'h',y:-0.08},
+    height: 500,
+  }), PLOTLY_CONFIG);
+
+  // Split donut
+  Plotly.newPlot('chart-split-donut', [{
+    type:'pie', hole:0.65,
+    labels:['NGX','US Portfolio'],
+    values:[ck.ngx_usd, ck.us_usd],
+    marker:{ colors:[T.blue, T.gold], line:{color:T.panel, width:3} },
+    textinfo:'label+percent',
+    textfont:{size:12},
+    hovertemplate:'<b>%{label}</b><br>$%{value:,.2f} (%{percent})<extra></extra>',
+  }], PLOTLY_LAYOUT({
+    margin:{t:10,b:10,l:10,r:10},
+    annotations:[{
+      x:0.5, y:0.5,
+      text: `<b>${fmtUSD(ck.total_usd)}</b>`,
+      font:{size:16, family:T.mono, color:T.white},
+      showarrow:false,
+    }]
+  }), PLOTLY_CONFIG);
+
+  // Return comparison (all stocks, coloured by market)
+  const allSorted = [...all].sort((a,b) => a.Return_Pct - b.Return_Pct);
+  Plotly.newPlot('chart-return-compare', [{
+    type:'bar', orientation:'h',
+    x: allSorted.map(s => s.Return_Pct),
+    y: allSorted.map(s => `[${s.Market}] ${s.Ticker}`),
+    marker:{
+      color: allSorted.map(s => s.Return_Pct>=0?T.green:T.red),
+      opacity: allSorted.map(s => s.Market==='NGX' ? 1.0 : 0.65),
+    },
+    text: allSorted.map(s => fmtPct(s.Return_Pct)),
+    textposition:'outside',
+    hovertemplate:'<b>%{y}</b><br>Return: %{x:.1f}%<extra></extra>',
+  }], PLOTLY_LAYOUT({
+    margin:{t:10,b:40,l:130,r:70},
+    xaxis:{ticksuffix:'%', gridcolor:T.border, zerolinecolor:T.grey},
+  }), PLOTLY_CONFIG);
+}
+
+// ── Generic table renderer ───────────────────────────────────────────────────
+function renderTable(containerId, rows, cols) {
+  const headers = cols.map(c =>
+    `<th>${c.label}</th>`).join('');
+  const body = rows.map(row => `
+    <tr>${cols.map(c => `<td>${c.fmt(row[c.key])}</td>`).join('')}</tr>
+  `).join('');
+  document.getElementById(containerId).innerHTML = `
+    <table class="data-table">
+      <thead><tr>${headers}</tr></thead>
+      <tbody>${body}</tbody>
+    </table>`;
+}
+
+// ── Boot ─────────────────────────────────────────────────────────────────────
+loadData();
+</script>
+</body>
+</html>
