@@ -17,12 +17,11 @@ export default function NGXOverviewPage() {
 
   if (!data && !loading) return null;
 
-  const k          = data?.ngx_kpis;
-  const active     = (data?.ngx_stocks ?? []).filter(s => s.CurrentEquity != null);
+  const k           = data?.ngx_kpis;
+  const active      = (data?.ngx_stocks ?? []).filter(s => s.CurrentEquity != null);
   const ngx_sectors = data?.ngx_sectors ?? [];
   const meta        = data?.meta;
 
-  // ── Chart data ─────────────────────────────────────────────────────────────
   const equityBar = {
     type: 'bar',
     x: active.map(s => s.Ticker),
@@ -35,8 +34,8 @@ export default function NGXOverviewPage() {
     type: 'pie',
     labels: ngx_sectors.map(s => s.Sector),
     values: ngx_sectors.map(s => s.Equity),
-    hole: 0.55,
-    marker: { colors: ngx_sectors.map(s => sectorColor(s.Sector)) },
+    hole: 0.58,
+    marker: { colors: ngx_sectors.map(s => sectorColor(s.Sector)), line: { color: '#fff', width: 2 } },
     textinfo: 'label+percent',
     textfont: { size: 10 },
     hovertemplate: '<b>%{label}</b><br>₦%{value:,.0f}<br>%{percent}<extra></extra>',
@@ -47,7 +46,7 @@ export default function NGXOverviewPage() {
     x: active.map(s => s.Ticker),
     y: active.map(s => s.ReturnPct),
     marker: {
-      color: active.map(s => (s.ReturnPct ?? 0) >= 0 ? COLORS.green : COLORS.red),
+      color: active.map(s => (s.ReturnPct ?? 0) >= 0 ? COLORS.gain : COLORS.loss),
       opacity: 0.85,
     },
     hovertemplate: '<b>%{x}</b><br>%{y:.1f}%<extra></extra>',
@@ -58,7 +57,7 @@ export default function NGXOverviewPage() {
     x: ngx_sectors.map(s => s.Sector),
     y: ngx_sectors.map(s => s.GainPct),
     marker: {
-      color: ngx_sectors.map(s => s.GainPct >= 0 ? sectorColor(s.Sector) : COLORS.red),
+      color: ngx_sectors.map(s => s.GainPct >= 0 ? sectorColor(s.Sector) : COLORS.loss),
       opacity: 0.85,
     },
     hovertemplate: '<b>%{x}</b><br>%{y:.1f}%<extra></extra>',
@@ -73,64 +72,75 @@ export default function NGXOverviewPage() {
     hovertemplate: '<b>%{customdata[0]}</b><br>Equity: %{customdata[1]}<br>Return: %{customdata[2]}<extra></extra>',
     marker: {
       colors: active.map(s => s.ReturnPct ?? 0),
-      colorscale: [[0,'#ff3d5a'],[0.2,'#ff9f43'],[0.4,'#f5c518'],[0.6,'#7ec850'],[1,'#00e87a']],
-      cmin: -30, cmax: 130,
+      colorscale: [[0,'#BE1B1B'],[0.35,'#D97706'],[0.5,'#F5C518'],[0.7,'#2D7D3A'],[1,'#0A7B44']],
+      cmin: -30, cmax: 100,
       showscale: true,
-      colorbar: { thickness: 10, len: 0.5, tickfont: { size: 9 }, ticksuffix: '%' },
-      line: { width: 1.5, color: COLORS.panel },
+      colorbar: { thickness: 10, len: 0.5, tickfont: { size: 9 }, ticksuffix: '%', bgcolor: 'transparent', borderwidth: 0 },
+      line: { width: 2, color: '#fff' },
     },
-    textfont: { size: 11 },
+    textfont: { size: 11, color: '#fff' },
     tiling: { packing: 'squarify' },
   };
 
-  // ── Table columns ───────────────────────────────────────────────────────────
   const cols: ColDef<StockRow>[] = [
-    { key: 'Ticker',  label: 'Ticker',  render: v => <b>{v}</b> },
-    { key: 'Stock',   label: 'Company', render: v => <span className="text-[var(--snow)]">{v}</span> },
+    { key: 'Ticker',  label: 'Ticker',
+      render: v => <span className="font-mono font-semibold text-[var(--ink)] text-[11px]">{v}</span>
+    },
+    { key: 'Stock',   label: 'Company',
+      render: v => <span className="text-[var(--ink-2)] text-[12px]">{v}</span>
+    },
     { key: 'Sector',  label: 'Sector',
       render: (v: string) => (
-        <span className="flex items-center gap-1.5">
-          <span className="w-2 h-2 rounded-full flex-shrink-0" style={{ background: sectorColor(v) }} />
-          {v}
+        <span className="inline-flex items-center gap-1.5">
+          <span className="w-2 h-2 rounded-full shrink-0" style={{ background: sectorColor(v) }} />
+          <span className="text-[var(--ink-3)]">{v}</span>
         </span>
       ),
     },
     { key: 'LivePrice', label: 'Price', right: true,
       render: (v: number) => v != null
-        ? <span className="font-mono font-bold text-[var(--snow)]">{fmtNGNFull(v)}</span>
-        : <span className="text-[var(--muted)]">—</span>,
+        ? <span className="font-mono font-semibold text-[var(--ink)]">{fmtNGNFull(v)}</span>
+        : <span className="text-[var(--ink-4)]">—</span>,
       sortValue: (r: StockRow) => r.LivePrice ?? 0,
     },
-    { key: 'LiveChangePct', label: 'Day %', right: true,
+    { key: 'LiveChangePct', label: 'Day', right: true,
       render: (v: number) => v != null
-        ? <span className={`font-mono ${isPositive(v) ? 'pos' : 'neg'}`}>{fmtPct2(v)}</span>
-        : '',
+        ? <span className={`font-mono font-medium text-[11px] ${isPositive(v) ? 'text-[var(--gain)]' : 'text-[var(--loss)]'}`}>{fmtPct2(v)}</span>
+        : <span className="text-[var(--ink-4)]">—</span>,
       sortValue: (r: StockRow) => r.LiveChangePct ?? 0,
     },
     { key: 'DayHigh', label: 'High', right: true,
-      render: (v: number) => v != null ? <span className="font-mono text-[var(--muted)]">{fmtNGNFull(v)}</span> : '',
+      render: (v: number) => v != null ? <span className="font-mono text-[var(--ink-3)]">{fmtNGNFull(v)}</span> : '',
     },
     { key: 'DayLow', label: 'Low', right: true,
-      render: (v: number) => v != null ? <span className="font-mono text-[var(--muted)]">{fmtNGNFull(v)}</span> : '',
+      render: (v: number) => v != null ? <span className="font-mono text-[var(--ink-3)]">{fmtNGNFull(v)}</span> : '',
     },
     { key: 'Volume', label: 'Volume', right: true,
-      render: (v: number) => <span className="font-mono text-[var(--muted)]">{fmtVol(v)}</span>,
+      render: (v: number) => <span className="font-mono text-[var(--ink-3)]">{fmtVol(v)}</span>,
       sortValue: (r: StockRow) => r.Volume ?? 0,
     },
     { key: 'RemainingCost', label: 'Cost', right: true,
-      render: (v: number) => <span className="font-mono">{fmtNGN(v)}</span>,
+      render: (v: number) => <span className="font-mono text-[var(--ink-3)]">{fmtNGN(v)}</span>,
       sortValue: (r: StockRow) => r.RemainingCost ?? 0,
     },
     { key: 'CurrentEquity', label: 'Equity', right: true,
-      render: (v: number) => <b className="font-mono">{fmtNGN(v)}</b>,
+      render: (v: number) => <span className="font-mono font-semibold text-[var(--ink)]">{fmtNGN(v)}</span>,
       sortValue: (r: StockRow) => r.CurrentEquity ?? 0,
     },
     { key: 'UnrealizedPL', label: 'G/L', right: true,
-      render: (v: number) => <span className={`font-mono ${isPositive(v) ? 'pos' : 'neg'}`}>{fmtNGN(v)}</span>,
+      render: (v: number) => (
+        <span className={`font-mono font-medium text-[11px] ${isPositive(v) ? 'text-[var(--gain)]' : 'text-[var(--loss)]'}`}>
+          {fmtNGN(v)}
+        </span>
+      ),
       sortValue: (r: StockRow) => r.UnrealizedPL ?? 0,
     },
     { key: 'ReturnPct', label: 'Return', right: true,
-      render: (v: number) => <b className={`font-mono ${isPositive(v) ? 'pos' : 'neg'}`}>{fmtPct(v)}</b>,
+      render: (v: number) => (
+        <span className={`font-mono font-semibold text-[12px] ${isPositive(v) ? 'text-[var(--gain)]' : 'text-[var(--loss)]'}`}>
+          {fmtPct(v)}
+        </span>
+      ),
       sortValue: (r: StockRow) => r.ReturnPct ?? 0,
     },
     { key: 'PriceSource', label: '', render: (v: string) => <SourceBadge source={v} /> },
@@ -140,15 +150,18 @@ export default function NGXOverviewPage() {
     <div className="space-y-5">
 
       {/* KPI strip */}
-      <div className="flex gap-3 flex-wrap">
-        {isFirstLoad ? [...Array(6)].map((_, i) => <ChartSkeleton key={i} height={88} />) : <>
-          <KPICard label="Total Equity"    value={fmtNGN(k?.equity)}      accent="gold"                                      delay={0}   />
-          <KPICard label="Total Cost"      value={fmtNGN(k?.cost)}        accent="blue"                                      delay={50}  />
-          <KPICard label="Unrealized Gain" value={fmtNGN(k?.gain)}        accent={isPositive(k?.gain) ? 'green' : 'red'}     delay={100} />
-          <KPICard label="Return"          value={fmtPct(k?.return_pct)}  accent={isPositive(k?.return_pct) ? 'green':'red'} delay={150} />
-          <KPICard label="Realized P/L"    value={fmtNGN(k?.realized_pl)} accent={isPositive(k?.realized_pl) ? 'green':'red'} delay={200} />
-          <KPICard label="Positions"       value={k?.positions ?? '—'}    accent="purple"                                    delay={250} />
-        </>}
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
+        {isFirstLoad
+          ? [...Array(6)].map((_, i) => <ChartSkeleton key={i} height={88} />)
+          : <>
+            <KPICard label="Total Equity"    value={fmtNGN(k?.equity)}      accent="neutral"                          delay={0}   />
+            <KPICard label="Total Cost"      value={fmtNGN(k?.cost)}        accent="neutral"                          delay={50}  />
+            <KPICard label="Unrealized G/L"  value={fmtNGN(k?.gain)}        accent={isPositive(k?.gain) ? 'gain':'loss'} delay={100} />
+            <KPICard label="Return"          value={fmtPct(k?.return_pct)}  accent={isPositive(k?.return_pct) ? 'gain':'loss'} delay={150} />
+            <KPICard label="Realized P/L"    value={fmtNGN(k?.realized_pl)} accent={isPositive(k?.realized_pl) ? 'gain':'loss'} delay={200} />
+            <KPICard label="Positions"       value={k?.positions ?? '—'}    accent="accent"                           delay={250} />
+          </>
+        }
       </div>
 
       {/* Price banner */}
@@ -161,47 +174,47 @@ export default function NGXOverviewPage() {
         />
       )}
 
-      {/* Equity + Sector donut */}
+      {/* Equity + Sector */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        <ChartCard title="Portfolio Equity by Stock" loading={isFirstLoad} height={320}>
-          <PlotlyChart data={[equityBar]} layout={plotlyLayout({ margin: { t:10,b:60,l:48,r:8 } })} height={320} />
+        <ChartCard title="Portfolio Equity" subtitle="by stock" loading={isFirstLoad} height={300}>
+          <PlotlyChart data={[equityBar]} layout={plotlyLayout({ margin: { t:8,b:56,l:60,r:8 } })} height={300} />
         </ChartCard>
-        <ChartCard title="Sector Allocation" loading={isFirstLoad} height={320}>
+        <ChartCard title="Sector Allocation" loading={isFirstLoad} height={300}>
           <PlotlyChart
             data={[sectorDonut]}
-            layout={plotlyLayout({ margin: { t:10,b:10,l:10,r:10 }, showlegend: true,
-              legend: { orientation: 'v', x: 1, xanchor: 'left', y: 0.5 } })}
+            layout={plotlyLayout({ margin: { t:8,b:8,l:8,r:8 }, showlegend: true,
+              legend: { orientation: 'v', x: 1.02, xanchor: 'left', y: 0.5 } })}
+            height={300}
+          />
+        </ChartCard>
+      </div>
+
+      {/* Return + Sector gain */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <ChartCard title="Unrealized Return" subtitle="per stock" loading={isFirstLoad} height={320}>
+          <PlotlyChart
+            data={[returnBar]}
+            layout={plotlyLayout({ margin: { t:8,b:56,l:60,r:8 },
+              yaxis: { ticksuffix: '%', zerolinecolor: COLORS['border-strong'] } })}
+            height={320}
+          />
+        </ChartCard>
+        <ChartCard title="Sector Gain %" loading={isFirstLoad} height={320}>
+          <PlotlyChart
+            data={[sectorGainBar]}
+            layout={plotlyLayout({ margin: { t:8,b:80,l:60,r:8 },
+              yaxis: { ticksuffix: '%', zerolinecolor: COLORS['border-strong'] } })}
             height={320}
           />
         </ChartCard>
       </div>
 
-      {/* Return % + Sector gain */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        <ChartCard title="Unrealized Return %" subtitle="per stock" loading={isFirstLoad} height={340}>
-          <PlotlyChart
-            data={[returnBar]}
-            layout={plotlyLayout({ margin: { t:10,b:60,l:60,r:8 },
-              yaxis: { ticksuffix: '%', gridcolor: COLORS.border, zerolinecolor: COLORS.muted } })}
-            height={340}
-          />
-        </ChartCard>
-        <ChartCard title="Gain %" subtitle="by sector" loading={isFirstLoad} height={340}>
-          <PlotlyChart
-            data={[sectorGainBar]}
-            layout={plotlyLayout({ margin: { t:10,b:80,l:60,r:8 },
-              yaxis: { ticksuffix: '%', gridcolor: COLORS.border, zerolinecolor: COLORS.muted } })}
-            height={340}
-          />
-        </ChartCard>
-      </div>
-
       {/* Treemap */}
-      <ChartCard title="Portfolio Treemap" subtitle="size = equity · colour = return" loading={isFirstLoad} height={320}>
+      <ChartCard title="Portfolio Treemap" subtitle="size = equity · colour = return" loading={isFirstLoad} height={300}>
         <PlotlyChart
           data={[treemap]}
-          layout={plotlyLayout({ margin: { t:10,b:10,l:10,r:10 } })}
-          height={320}
+          layout={plotlyLayout({ margin: { t:8,b:8,l:8,r:8 } })}
+          height={300}
         />
       </ChartCard>
 

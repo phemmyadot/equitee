@@ -3,29 +3,28 @@
 import { useState } from 'react';
 import clsx from 'clsx';
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
 export interface ColDef<T extends Record<string, any>> {
-  key:     keyof T | string;
-  label:   string;
-  right?:  boolean;
+  key:        keyof T | string;
+  label:      string;
+  right?:     boolean;
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  render?: (value: any, row: T) => React.ReactNode;
+  render?:    (value: any, row: T) => React.ReactNode;
   sortValue?: (row: T) => number | string;
 }
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 interface StockTableProps<T extends Record<string, any>> {
-  rows:  T[];
-  cols:  ColDef<T>[];
-  maxH?: string;
+  rows:   T[];
+  cols:   ColDef<T>[];
+  maxH?:  string;
 }
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export default function StockTable<T extends Record<string, any>>({
   rows, cols, maxH = '420px',
 }: StockTableProps<T>) {
-  const [sortKey,  setSortKey]  = useState<string | null>(null);
-  const [sortDir,  setSortDir]  = useState<'asc' | 'desc'>('desc');
+  const [sortKey, setSortKey]  = useState<string | null>(null);
+  const [sortDir, setSortDir]  = useState<'asc' | 'desc'>('desc');
 
   const handleSort = (key: string) => {
     if (sortKey === key) setSortDir(d => d === 'asc' ? 'desc' : 'asc');
@@ -43,9 +42,9 @@ export default function StockTable<T extends Record<string, any>>({
   });
 
   return (
-    <div className="overflow-x-auto" style={{ maxHeight: maxH, overflowY: 'auto' }}>
+    <div style={{ maxHeight: maxH }} className="overflow-auto rounded-lg border border-[var(--border)]">
       <table className="data-table">
-        <thead className="sticky top-0 bg-[var(--panel)] z-10">
+        <thead>
           <tr>
             {cols.map((col) => (
               <th
@@ -53,13 +52,20 @@ export default function StockTable<T extends Record<string, any>>({
                 onClick={() => col.sortValue !== undefined && handleSort(String(col.key))}
                 className={clsx(
                   col.right && 'right',
-                  col.sortValue !== undefined && 'cursor-pointer select-none hover:text-[var(--snow)] transition-colors'
+                  col.sortValue && 'cursor-pointer select-none hover:text-[var(--ink-2)] transition-colors'
                 )}
               >
-                {col.label}
-                {sortKey === String(col.key) && (
-                  <span className="ml-1">{sortDir === 'asc' ? '↑' : '↓'}</span>
-                )}
+                <span className="inline-flex items-center gap-1">
+                  {col.label}
+                  {col.sortValue && (
+                    <span className={clsx(
+                      'text-[8px] transition-opacity',
+                      sortKey === String(col.key) ? 'opacity-100' : 'opacity-30'
+                    )}>
+                      {sortKey === String(col.key) ? (sortDir === 'asc' ? '↑' : '↓') : '↕'}
+                    </span>
+                  )}
+                </span>
               </th>
             ))}
           </tr>

@@ -11,7 +11,6 @@ import { fmtNGN, fmtPct, isPositive } from '@/lib/formatters';
 export default function NGXAdvancedPage() {
   const { data, loading } = usePortfolio();
   const isFirstLoad = loading && !data;
-
   if (!data && !loading) return null;
 
   const active     = (data?.ngx_stocks ?? []).filter(s => s.CurrentEquity != null);
@@ -20,66 +19,70 @@ export default function NGXAdvancedPage() {
   const meta       = data?.meta;
   const totalEquity = k?.equity || 1;
 
-  // ── Cost Basis stacked bar ─────────────────────────────────────────────────
   const costTrace = {
     name: 'Cost', type: 'bar',
     x: active.map(s => s.Ticker),
     y: active.map(s => s.RemainingCost ?? 0),
-    marker: { color: COLORS.dim, opacity: 0.9 },
+    marker: { color: COLORS['border-strong'], opacity: 1 },
     hovertemplate: '<b>%{x}</b> Cost<br>₦%{y:,.0f}<extra></extra>',
   };
   const gainTrace = {
     name: 'Gain', type: 'bar',
     x: active.map(s => s.Ticker),
     y: active.map(s => Math.max(0, s.UnrealizedPL ?? 0)),
-    marker: { color: COLORS.green, opacity: 0.75 },
+    marker: { color: COLORS.gain, opacity: 0.8 },
     hovertemplate: '<b>%{x}</b> Gain<br>₦%{y:,.0f}<extra></extra>',
   };
   const lossTrace = {
     name: 'Loss', type: 'bar',
     x: active.map(s => s.Ticker),
     y: active.map(s => Math.min(0, s.UnrealizedPL ?? 0)),
-    marker: { color: COLORS.red, opacity: 0.75 },
+    marker: { color: COLORS.loss, opacity: 0.8 },
     hovertemplate: '<b>%{x}</b> Loss<br>₦%{y:,.0f}<extra></extra>',
   };
 
-  // ── Waterfall ─────────────────────────────────────────────────────────────
   const waterfallTrace = wf ? {
     type: 'waterfall', orientation: 'v',
     measure: ['absolute', 'relative', 'relative', 'total'],
     x: ['Total Cost', 'Realized P/L', 'Unrealized G/L', 'Current Equity'],
     y: [wf.total_cost, wf.realized_pl, wf.unrealized_pl, wf.current_equity],
     connector: { line: { color: COLORS.border, width: 1.5 } },
-    increasing: { marker: { color: COLORS.green } },
-    decreasing: { marker: { color: COLORS.red   } },
-    totals:     { marker: { color: COLORS.gold  } },
+    increasing: { marker: { color: COLORS.gain } },
+    decreasing: { marker: { color: COLORS.loss } },
+    totals:     { marker: { color: COLORS.accent } },
     texttemplate: '%{y:,.0f}', textposition: 'outside',
-    textfont: { size: 10 },
+    textfont: { size: 10, color: COLORS.ink2 },
     hovertemplate: '<b>%{x}</b><br>₦%{y:,.0f}<extra></extra>',
   } : null;
 
-  // ── HHI Gauge ─────────────────────────────────────────────────────────────
   const hhi      = meta?.hhi ?? 0;
-  const hhiColor = hhi < 1000 ? COLORS.green : hhi < 1800 ? COLORS.gold : COLORS.red;
+  const hhiColor = hhi < 1000 ? COLORS.gain : hhi < 1800 ? COLORS.warn : COLORS.loss;
   const hhiGauge = {
-    type: 'indicator', mode: 'gauge+number+delta',
+    type: 'indicator', mode: 'gauge+number',
     value: hhi,
-    title: { text: `${meta?.hhi_label ?? ''} CONCENTRATION`, font: { size: 11, color: COLORS.muted } },
-    number: { font: { size: 32, color: hhiColor, family: "'IBM Plex Mono', monospace" } },
+    title: { text: `${meta?.hhi_label ?? ''} Concentration`, font: { size: 11, color: COLORS.ink3 } },
+    number: { font: { size: 36, color: hhiColor, family: "'JetBrains Mono', monospace" }, valueformat: '.0f' },
     gauge: {
-      axis: { range: [0, 3000], tickvals: [0,1000,1800,3000], ticktext: ['0','1000','1800','3000'], tickfont: { size: 9 } },
-      bar: { color: hhiColor, thickness: 0.25 },
-      bgcolor: COLORS.dim, bordercolor: COLORS.border,
+      axis: {
+        range: [0, 3000],
+        tickvals: [0, 1000, 1800, 3000],
+        ticktext: ['0', '1000', '1800', '3000'],
+        tickfont: { size: 9, color: COLORS.ink4 },
+        linecolor: COLORS.border,
+      },
+      bar: { color: hhiColor, thickness: 0.22 },
+      bgcolor: COLORS.canvas,
+      bordercolor: COLORS.border,
+      borderwidth: 1,
       steps: [
-        { range: [0,    1000], color: 'rgba(0,232,122,0.08)' },
-        { range: [1000, 1800], color: 'rgba(245,197,24,0.08)' },
-        { range: [1800, 3000], color: 'rgba(255,61,90,0.08)'  },
+        { range: [0,    1000], color: COLORS.gainLight  },
+        { range: [1000, 1800], color: '#FEF3CD' },
+        { range: [1800, 3000], color: COLORS.lossLight  },
       ],
       threshold: { line: { color: hhiColor, width: 2 }, thickness: 0.7, value: hhi },
     },
   };
 
-  // ── Risk–Return Scatter ────────────────────────────────────────────────────
   const mean = active.length
     ? active.reduce((a, b) => a + (b.ReturnPct ?? 0), 0) / active.length
     : 0;
@@ -90,74 +93,70 @@ export default function NGXAdvancedPage() {
     y: active.map(s => s.ReturnPct ?? 0),
     text: active.map(s => s.Ticker),
     textposition: 'top center',
-    textfont: { size: 9, color: COLORS.muted },
+    textfont: { size: 9, color: COLORS.ink3 },
     marker: {
-      size: active.map(s => Math.max(8, Math.sqrt((s.CurrentEquity ?? 0) / totalEquity) * 80)),
+      size: active.map(s => Math.max(10, Math.sqrt((s.CurrentEquity ?? 0) / totalEquity) * 80)),
       color: active.map(s => sectorColor(s.Sector)),
-      opacity: 0.8,
-      line: { color: COLORS.border, width: 1 },
+      opacity: 0.75,
+      line: { color: '#fff', width: 1.5 },
     },
-    hovertemplate: '<b>%{text}</b><br>Return: %{y:.1f}%<br>Risk proxy: %{x:.1f}<extra></extra>',
+    hovertemplate: '<b>%{text}</b><br>Return: %{y:.1f}%<br>Risk: %{x:.1f}<extra></extra>',
   };
 
   return (
     <div className="space-y-5">
 
-      {/* KPIs */}
-      <div className="flex gap-3 flex-wrap">
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
         {isFirstLoad ? [...Array(5)].map((_, i) => <ChartSkeleton key={i} height={88} />) : <>
-          <KPICard label="Total Equity"   value={fmtNGN(k?.equity)}      accent="gold"                                       delay={0}   />
-          <KPICard label="Unrealized G/L" value={fmtNGN(k?.gain)}        accent={isPositive(k?.gain) ? 'green' : 'red'}      delay={50}  />
-          <KPICard label="Realized P/L"   value={fmtNGN(k?.realized_pl)} accent={isPositive(k?.realized_pl) ? 'green':'red'} delay={100} />
-          <KPICard label="Return"         value={fmtPct(k?.return_pct)}  accent={isPositive(k?.return_pct) ? 'green':'red'}  delay={150} />
+          <KPICard label="Total Equity"   value={fmtNGN(k?.equity)}      accent="neutral"                               delay={0}   />
+          <KPICard label="Unrealized G/L" value={fmtNGN(k?.gain)}        accent={isPositive(k?.gain) ? 'gain':'loss'}   delay={50}  />
+          <KPICard label="Realized P/L"   value={fmtNGN(k?.realized_pl)} accent={isPositive(k?.realized_pl) ? 'gain':'loss'} delay={100} />
+          <KPICard label="Return"         value={fmtPct(k?.return_pct)}  accent={isPositive(k?.return_pct) ? 'gain':'loss'} delay={150} />
           <KPICard
-            label="HHI" value={`${hhi.toFixed(0)}`}
+            label="HHI Index" value={hhi.toFixed(0)}
             sub={`${meta?.hhi_label ?? ''} concentration`}
-            accent={hhi < 1000 ? 'green' : hhi < 1800 ? 'gold' : 'red'}
+            accent={hhi < 1000 ? 'gain' : hhi < 1800 ? 'warn' : 'loss'}
             delay={200}
           />
         </>}
       </div>
 
-      {/* Cost basis */}
-      <ChartCard title="Cost Basis vs Current Value" subtitle="grey = cost · green = gain · red = loss" loading={isFirstLoad} height={400}>
+      <ChartCard title="Cost Basis vs Current Value" subtitle="grey = cost · green = gain · red = loss" loading={isFirstLoad} height={380}>
         <PlotlyChart
           data={[costTrace, gainTrace, lossTrace]}
-          layout={plotlyLayout({ barmode: 'stack', margin: { t:10,b:60,l:72,r:8 } })}
-          height={400}
+          layout={plotlyLayout({ barmode: 'stack', margin: { t:8,b:56,l:72,r:8 } })}
+          height={380}
         />
       </ChartCard>
 
-      {/* Waterfall + HHI */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        <ChartCard title="Portfolio Value Waterfall" loading={isFirstLoad} height={380}>
+        <ChartCard title="Portfolio Value Waterfall" loading={isFirstLoad} height={360}>
           {waterfallTrace && (
             <PlotlyChart
               data={[waterfallTrace]}
-              layout={plotlyLayout({ margin: { t:40,b:60,l:72,r:8 } })}
-              height={380}
+              layout={plotlyLayout({ margin: { t:32,b:56,l:72,r:8 } })}
+              height={360}
             />
           )}
         </ChartCard>
-        <ChartCard title="Concentration Risk" subtitle="HHI gauge" loading={isFirstLoad} height={380}>
+        <ChartCard title="Concentration Risk" subtitle="Herfindahl–Hirschman Index" loading={isFirstLoad} height={360}>
           <PlotlyChart
             data={[hhiGauge]}
-            layout={plotlyLayout({ margin: { t:40,b:20,l:20,r:20 } })}
-            height={380}
+            layout={plotlyLayout({ margin: { t:32,b:16,l:20,r:20 } })}
+            height={360}
           />
         </ChartCard>
       </div>
 
-      {/* Scatter */}
-      <ChartCard title="Risk-Return Scatter" subtitle="size = equity weight · colour = sector" loading={isFirstLoad} height={420}>
+      <ChartCard title="Risk–Return" subtitle="size = equity weight · colour = sector" loading={isFirstLoad} height={400}>
         <PlotlyChart
           data={[scatter]}
           layout={plotlyLayout({
-            margin: { t:20,b:60,l:60,r:20 },
-            xaxis: { title: { text: 'Return deviation from mean (risk proxy)', font: { size: 10 } } },
+            margin: { t:16,b:56,l:60,r:16 },
+            xaxis: { title: { text: 'Return deviation from mean', font: { size: 10 } }, tickfont: { size: 9 } },
             yaxis: { title: { text: 'Return %', font: { size: 10 } }, ticksuffix: '%' },
           })}
-          height={420}
+          height={400}
         />
       </ChartCard>
 

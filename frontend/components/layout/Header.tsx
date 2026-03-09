@@ -4,17 +4,16 @@ import { useEffect, useState } from 'react';
 import { fmtAge } from '@/lib/formatters';
 
 interface HeaderProps {
-  usdngn?:   number;
-  fxSource?: string;
+  usdngn?:     number;
+  fxSource?:   string;
   lastUpdated?: Date;
-  loading:   boolean;
-  onRefresh: () => void;
+  loading:     boolean;
+  onRefresh:   () => void;
 }
 
 export default function Header({ usdngn, fxSource, lastUpdated, loading, onRefresh }: HeaderProps) {
   const [now, setNow] = useState<Date>(new Date());
 
-  // Tick the clock every second so "X ago" stays fresh
   useEffect(() => {
     const id = setInterval(() => setNow(new Date()), 1000);
     return () => clearInterval(id);
@@ -25,40 +24,57 @@ export default function Header({ usdngn, fxSource, lastUpdated, loading, onRefre
     : null;
 
   return (
-    <header className="
+    <header style={{ height: 'var(--header-h)' }} className="
       sticky top-0 z-50
       flex items-center justify-between
-      px-4 md:px-8 h-14
-      border-b border-[var(--border)]
-      bg-[rgba(7,9,15,0.92)] backdrop-blur-md
+      bg-white border-b border-[var(--border)]
+      shadow-[0_1px_0_#E4E7EC]
+      px-[var(--page-px)] md:px-[var(--page-px-md)] lg:px-[var(--page-px-lg)]
     ">
-      {/* Logo */}
-      <div className="font-mono text-[11px] font-bold tracking-[0.18em] uppercase select-none">
-        <span className="text-[var(--blue)]">PORT</span>
-        <span className="text-[var(--gold)]">FOLIO</span>
-        <span className="text-[var(--muted)] ml-2 hidden sm:inline">ANALYZER</span>
+
+      {/* Left — logo */}
+      <div className="flex items-center gap-2 shrink-0">
+        {/* Icon mark */}
+        <div className="
+          w-7 h-7 rounded-md bg-[var(--accent)]
+          flex items-center justify-center shrink-0
+        ">
+          <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
+            <path d="M2 10L5.5 6.5L8 9L12 4" stroke="white" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"/>
+          </svg>
+        </div>
+        <span className="font-semibold text-[13px] text-[var(--ink)] tracking-tight">
+          Portfolio
+        </span>
+        <span className="hidden sm:block text-[var(--ink-4)] text-[13px]">Analyzer</span>
       </div>
 
-      {/* Centre — FX rate */}
+      {/* Centre — FX rate chip */}
       {usdngn && (
-        <div className="hidden md:flex items-center gap-3">
-          <span className="font-mono text-[10px] text-[var(--muted)] tracking-wider">USD/NGN</span>
-          <span className="font-mono text-[13px] font-bold text-[var(--gold)]">
+        <div className="
+          hidden md:flex items-center gap-2
+          bg-[var(--canvas)] border border-[var(--border)]
+          rounded-lg px-3 py-1.5
+        ">
+          <span className="text-[10px] font-semibold uppercase tracking-wider text-[var(--ink-4)] font-mono">
+            USD/NGN
+          </span>
+          <span className="font-mono text-[13px] font-semibold text-[var(--ink)]">
             ₦{usdngn.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
           </span>
           {fxSource && (
-            <span className="font-mono text-[9px] text-[var(--muted)] bg-[var(--dim)] px-2 py-0.5 rounded-sm">
+            <span className="text-[9px] font-medium uppercase tracking-wide text-[var(--ink-4)] bg-[var(--border)] px-1.5 py-0.5 rounded-sm">
               {fxSource}
             </span>
           )}
         </div>
       )}
 
-      {/* Right — timestamp + refresh */}
-      <div className="flex items-center gap-3">
-        {lastUpdated && (
-          <span className="hidden sm:block font-mono text-[9px] text-[var(--muted)]">
-            {ageSeconds !== null ? fmtAge(ageSeconds) : '—'}
+      {/* Right — last updated + refresh */}
+      <div className="flex items-center gap-3 shrink-0">
+        {ageSeconds !== null && (
+          <span className="hidden sm:block font-mono text-[10px] text-[var(--ink-4)]">
+            {fmtAge(ageSeconds)}
           </span>
         )}
 
@@ -66,15 +82,32 @@ export default function Header({ usdngn, fxSource, lastUpdated, loading, onRefre
           onClick={onRefresh}
           disabled={loading}
           className="
-            font-mono text-[10px] tracking-wider
-            border border-[var(--blue)] text-[var(--blue)]
-            px-3 py-1.5 rounded
-            hover:bg-[var(--blue)] hover:text-[var(--bg)]
-            disabled:opacity-40 disabled:cursor-not-allowed
-            transition-all duration-150
+            flex items-center gap-1.5
+            text-[11px] font-semibold
+            bg-[var(--accent)] text-white
+            px-3 py-1.5 rounded-md
+            hover:bg-[#1447C0]
+            disabled:opacity-50 disabled:cursor-not-allowed
+            transition-colors duration-150
+            whitespace-nowrap
           "
         >
-          {loading ? '···' : '⟳ REFRESH'}
+          {loading ? (
+            <>
+              <svg className="animate-spin" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                <path d="M21 12a9 9 0 1 1-6.219-8.56"/>
+              </svg>
+              <span className="hidden sm:inline">Refreshing</span>
+            </>
+          ) : (
+            <>
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                <path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/>
+                <path d="M3 3v5h5"/>
+              </svg>
+              <span className="hidden sm:inline">Refresh</span>
+            </>
+          )}
         </button>
       </div>
     </header>
