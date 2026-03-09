@@ -1,4 +1,3 @@
 DB to store NGX and US tickers, remove google sheet 
-Make app modular
 Make mobile responsive
 Create prediction navigation

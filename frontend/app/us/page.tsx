@@ -2,30 +2,26 @@
 
 import { usePortfolio } from '@/lib/PortfolioContext';
 import KPICard          from '@/components/ui/KPICard';
+import ChartCard        from '@/components/ui/ChartCard';
+import StockTable, { type ColDef } from '@/components/ui/StockTable';
 import SourceBadge      from '@/components/ui/Badge';
 import { ChartSkeleton, PriceBanner } from '@/components/ui/Feedback';
 import PlotlyChart      from '@/components/charts/PlotlyChart';
 import { plotlyLayout, COLORS, sectorColor } from '@/lib/theme';
 import { fmtUSD, fmtPct, fmtPct2, isPositive } from '@/lib/formatters';
 import type { StockRow } from '@/lib/api';
-import StockTable, { ColDef } from '@/components/ui/StockTable';
 
 export default function USPortfolioPage() {
   const { data, loading } = usePortfolio();
+  const isFirstLoad = loading && !data;
 
-  if (loading && !data) return (
-    <div className="space-y-4">
-      <div className="flex gap-3 flex-wrap">{[...Array(4)].map((_, i) => <ChartSkeleton key={i} height={90} />)}</div>
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        <ChartSkeleton height={320} /><ChartSkeleton height={320} />
-      </div>
-    </div>
-  );
+  if (!data && !loading) return null;
 
-  if (!data) return null;
-  const { us_kpis: k, us_stocks, us_sectors, meta } = data;
+  const k          = data?.us_kpis;
+  const us_stocks  = data?.us_stocks ?? [];
+  const us_sectors = data?.us_sectors ?? [];
+  const meta       = data?.meta;
 
-  // ── Charts ─────────────────────────────────────────────────────────────────
   const equityBar = {
     type: 'bar',
     x: us_stocks.map(s => s.Ticker),
@@ -57,40 +53,21 @@ export default function USPortfolioPage() {
   };
 
   const costBasisBar = [
-    {
-      name: 'Cost',
-      type: 'bar',
-      x: us_stocks.map(s => s.Ticker),
-      y: us_stocks.map(s => s.RemainingCost ?? 0),
-      marker: { color: COLORS.dim },
-    },
-    {
-      name: 'Gain',
-      type: 'bar',
-      x: us_stocks.map(s => s.Ticker),
-      y: us_stocks.map(s => Math.max(0, s.UnrealizedPL ?? 0)),
-      marker: { color: COLORS.green, opacity: 0.75 },
-    },
-    {
-      name: 'Loss',
-      type: 'bar',
-      x: us_stocks.map(s => s.Ticker),
-      y: us_stocks.map(s => Math.min(0, s.UnrealizedPL ?? 0)),
-      marker: { color: COLORS.red, opacity: 0.75 },
-    },
+    { name: 'Cost', type: 'bar', x: us_stocks.map(s => s.Ticker), y: us_stocks.map(s => s.RemainingCost ?? 0), marker: { color: COLORS.dim } },
+    { name: 'Gain', type: 'bar', x: us_stocks.map(s => s.Ticker), y: us_stocks.map(s => Math.max(0, s.UnrealizedPL ?? 0)), marker: { color: COLORS.green, opacity: 0.75 } },
+    { name: 'Loss', type: 'bar', x: us_stocks.map(s => s.Ticker), y: us_stocks.map(s => Math.min(0, s.UnrealizedPL ?? 0)), marker: { color: COLORS.red, opacity: 0.75 } },
   ];
 
-  // ── Table columns ──────────────────────────────────────────────────────────
   const cols: ColDef<StockRow>[] = [
     { key: 'Ticker', label: 'Ticker', render: v => <b>{v}</b> },
     { key: 'Stock',  label: 'Company' },
     { key: 'Sector', label: 'Sector',
       render: (v: string) => (
         <span className="flex items-center gap-1.5">
-          <span className="w-2 h-2 rounded-full inline-block" style={{ background: sectorColor(v) }} />
+          <span className="w-2 h-2 rounded-full" style={{ background: sectorColor(v) }} />
           {v}
         </span>
-      )
+      ),
     },
     { key: 'LivePrice', label: 'Price', right: true,
       render: (v: number) => v != null
@@ -134,64 +111,59 @@ export default function USPortfolioPage() {
 
       {/* KPIs */}
       <div className="flex gap-3 flex-wrap">
-        <KPICard label="Total Equity"    value={fmtUSD(k.equity)}     accent="gold"                              delay={0}  />
-        <KPICard label="Total Cost"      value={fmtUSD(k.cost)}       accent="blue"                              delay={50} />
-        <KPICard label="Unrealized Gain" value={fmtUSD(k.gain)}       accent={isPositive(k.gain) ? 'green':'red'} delay={100} />
-        <KPICard label="Return"          value={fmtPct(k.return_pct)} accent={isPositive(k.return_pct) ? 'green':'red'} delay={150} />
-        <KPICard label="Positions"       value={k.positions}           accent="purple"                            delay={200} />
+        {isFirstLoad ? [...Array(5)].map((_, i) => <ChartSkeleton key={i} height={88} />) : <>
+          <KPICard label="Total Equity"    value={fmtUSD(k?.equity)}     accent="gold"                                      delay={0}   />
+          <KPICard label="Total Cost"      value={fmtUSD(k?.cost)}       accent="blue"                                      delay={50}  />
+          <KPICard label="Unrealized Gain" value={fmtUSD(k?.gain)}       accent={isPositive(k?.gain) ? 'green' : 'red'}     delay={100} />
+          <KPICard label="Return"          value={fmtPct(k?.return_pct)} accent={isPositive(k?.return_pct) ? 'green':'red'} delay={150} />
+          <KPICard label="Positions"       value={k?.positions ?? '—'}   accent="purple"                                    delay={200} />
+        </>}
       </div>
 
-      {/* Price banner */}
-      <PriceBanner
-        live={meta.us_prices_live}
-        total={meta.us_prices_total}
-        source={meta.us_price_source}
-        ageSeconds={meta.us_price_age}
-      />
+      {meta && (
+        <PriceBanner
+          live={meta.us_prices_live}
+          total={meta.us_prices_total}
+          source={meta.us_price_source}
+          ageSeconds={meta.us_price_age}
+        />
+      )}
 
-      {/* Equity + Donut */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        <div className="chart-card">
-          <div className="chart-title">Portfolio Equity by Stock</div>
+        <ChartCard title="Portfolio Equity by Stock" loading={isFirstLoad} height={300}>
           <PlotlyChart data={[equityBar]} layout={plotlyLayout({ margin: { t:10,b:60,l:60,r:8 } })} height={300} />
-        </div>
-        <div className="chart-card">
-          <div className="chart-title">Sector Allocation</div>
+        </ChartCard>
+        <ChartCard title="Sector Allocation" loading={isFirstLoad} height={300}>
           <PlotlyChart
             data={[sectorDonut]}
             layout={plotlyLayout({ margin: { t:10,b:10,l:10,r:10 }, showlegend: true,
               legend: { orientation: 'v', x: 1, xanchor: 'left', y: 0.5 } })}
             height={300}
           />
-        </div>
+        </ChartCard>
       </div>
 
-      {/* Return + Cost basis */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        <div className="chart-card">
-          <div className="chart-title">Return % <span>per stock</span></div>
+        <ChartCard title="Return %" subtitle="per stock" loading={isFirstLoad} height={300}>
           <PlotlyChart
             data={[returnBar]}
             layout={plotlyLayout({ margin: { t:10,b:60,l:60,r:8 },
               yaxis: { ticksuffix: '%', zerolinecolor: COLORS.muted } })}
             height={300}
           />
-        </div>
-        <div className="chart-card">
-          <div className="chart-title">Cost Basis vs Value</div>
+        </ChartCard>
+        <ChartCard title="Cost Basis vs Value" loading={isFirstLoad} height={300}>
           <PlotlyChart
             data={costBasisBar}
             layout={plotlyLayout({ barmode: 'stack', margin: { t:10,b:60,l:60,r:8 } })}
             height={300}
           />
-        </div>
+        </ChartCard>
       </div>
 
-      {/* Table */}
-      <div className="chart-card">
-        <div className="chart-title">US Holdings Detail</div>
+      <ChartCard title="US Holdings Detail" loading={isFirstLoad} height={380}>
         <StockTable rows={us_stocks} cols={cols} />
-      </div>
+      </ChartCard>
 
     </div>
   );

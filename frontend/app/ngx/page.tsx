@@ -2,6 +2,7 @@
 
 import { usePortfolio } from '@/lib/PortfolioContext';
 import KPICard          from '@/components/ui/KPICard';
+import ChartCard        from '@/components/ui/ChartCard';
 import StockTable, { type ColDef } from '@/components/ui/StockTable';
 import SourceBadge      from '@/components/ui/Badge';
 import { ChartSkeleton, PriceBanner } from '@/components/ui/Feedback';
@@ -12,24 +13,16 @@ import type { StockRow } from '@/lib/api';
 
 export default function NGXOverviewPage() {
   const { data, loading } = usePortfolio();
+  const isFirstLoad = loading && !data;
 
-  if (loading && !data) return (
-    <div className="space-y-6">
-      <div className="flex gap-3 flex-wrap">{[...Array(6)].map((_, i) => <ChartSkeleton key={i} height={90} />)}</div>
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        <ChartSkeleton height={340} /><ChartSkeleton height={340} />
-      </div>
-      <ChartSkeleton height={320} />
-    </div>
-  );
+  if (!data && !loading) return null;
 
-  if (!data) return null;
-  const { ngx_kpis: k, ngx_stocks, ngx_sectors, meta } = data;
-  const active = ngx_stocks.filter(s => s.CurrentEquity != null);
+  const k          = data?.ngx_kpis;
+  const active     = (data?.ngx_stocks ?? []).filter(s => s.CurrentEquity != null);
+  const ngx_sectors = data?.ngx_sectors ?? [];
+  const meta        = data?.meta;
 
-  // ── Charts ─────────────────────────────────────────────────────────────────
-
-  // Equity bar
+  // ── Chart data ─────────────────────────────────────────────────────────────
   const equityBar = {
     type: 'bar',
     x: active.map(s => s.Ticker),
@@ -38,7 +31,6 @@ export default function NGXOverviewPage() {
     hovertemplate: '<b>%{x}</b><br>₦%{y:,.0f}<extra></extra>',
   };
 
-  // Sector donut
   const sectorDonut = {
     type: 'pie',
     labels: ngx_sectors.map(s => s.Sector),
@@ -50,35 +42,28 @@ export default function NGXOverviewPage() {
     hovertemplate: '<b>%{label}</b><br>₦%{value:,.0f}<br>%{percent}<extra></extra>',
   };
 
-  // Return diverging bar
   const returnBar = {
     type: 'bar',
     x: active.map(s => s.Ticker),
     y: active.map(s => s.ReturnPct),
     marker: {
-      color: active.map(s =>
-        (s.ReturnPct ?? 0) >= 0 ? COLORS.green : COLORS.red
-      ),
+      color: active.map(s => (s.ReturnPct ?? 0) >= 0 ? COLORS.green : COLORS.red),
       opacity: 0.85,
     },
     hovertemplate: '<b>%{x}</b><br>%{y:.1f}%<extra></extra>',
   };
 
-  // Sector gain bar
   const sectorGainBar = {
     type: 'bar',
     x: ngx_sectors.map(s => s.Sector),
     y: ngx_sectors.map(s => s.GainPct),
     marker: {
-      color: ngx_sectors.map(s =>
-        s.GainPct >= 0 ? sectorColor(s.Sector) : COLORS.red
-      ),
+      color: ngx_sectors.map(s => s.GainPct >= 0 ? sectorColor(s.Sector) : COLORS.red),
       opacity: 0.85,
     },
     hovertemplate: '<b>%{x}</b><br>%{y:.1f}%<extra></extra>',
   };
 
-  // Treemap
   const treemap = {
     type: 'treemap',
     labels:  active.map(s => `${s.Ticker}<br>${fmtPct(s.ReturnPct ?? 0)}`),
@@ -95,23 +80,22 @@ export default function NGXOverviewPage() {
       line: { width: 1.5, color: COLORS.panel },
     },
     textfont: { size: 11 },
-    tiling:   { packing: 'squarify' },
+    tiling: { packing: 'squarify' },
   };
 
-  // ── Table columns ──────────────────────────────────────────────────────────
+  // ── Table columns ───────────────────────────────────────────────────────────
   const cols: ColDef<StockRow>[] = [
-    { key: 'Ticker',       label: 'Ticker',  render: v => <b>{v}</b> },
-    { key: 'Stock',        label: 'Company', render: v => <span className="text-[var(--snow)]">{v}</span> },
-    { key: 'Sector',       label: 'Sector',
+    { key: 'Ticker',  label: 'Ticker',  render: v => <b>{v}</b> },
+    { key: 'Stock',   label: 'Company', render: v => <span className="text-[var(--snow)]">{v}</span> },
+    { key: 'Sector',  label: 'Sector',
       render: (v: string) => (
         <span className="flex items-center gap-1.5">
-          <span className="w-2 h-2 rounded-full inline-block flex-shrink-0"
-            style={{ background: sectorColor(v) }} />
+          <span className="w-2 h-2 rounded-full flex-shrink-0" style={{ background: sectorColor(v) }} />
           {v}
         </span>
-      )
+      ),
     },
-    { key: 'LivePrice',    label: 'Price', right: true,
+    { key: 'LivePrice', label: 'Price', right: true,
       render: (v: number) => v != null
         ? <span className="font-mono font-bold text-[var(--snow)]">{fmtNGNFull(v)}</span>
         : <span className="text-[var(--muted)]">—</span>,
@@ -157,80 +141,74 @@ export default function NGXOverviewPage() {
 
       {/* KPI strip */}
       <div className="flex gap-3 flex-wrap">
-        <KPICard label="Total Equity"    value={fmtNGN(k.equity)}      accent="gold"                              delay={0}  />
-        <KPICard label="Total Cost"      value={fmtNGN(k.cost)}        accent="blue"                              delay={50} />
-        <KPICard label="Unrealized Gain" value={fmtNGN(k.gain)}        accent={isPositive(k.gain) ? 'green':'red'} delay={100} />
-        <KPICard label="Return"          value={fmtPct(k.return_pct)}  accent={isPositive(k.return_pct) ? 'green':'red'} delay={150} />
-        <KPICard label="Realized P/L"    value={fmtNGN(k.realized_pl)} accent={isPositive(k.realized_pl) ? 'green':'red'} delay={200} />
-        <KPICard label="Positions"       value={k.positions}            accent="purple"                            delay={250} />
+        {isFirstLoad ? [...Array(6)].map((_, i) => <ChartSkeleton key={i} height={88} />) : <>
+          <KPICard label="Total Equity"    value={fmtNGN(k?.equity)}      accent="gold"                                      delay={0}   />
+          <KPICard label="Total Cost"      value={fmtNGN(k?.cost)}        accent="blue"                                      delay={50}  />
+          <KPICard label="Unrealized Gain" value={fmtNGN(k?.gain)}        accent={isPositive(k?.gain) ? 'green' : 'red'}     delay={100} />
+          <KPICard label="Return"          value={fmtPct(k?.return_pct)}  accent={isPositive(k?.return_pct) ? 'green':'red'} delay={150} />
+          <KPICard label="Realized P/L"    value={fmtNGN(k?.realized_pl)} accent={isPositive(k?.realized_pl) ? 'green':'red'} delay={200} />
+          <KPICard label="Positions"       value={k?.positions ?? '—'}    accent="purple"                                    delay={250} />
+        </>}
       </div>
 
       {/* Price banner */}
-      <PriceBanner
-        live={meta.ngx_prices_live}
-        total={meta.ngx_prices_total}
-        source={meta.ngx_price_source}
-        ageSeconds={meta.ngx_price_age}
-      />
+      {meta && (
+        <PriceBanner
+          live={meta.ngx_prices_live}
+          total={meta.ngx_prices_total}
+          source={meta.ngx_price_source}
+          ageSeconds={meta.ngx_price_age}
+        />
+      )}
 
       {/* Equity + Sector donut */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        <div className="chart-card">
-          <div className="chart-title">Portfolio Equity by Stock</div>
+        <ChartCard title="Portfolio Equity by Stock" loading={isFirstLoad} height={320}>
           <PlotlyChart data={[equityBar]} layout={plotlyLayout({ margin: { t:10,b:60,l:48,r:8 } })} height={320} />
-        </div>
-        <div className="chart-card">
-          <div className="chart-title">Sector Allocation</div>
+        </ChartCard>
+        <ChartCard title="Sector Allocation" loading={isFirstLoad} height={320}>
           <PlotlyChart
             data={[sectorDonut]}
             layout={plotlyLayout({ margin: { t:10,b:10,l:10,r:10 }, showlegend: true,
               legend: { orientation: 'v', x: 1, xanchor: 'left', y: 0.5 } })}
             height={320}
           />
-        </div>
+        </ChartCard>
       </div>
 
-      {/* Return + Sector gain */}
+      {/* Return % + Sector gain */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        <div className="chart-card">
-          <div className="chart-title">Unrealized Return % <span>per stock</span></div>
+        <ChartCard title="Unrealized Return %" subtitle="per stock" loading={isFirstLoad} height={340}>
           <PlotlyChart
-            data={[{ ...returnBar, type: 'bar' }]}
-            layout={plotlyLayout({
-              margin: { t:10,b:60,l:60,r:8 },
-              yaxis: { ticksuffix: '%', gridcolor: COLORS.border, zerolinecolor: COLORS.muted },
-            })}
+            data={[returnBar]}
+            layout={plotlyLayout({ margin: { t:10,b:60,l:60,r:8 },
+              yaxis: { ticksuffix: '%', gridcolor: COLORS.border, zerolinecolor: COLORS.muted } })}
             height={340}
           />
-        </div>
-        <div className="chart-card">
-          <div className="chart-title">Gain % <span>by sector</span></div>
+        </ChartCard>
+        <ChartCard title="Gain %" subtitle="by sector" loading={isFirstLoad} height={340}>
           <PlotlyChart
-            data={[{ ...sectorGainBar, type: 'bar' }]}
-            layout={plotlyLayout({
-              margin: { t:10,b:80,l:60,r:8 },
-              yaxis: { ticksuffix: '%', gridcolor: COLORS.border, zerolinecolor: COLORS.muted },
-            })}
+            data={[sectorGainBar]}
+            layout={plotlyLayout({ margin: { t:10,b:80,l:60,r:8 },
+              yaxis: { ticksuffix: '%', gridcolor: COLORS.border, zerolinecolor: COLORS.muted } })}
             height={340}
           />
-        </div>
+        </ChartCard>
       </div>
 
       {/* Treemap */}
-      <div className="chart-card">
-        <div className="chart-title">Portfolio Treemap <span>size = equity · colour = return</span></div>
+      <ChartCard title="Portfolio Treemap" subtitle="size = equity · colour = return" loading={isFirstLoad} height={320}>
         <PlotlyChart
           data={[treemap]}
           layout={plotlyLayout({ margin: { t:10,b:10,l:10,r:10 } })}
           height={320}
         />
-      </div>
+      </ChartCard>
 
       {/* Holdings table */}
-      <div className="chart-card">
-        <div className="chart-title">Holdings Detail</div>
+      <ChartCard title="Holdings Detail" loading={isFirstLoad} height={420}>
         <StockTable rows={active} cols={cols} />
-      </div>
+      </ChartCard>
 
     </div>
   );
