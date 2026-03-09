@@ -1,50 +1,42 @@
 'use client';
 
 import { usePortfolio } from '@/lib/PortfolioContext';
+import KPICard           from '@/components/ui/KPICard';
+import ChartCard         from '@/components/ui/ChartCard';
 import { ChartSkeleton } from '@/components/ui/Feedback';
 import PlotlyChart       from '@/components/charts/PlotlyChart';
-import KPICard           from '@/components/ui/KPICard';
 import { plotlyLayout, COLORS, sectorColor } from '@/lib/theme';
 import { fmtNGN, fmtPct, isPositive } from '@/lib/formatters';
 
 export default function NGXAdvancedPage() {
   const { data, loading } = usePortfolio();
+  const isFirstLoad = loading && !data;
 
-  if (loading && !data) return (
-    <div className="space-y-4">
-      <ChartSkeleton height={400} />
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        <ChartSkeleton height={380} /><ChartSkeleton height={380} />
-      </div>
-      <ChartSkeleton height={420} />
-    </div>
-  );
+  if (!data && !loading) return null;
 
-  if (!data) return null;
-  const { ngx_stocks, ngx_kpis: k, waterfall, meta } = data;
-  const active = ngx_stocks.filter(s => s.CurrentEquity != null);
-  const totalEquity = k.equity || 1;
+  const active     = (data?.ngx_stocks ?? []).filter(s => s.CurrentEquity != null);
+  const k          = data?.ngx_kpis;
+  const wf         = data?.waterfall;
+  const meta       = data?.meta;
+  const totalEquity = k?.equity || 1;
 
-  // ── Cost Basis vs Value stacked bar ───────────────────────────────────────
+  // ── Cost Basis stacked bar ─────────────────────────────────────────────────
   const costTrace = {
-    name: 'Cost',
-    type: 'bar',
+    name: 'Cost', type: 'bar',
     x: active.map(s => s.Ticker),
     y: active.map(s => s.RemainingCost ?? 0),
     marker: { color: COLORS.dim, opacity: 0.9 },
     hovertemplate: '<b>%{x}</b> Cost<br>₦%{y:,.0f}<extra></extra>',
   };
   const gainTrace = {
-    name: 'Gain',
-    type: 'bar',
+    name: 'Gain', type: 'bar',
     x: active.map(s => s.Ticker),
     y: active.map(s => Math.max(0, s.UnrealizedPL ?? 0)),
     marker: { color: COLORS.green, opacity: 0.75 },
     hovertemplate: '<b>%{x}</b> Gain<br>₦%{y:,.0f}<extra></extra>',
   };
   const lossTrace = {
-    name: 'Loss',
-    type: 'bar',
+    name: 'Loss', type: 'bar',
     x: active.map(s => s.Ticker),
     y: active.map(s => Math.min(0, s.UnrealizedPL ?? 0)),
     marker: { color: COLORS.red, opacity: 0.75 },
@@ -52,10 +44,8 @@ export default function NGXAdvancedPage() {
   };
 
   // ── Waterfall ─────────────────────────────────────────────────────────────
-  const wf = waterfall;
-  const waterfallData = {
-    type: 'waterfall',
-    orientation: 'v',
+  const waterfallTrace = wf ? {
+    type: 'waterfall', orientation: 'v',
     measure: ['absolute', 'relative', 'relative', 'total'],
     x: ['Total Cost', 'Realized P/L', 'Unrealized G/L', 'Current Equity'],
     y: [wf.total_cost, wf.realized_pl, wf.unrealized_pl, wf.current_equity],
@@ -63,53 +53,40 @@ export default function NGXAdvancedPage() {
     increasing: { marker: { color: COLORS.green } },
     decreasing: { marker: { color: COLORS.red   } },
     totals:     { marker: { color: COLORS.gold  } },
-    texttemplate: '%{y:,.0f}',
-    textposition: 'outside',
+    texttemplate: '%{y:,.0f}', textposition: 'outside',
     textfont: { size: 10 },
     hovertemplate: '<b>%{x}</b><br>₦%{y:,.0f}<extra></extra>',
-  };
+  } : null;
 
   // ── HHI Gauge ─────────────────────────────────────────────────────────────
-  const hhi = meta.hhi;
+  const hhi      = meta?.hhi ?? 0;
   const hhiColor = hhi < 1000 ? COLORS.green : hhi < 1800 ? COLORS.gold : COLORS.red;
   const hhiGauge = {
-    type: 'indicator',
-    mode: 'gauge+number+delta',
+    type: 'indicator', mode: 'gauge+number+delta',
     value: hhi,
-    title: { text: `${meta.hhi_label} CONCENTRATION`, font: { size: 11, color: COLORS.muted } },
+    title: { text: `${meta?.hhi_label ?? ''} CONCENTRATION`, font: { size: 11, color: COLORS.muted } },
     number: { font: { size: 32, color: hhiColor, family: "'IBM Plex Mono', monospace" } },
     gauge: {
-      axis: {
-        range: [0, 3000],
-        tickvals: [0, 1000, 1800, 3000],
-        ticktext: ['0', '1000', '1800', '3000'],
-        tickfont: { size: 9 },
-      },
+      axis: { range: [0, 3000], tickvals: [0,1000,1800,3000], ticktext: ['0','1000','1800','3000'], tickfont: { size: 9 } },
       bar: { color: hhiColor, thickness: 0.25 },
-      bgcolor: COLORS.dim,
-      bordercolor: COLORS.border,
+      bgcolor: COLORS.dim, bordercolor: COLORS.border,
       steps: [
-        { range: [0, 1000],    color: 'rgba(0,232,122,0.08)' },
+        { range: [0,    1000], color: 'rgba(0,232,122,0.08)' },
         { range: [1000, 1800], color: 'rgba(245,197,24,0.08)' },
         { range: [1800, 3000], color: 'rgba(255,61,90,0.08)'  },
       ],
-      threshold: {
-        line: { color: hhiColor, width: 2 },
-        thickness: 0.7,
-        value: hhi,
-      },
+      threshold: { line: { color: hhiColor, width: 2 }, thickness: 0.7, value: hhi },
     },
   };
 
-  // ── Risk–Return Scatter ───────────────────────────────────────────────────
+  // ── Risk–Return Scatter ────────────────────────────────────────────────────
+  const mean = active.length
+    ? active.reduce((a, b) => a + (b.ReturnPct ?? 0), 0) / active.length
+    : 0;
+
   const scatter = {
-    type: 'scatter',
-    mode: 'markers+text',
-    x: active.map(s => {
-      // Proxy for risk: distance of return from mean
-      const mean = active.reduce((a, b) => a + (b.ReturnPct ?? 0), 0) / active.length;
-      return Math.abs((s.ReturnPct ?? 0) - mean);
-    }),
+    type: 'scatter', mode: 'markers+text',
+    x: active.map(s => Math.abs((s.ReturnPct ?? 0) - mean)),
     y: active.map(s => s.ReturnPct ?? 0),
     text: active.map(s => s.Ticker),
     textposition: 'top center',
@@ -128,51 +105,51 @@ export default function NGXAdvancedPage() {
 
       {/* KPIs */}
       <div className="flex gap-3 flex-wrap">
-        <KPICard label="Total Equity"   value={fmtNGN(k.equity)}      accent="gold"                              delay={0}  />
-        <KPICard label="Unrealized G/L" value={fmtNGN(k.gain)}        accent={isPositive(k.gain) ? 'green':'red'} delay={50} />
-        <KPICard label="Realized P/L"   value={fmtNGN(k.realized_pl)} accent={isPositive(k.realized_pl) ? 'green':'red'} delay={100} />
-        <KPICard label="Return"         value={fmtPct(k.return_pct)}  accent={isPositive(k.return_pct) ? 'green':'red'} delay={150} />
-        <KPICard label="HHI"
-          value={`${hhi.toFixed(0)}`}
-          sub={`${meta.hhi_label} concentration`}
-          accent={hhi < 1000 ? 'green' : hhi < 1800 ? 'gold' : 'red'}
-          delay={200}
-        />
+        {isFirstLoad ? [...Array(5)].map((_, i) => <ChartSkeleton key={i} height={88} />) : <>
+          <KPICard label="Total Equity"   value={fmtNGN(k?.equity)}      accent="gold"                                       delay={0}   />
+          <KPICard label="Unrealized G/L" value={fmtNGN(k?.gain)}        accent={isPositive(k?.gain) ? 'green' : 'red'}      delay={50}  />
+          <KPICard label="Realized P/L"   value={fmtNGN(k?.realized_pl)} accent={isPositive(k?.realized_pl) ? 'green':'red'} delay={100} />
+          <KPICard label="Return"         value={fmtPct(k?.return_pct)}  accent={isPositive(k?.return_pct) ? 'green':'red'}  delay={150} />
+          <KPICard
+            label="HHI" value={`${hhi.toFixed(0)}`}
+            sub={`${meta?.hhi_label ?? ''} concentration`}
+            accent={hhi < 1000 ? 'green' : hhi < 1800 ? 'gold' : 'red'}
+            delay={200}
+          />
+        </>}
       </div>
 
-      {/* Cost basis stacked bar */}
-      <div className="chart-card">
-        <div className="chart-title">Cost Basis vs Current Value <span>grey = cost · green = gain · red = loss</span></div>
+      {/* Cost basis */}
+      <ChartCard title="Cost Basis vs Current Value" subtitle="grey = cost · green = gain · red = loss" loading={isFirstLoad} height={400}>
         <PlotlyChart
           data={[costTrace, gainTrace, lossTrace]}
           layout={plotlyLayout({ barmode: 'stack', margin: { t:10,b:60,l:72,r:8 } })}
           height={400}
         />
-      </div>
+      </ChartCard>
 
-      {/* Waterfall + HHI gauge */}
+      {/* Waterfall + HHI */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        <div className="chart-card">
-          <div className="chart-title">Portfolio Value Waterfall</div>
-          <PlotlyChart
-            data={[waterfallData]}
-            layout={plotlyLayout({ margin: { t:40,b:60,l:72,r:8 } })}
-            height={380}
-          />
-        </div>
-        <div className="chart-card">
-          <div className="chart-title">Concentration Risk <span>HHI gauge</span></div>
+        <ChartCard title="Portfolio Value Waterfall" loading={isFirstLoad} height={380}>
+          {waterfallTrace && (
+            <PlotlyChart
+              data={[waterfallTrace]}
+              layout={plotlyLayout({ margin: { t:40,b:60,l:72,r:8 } })}
+              height={380}
+            />
+          )}
+        </ChartCard>
+        <ChartCard title="Concentration Risk" subtitle="HHI gauge" loading={isFirstLoad} height={380}>
           <PlotlyChart
             data={[hhiGauge]}
             layout={plotlyLayout({ margin: { t:40,b:20,l:20,r:20 } })}
             height={380}
           />
-        </div>
+        </ChartCard>
       </div>
 
       {/* Scatter */}
-      <div className="chart-card">
-        <div className="chart-title">Risk-Return Scatter <span>size = equity weight · colour = sector</span></div>
+      <ChartCard title="Risk-Return Scatter" subtitle="size = equity weight · colour = sector" loading={isFirstLoad} height={420}>
         <PlotlyChart
           data={[scatter]}
           layout={plotlyLayout({
@@ -182,7 +159,7 @@ export default function NGXAdvancedPage() {
           })}
           height={420}
         />
-      </div>
+      </ChartCard>
 
     </div>
   );
