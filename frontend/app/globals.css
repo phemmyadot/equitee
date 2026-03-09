@@ -1,0 +1,225 @@
+@import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;600;700&family=Syne:wght@400;500;600;700;800&display=swap');
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --font-mono: 'IBM Plex Mono', monospace;
+  --font-body: 'Syne', sans-serif;
+
+  --bg:      #07090f;
+  --surface: #0d1019;
+  --panel:   #121620;
+  --border:  #1a2035;
+  --green:   #00e87a;
+  --red:     #ff3d5a;
+  --gold:    #f5c518;
+  --blue:    #4d8eff;
+  --purple:  #a78bfa;
+  --snow:    #e2e8f8;
+  --muted:   #3a4260;
+  --dim:     #252d45;
+}
+
+*, *::before, *::after { box-sizing: border-box; }
+
+html { scroll-behavior: smooth; }
+
+body {
+  background-color: var(--bg);
+  color: var(--snow);
+  font-family: var(--font-body);
+  min-height: 100dvh;
+  overflow-x: hidden;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* ── Subtle grid texture ── */
+body::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  background-image:
+    linear-gradient(rgba(77,142,255,0.025) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(77,142,255,0.025) 1px, transparent 1px);
+  background-size: 48px 48px;
+  pointer-events: none;
+  z-index: 0;
+}
+
+/* ── Scrollbar ── */
+::-webkit-scrollbar       { width: 5px; height: 5px; }
+::-webkit-scrollbar-track { background: var(--surface); }
+::-webkit-scrollbar-thumb { background: var(--dim); border-radius: 3px; }
+::-webkit-scrollbar-thumb:hover { background: var(--muted); }
+
+/* ── Utilities ── */
+.pos { color: var(--green); }
+.neg { color: var(--red); }
+.mono { font-family: var(--font-mono); }
+
+/* ── Chart card ── */
+.chart-card {
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 20px;
+  position: relative;
+  overflow: hidden;
+}
+
+.chart-card::before {
+  content: '';
+  position: absolute;
+  top: 0; left: 0; right: 0;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, rgba(77,142,255,0.3), transparent);
+}
+
+.chart-title {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--muted);
+  margin-bottom: 16px;
+}
+
+.chart-title span {
+  color: var(--dim);
+  margin-left: 8px;
+  text-transform: none;
+  letter-spacing: 0;
+}
+
+/* ── Table ── */
+.data-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12px;
+}
+
+.data-table th {
+  font-family: var(--font-mono);
+  font-size: 9px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--muted);
+  padding: 8px 12px;
+  text-align: left;
+  border-bottom: 1px solid var(--border);
+  white-space: nowrap;
+}
+
+.data-table th.right,
+.data-table td.right { text-align: right; }
+
+.data-table td {
+  padding: 10px 12px;
+  border-bottom: 1px solid rgba(26,32,53,0.6);
+  color: var(--snow);
+  white-space: nowrap;
+}
+
+.data-table tr:last-child td { border-bottom: none; }
+
+.data-table tr:hover td { background: rgba(77,142,255,0.04); }
+
+/* ── KPI card animation ── */
+@keyframes kpi-in {
+  from { opacity: 0; transform: translateY(8px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+.kpi-animate {
+  animation: kpi-in 0.35s ease both;
+}
+
+/* ── Skeleton shimmer ── */
+@keyframes shimmer {
+  0%   { background-position: -400px 0; }
+  100% { background-position: 400px 0; }
+}
+
+.skeleton {
+  background: linear-gradient(90deg,
+    var(--panel) 25%,
+    var(--dim)   50%,
+    var(--panel) 75%
+  );
+  background-size: 800px 100%;
+  animation: shimmer 1.4s infinite;
+  border-radius: 6px;
+}
+
+/* ── Badge ── */
+.badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-family: var(--font-mono);
+  font-size: 9px;
+  letter-spacing: 0.06em;
+  padding: 2px 6px;
+  border-radius: 3px;
+}
+
+.badge-live   { color: var(--green);  background: rgba(0,232,122,0.1);  }
+.badge-yahoo  { color: var(--gold);   background: rgba(245,197,24,0.1); }
+.badge-nodata { color: var(--muted);  background: rgba(58,66,96,0.3);   }
+
+/* ── Price banner ── */
+.price-banner {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  color: var(--muted);
+  background: rgba(77,142,255,0.05);
+  border: 1px solid rgba(77,142,255,0.12);
+  border-radius: 6px;
+  padding: 8px 14px;
+  margin-bottom: 20px;
+  letter-spacing: 0.04em;
+}
+
+/* ── Fade-in page ── */
+@keyframes page-in {
+  from { opacity: 0; transform: translateY(6px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+.page-enter {
+  animation: page-in 0.3s ease both;
+}
+
+/* ── Mobile bottom nav ── */
+.bottom-nav {
+  position: fixed;
+  bottom: 0; left: 0; right: 0;
+  height: 60px;
+  background: rgba(13,16,25,0.96);
+  backdrop-filter: blur(12px);
+  border-top: 1px solid var(--border);
+  display: flex;
+  z-index: 50;
+}
+
+.bottom-nav-item {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 3px;
+  font-family: var(--font-mono);
+  font-size: 8px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--muted);
+  cursor: pointer;
+  transition: color 0.15s;
+  text-decoration: none;
+}
+
+.bottom-nav-item.active { color: var(--blue); }
+.bottom-nav-item:hover  { color: var(--snow); }
