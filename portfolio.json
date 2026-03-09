@@ -1,0 +1,32 @@
+{
+  "_comment": "Edit this file to update your holdings. avg_cost is per-share cost basis.",
+  "ngx": [
+    { "ticker": "FIDSON",    "name": "Fidson Healthcare Plc",        "shares": 15900, "avg_cost": 40.57,   "sector": "Healthcare"    },
+    { "ticker": "MTNN",      "name": "MTN Nigeria Communications",   "shares": 1500,  "avg_cost": 383.86,  "sector": "Telecom"       },
+    { "ticker": "OKOMUOIL",  "name": "Okomu Oil Palm Plc",           "shares": 125,   "avg_cost": 963.50,  "sector": "Agro"          },
+    { "ticker": "SEPLAT",    "name": "Seplat Energy Plc",            "shares": 70,    "avg_cost": 5099.89, "sector": "Energy"        },
+    { "ticker": "PRESCO",    "name": "Presco Plc",                   "shares": 610,   "avg_cost": 1307.52, "sector": "Agro"          },
+    { "ticker": "DANGCEM",   "name": "Dangote Cement Plc",           "shares": 980,   "avg_cost": 520.05,  "sector": "Construction"  },
+    { "ticker": "CUSTODIAN", "name": "Custodian Investment Plc",     "shares": 5600,  "avg_cost": 42.00,   "sector": "Insurance"     },
+    { "ticker": "BETAGLAS",  "name": "Beta Glass Plc",               "shares": 1600,  "avg_cost": 349.32,  "sector": "Manufacturing" },
+    { "ticker": "ARADEL",    "name": "Aradel Holdings Plc",          "shares": 591,   "avg_cost": 778.00,  "sector": "Energy"        },
+    { "ticker": "GTCO",      "name": "Guaranty Trust Holding Co",    "shares": 8700,  "avg_cost": 88.19,   "sector": "Banking"       },
+    { "ticker": "BUACEMENT", "name": "BUA Cement Plc",               "shares": 2360,  "avg_cost": 177.00,  "sector": "Construction"  },
+    { "ticker": "UBA",       "name": "United Bank for Africa Plc",   "shares": 19960, "avg_cost": 44.04,   "sector": "Banking"       },
+    { "ticker": "NNFM",      "name": "Northern Nigeria Flour Mills", "shares": 120,   "avg_cost": 86.00,   "sector": "Consumer"      },
+    { "ticker": "OANDO",     "name": "Oando Plc",                    "shares": 11200, "avg_cost": 52.78,   "sector": "Energy"        }
+  ],
+  "us": [
+    { "ticker": "TSM",  "name": "Taiwan Semiconductor",  "shares": 0.895883, "avg_cost": 334.87, "sector": "Technology" },
+    { "ticker": "AMZN", "name": "Amazon",                "shares": 0.7469,   "avg_cost": 200.83, "sector": "Consumer"   },
+    { "ticker": "NFLX", "name": "Netflix",               "shares": 0.111657, "avg_cost": 89.56,  "sector": "Media"      },
+    { "ticker": "MSFT", "name": "Microsoft",             "shares": 0.498827, "avg_cost": 400.94, "sector": "Technology" },
+    { "ticker": "LLY",  "name": "Eli Lilly",             "shares": 0.143421, "avg_cost": 1045.87,"sector": "Healthcare" },
+    { "ticker": "NVDA", "name": "Nvidia",                "shares": 1.068779, "avg_cost": 192.63, "sector": "Technology" }
+  ],
+  "sold": [
+    { "ticker": "CAVERTON",   "name": "Caverton Offshore",     "market": "ngx", "realized_pl": 13322.82  },
+    { "ticker": "CHAMPION",   "name": "Champion Breweries",    "market": "ngx", "realized_pl": -824.00   },
+    { "ticker": "ELLAHLAKES", "name": "Ellah Lakes Plc",       "market": "ngx", "realized_pl": -3188.54  }
+  ]
+}

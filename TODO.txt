@@ -1,0 +1,5 @@
+Use api https://doclib.ngxgroup.com/REST/api/statistics/equities/?market=&sector=&orderby=&pageSize=300&pageNo=0
+DB to store NGX and US tickers, remove google sheet 
+Make app modular
+Make mobile responsive
+Create prediction navigation

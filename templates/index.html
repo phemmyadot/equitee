@@ -373,6 +373,10 @@
   ════════════════════════════════════════════════════ -->
   <div class="tab-content active" id="tab-ngx-overview">
     <div class="kpi-strip" id="ngx-kpis"></div>
+    <div id="price-banner" style="
+      font-family:var(--font-mono);font-size:10px;color:var(--grey);
+      margin-bottom:14px; display:flex; align-items:center; gap:8px;">
+    </div>
     <div class="grid-2-1">
       <div class="chart-card">
         <div class="chart-title">Portfolio Equity by Stock</div>
@@ -574,8 +578,10 @@ async function loadData() {
       throw new Error(err.detail || res.statusText);
     }
     DATA = await res.json();
-    document.getElementById('last-updated').textContent =
-      'UPDATED ' + new Date().toLocaleTimeString();
+    document.getElementById('last-updated').innerHTML =
+      `UPDATED ${new Date().toLocaleTimeString()} &nbsp;·&nbsp; ` +
+      `<span style="color:var(--gold)">USD/NGN &#8358;${DATA.meta.usdngn.toLocaleString()}</span> ` +
+      `<span style="color:var(--grey);font-size:9px">[${DATA.meta.fx_source}]</span>`;
     renderAll(DATA);
   } catch (e) {
     const banner = document.getElementById('error-banner');
@@ -601,6 +607,19 @@ function renderAll(d) {
 // ════════════════════════════════════════════════════════════════════════════
 function renderNGXOverview(d) {
   const k = d.ngx_kpis;
+  // Price coverage banner
+  const pb = document.getElementById('price-banner');
+  if (pb) {
+    const lv  = d.meta.ngx_prices_live, tot = d.meta.ngx_prices_total;
+    const age = d.meta.ngx_price_age != null ? Math.round(d.meta.ngx_price_age/60) : '?';
+    const pct = tot ? Math.round(lv/tot*100) : 0;
+    pb.innerHTML =
+      `<span style="color:var(--green)">●</span> ` +
+      `<b style="color:var(--white)">${lv}/${tot}</b> positions with live prices ` +
+      `&nbsp;·&nbsp; <span style="color:var(--gold)">${d.meta.ngx_price_source}</span>` +
+      `&nbsp;·&nbsp; cached ${age}m ago`;
+  }
+
   renderKPIs('ngx-kpis', [
     { label:'Total Equity',    value: fmtN(k.equity),           accent:'gold' },
     { label:'Total Cost',      value: fmtN(k.cost),             accent:'blue' },
@@ -700,16 +719,34 @@ function renderNGXOverview(d) {
 
   // Holdings table
   renderTable('ngx-table', d.ngx_stocks, [
-    { key:'Ticker', label:'Ticker', fmt: v => v },
-    { key:'Stock',  label:'Name',   fmt: v => v },
-    { key:'Sector', label:'Sector', fmt: v =>
+    { key:'Ticker',       label:'Ticker',  fmt: v => `<b>${v}</b>` },
+    { key:'Stock',        label:'Company', fmt: v => v },
+    { key:'Sector',       label:'Sector',  fmt: v =>
       `<span class="sector-dot" style="background:${SECTOR_COLORS[v]||T.blue}"></span>${v}` },
-    { key:'Remaining Cost',  label:'Cost',    fmt: fmtN },
-    { key:'Current Equity',  label:'Equity',  fmt: fmtN },
-    { key:'Unrealized PL',   label:'Unreal. G/L', fmt: v =>
-      `<span class="${v>=0?'pos':'neg'}">${fmtN(v)}</span>` },
-    { key:'Return Pct',      label:'Return',  fmt: v =>
-      `<span class="${v>=0?'pos':'neg'}">${fmtPct(v)}</span>` },
+    { key:'Live Price',   label:'Price',   fmt: v =>
+      v != null
+        ? `<span style="color:var(--white);font-family:var(--font-mono);font-weight:700">₦${Number(v).toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2})}</span>`
+        : `<span style="color:var(--grey)">—</span>` },
+    { key:'Live Change%', label:'Day %',   fmt: v =>
+      v != null
+        ? `<span class="${v>=0?'pos':'neg'}" style="font-family:var(--font-mono)">${v>=0?'+':''}${Number(v).toFixed(2)}%</span>`
+        : '' },
+    { key:'Day High',     label:'High',    fmt: v =>
+      v != null ? `<span style="color:var(--grey)">₦${Number(v).toLocaleString()}</span>` : '' },
+    { key:'Day Low',      label:'Low',     fmt: v =>
+      v != null ? `<span style="color:var(--grey)">₦${Number(v).toLocaleString()}</span>` : '' },
+    { key:'Volume',       label:'Volume',  fmt: v =>
+      v != null ? `<span style="color:var(--grey)">${Number(v).toLocaleString()}</span>` : '' },
+    { key:'Remaining Cost',  label:'Cost',   fmt: fmtN },
+    { key:'Current Equity',  label:'Equity', fmt: v => `<b>${fmtN(v)}</b>` },
+    { key:'Unrealized PL',   label:'G/L',    fmt: v =>
+      `<span class="${v>=0?'pos':'neg'}" style="font-family:var(--font-mono)">${fmtN(v)}</span>` },
+    { key:'Return Pct',      label:'Return', fmt: v =>
+      `<span class="${v>=0?'pos':'neg'}" style="font-family:var(--font-mono);font-weight:700">${fmtPct(v)}</span>` },
+    { key:'Price Source', label:'',  fmt: v =>
+      v==='ngx-api'
+        ? `<span style="color:var(--green);font-size:9px;font-family:var(--font-mono)" title="Price from NGX REST API">● API</span>`
+        : `<span style="color:var(--grey);font-size:9px;font-family:var(--font-mono)" title="Price from Google Sheets">○ sheet</span>` },
   ]);
 }
 
@@ -920,16 +957,32 @@ function renderUSPortfolio(d) {
 
   // Table
   renderTable('us-table', d.us_stocks, [
-    { key:'Ticker', label:'Ticker', fmt: v => v },
-    { key:'Stock',  label:'Name',   fmt: v => v },
-    { key:'Sector', label:'Sector', fmt: v =>
+    { key:'Ticker',       label:'Ticker',  fmt: v => `<b>${v}</b>` },
+    { key:'Stock',        label:'Company', fmt: v => v },
+    { key:'Sector',       label:'Sector',  fmt: v =>
       `<span class="sector-dot" style="background:${SECTOR_COLORS[v]||T.blue}"></span>${v}` },
-    { key:'Remaining Cost', label:'Cost',   fmt: fmtUSD },
-    { key:'Current Equity', label:'Equity', fmt: fmtUSD },
+    { key:'Live Price',   label:'Price',   fmt: v =>
+      v != null
+        ? `<span style="color:var(--white);font-family:var(--font-mono);font-weight:700">$${Number(v).toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2})}</span>`
+        : `<span style="color:var(--grey)">—</span>` },
+    { key:'Live Change%', label:'Day %',   fmt: v =>
+      v != null
+        ? `<span class="${v>=0?'pos':'neg'}" style="font-family:var(--font-mono)">${v>=0?'+':''}${Number(v).toFixed(2)}%</span>`
+        : '' },
+    { key:'Day High',     label:'High',    fmt: v =>
+      v != null ? `<span style="color:var(--grey)">$${Number(v).toFixed(2)}</span>` : '' },
+    { key:'Day Low',      label:'Low',     fmt: v =>
+      v != null ? `<span style="color:var(--grey)">$${Number(v).toFixed(2)}</span>` : '' },
+    { key:'Remaining Cost', label:'Cost',   fmt: v => `<b>${fmtUSD(v)}</b>` },
+    { key:'Current Equity', label:'Equity', fmt: v => `<b>${fmtUSD(v)}</b>` },
     { key:'Unrealized PL',  label:'G/L',    fmt: v =>
-      `<span class="${v>=0?'pos':'neg'}">${fmtUSD(v)}</span>` },
+      `<span class="${v>=0?'pos':'neg'}" style="font-family:var(--font-mono)">${fmtUSD(v)}</span>` },
     { key:'Return Pct',     label:'Return', fmt: v =>
-      `<span class="${v>=0?'pos':'neg'}">${fmtPct(v)}</span>` },
+      `<span class="${v>=0?'pos':'neg'}" style="font-family:var(--font-mono);font-weight:700">${fmtPct(v)}</span>` },
+    { key:'Price Source', label:'',  fmt: v =>
+      v==='yahoo'
+        ? `<span style="color:var(--gold);font-size:9px;font-family:var(--font-mono)" title="Price from Yahoo Finance">● YHO</span>`
+        : `<span style="color:var(--grey);font-size:9px;font-family:var(--font-mono)" title="No price data">○ n/a</span>` },
   ]);
 }
 
@@ -943,7 +996,7 @@ function renderCombined(d) {
   const usdngn = d.meta.usdngn;
 
   renderKPIs('combined-kpis', [
-    { label:'NGX (USD)',     value: fmtUSD(ck.ngx_usd),   accent:'blue',   sub:`@ ₦${usdngn.toLocaleString()}/USD` },
+    { label:'NGX (USD)',     value: fmtUSD(ck.ngx_usd),   accent:'blue',   sub:`@ ₦${d.meta.usdngn.toLocaleString()}/USD · ${d.meta.fx_source}` },
     { label:'US Portfolio',  value: fmtUSD(ck.us_usd),    accent:'gold'  },
     { label:'Total USD',     value: fmtUSD(ck.total_usd), accent:'green' },
     { label:'NGX Weight',    value: fmtPct(ck.ngx_usd/ck.total_usd*100, false), accent:'purple' },
