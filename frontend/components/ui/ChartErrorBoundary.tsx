@@ -2,27 +2,9 @@
 
 import { Component, type ReactNode, type ErrorInfo } from 'react';
 
-interface Props {
-  children:  ReactNode;
-  title?:    string;
-  height?:   number;
-}
+interface Props   { children: ReactNode; title?: string; height?: number; }
+interface State   { hasError: boolean; message: string; }
 
-interface State {
-  hasError: boolean;
-  message:  string;
-}
-
-/**
- * Per-chart error boundary.
- * Catches any render error inside a chart and shows a contained
- * error card instead of crashing the whole page.
- *
- * Usage:
- *   <ChartErrorBoundary title="Equity Chart">
- *     <PlotlyChart ... />
- *   </ChartErrorBoundary>
- */
 export default class ChartErrorBoundary extends Component<Props, State> {
   constructor(props: Props) {
     super(props);
@@ -34,12 +16,8 @@ export default class ChartErrorBoundary extends Component<Props, State> {
   }
 
   componentDidCatch(error: Error, info: ErrorInfo) {
-    console.error(`[ChartErrorBoundary] ${this.props.title ?? 'chart'}:`, error, info);
+    console.error(`[ChartErrorBoundary] ${this.props.title}:`, error, info);
   }
-
-  handleRetry = () => {
-    this.setState({ hasError: false, message: '' });
-  };
 
   render() {
     const { hasError, message } = this.state;
@@ -49,30 +27,27 @@ export default class ChartErrorBoundary extends Component<Props, State> {
 
     return (
       <div
-        className="
-          flex flex-col items-center justify-center gap-3
-          border border-[rgba(255,61,90,0.2)] rounded-lg
-          bg-[rgba(255,61,90,0.04)]
-        "
+        className="flex flex-col items-center justify-center gap-3 rounded-lg bg-[var(--loss-light)] border border-[#F5C6C6]"
         style={{ height }}
       >
-        <span className="font-mono text-[10px] text-[var(--red)] tracking-wider">
-          ⚠ {title ? `${title.toUpperCase()} ` : ''}RENDER ERROR
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--loss)" strokeWidth="2">
+          <circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/>
+        </svg>
+        <span className="text-[11px] font-semibold text-[var(--loss)]">
+          {title ? `${title} failed to render` : 'Chart error'}
         </span>
-        <span className="font-mono text-[9px] text-[var(--muted)] max-w-[280px] text-center leading-relaxed px-4">
-          {message || 'An unexpected error occurred while rendering this chart.'}
-        </span>
+        {message && (
+          <span className="text-[10px] text-[var(--ink-3)] max-w-[260px] text-center px-4">{message}</span>
+        )}
         <button
-          onClick={this.handleRetry}
+          onClick={() => this.setState({ hasError: false, message: '' })}
           className="
-            font-mono text-[9px] tracking-wider
-            border border-[var(--muted)] text-[var(--muted)]
-            px-3 py-1 rounded
-            hover:border-[var(--snow)] hover:text-[var(--snow)]
-            transition-colors duration-150
+            text-[11px] font-medium text-[var(--loss)]
+            border border-[#F5C6C6] rounded px-3 py-1
+            hover:bg-white transition-colors duration-150
           "
         >
-          RETRY
+          Retry
         </button>
       </div>
     );

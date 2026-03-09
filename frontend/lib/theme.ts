@@ -1,40 +1,45 @@
 /**
- * Shared design tokens and Plotly layout factory.
- * Single source of truth for all chart styling.
+ * Design tokens + Plotly layout factory.
+ * Light theme — matches globals.css variables exactly.
  */
 
 export const COLORS = {
-  bg:      '#07090f',
-  surface: '#0d1019',
-  panel:   '#121620',
-  border:  '#1a2035',
-  green:   '#00e87a',
-  red:     '#ff3d5a',
-  gold:    '#f5c518',
-  blue:    '#4d8eff',
-  purple:  '#a78bfa',
-  snow:    '#e2e8f8',
-  muted:   '#3a4260',
-  dim:     '#252d45',
+  canvas:       '#F7F8FA',
+  surface:      '#FFFFFF',
+  border:       '#E4E7EC',
+  'border-strong': '#CBD2DC',
+  ink:          '#0F1728',
+  ink2:         '#374151',
+  ink3:         '#6B7280',
+  ink4:         '#9CA3AF',
+  accent:       '#1A56DB',
+  accentLight:  '#EBF0FD',
+  gain:         '#0A7B44',
+  gainLight:    '#E6F4EE',
+  loss:         '#BE1B1B',
+  lossLight:    '#FDEAEA',
+  warn:         '#92600A',
+  teal:         '#0E7490',
+  purple:       '#6D28D9',
 } as const;
 
 export const SECTOR_COLORS: Record<string, string> = {
-  Healthcare:    '#00c2a8',
-  Telecom:       '#4d8eff',
-  Agro:          '#7ec850',
-  Energy:        '#ff9f43',
-  Construction:  '#a29bfe',
-  Insurance:     '#fd79a8',
-  Manufacturing: '#f5c518',
-  Banking:       '#6c5ce7',
-  Consumer:      '#b2bec3',
-  Technology:    '#00cec9',
-  Media:         '#e17055',
-  Other:         '#636e72',
+  Healthcare:    '#0E7490',
+  Telecom:       '#1A56DB',
+  Agro:          '#2D7D3A',
+  Energy:        '#B45309',
+  Construction:  '#6D28D9',
+  Insurance:     '#BE185D',
+  Manufacturing: '#92600A',
+  Banking:       '#1E40AF',
+  Consumer:      '#374151',
+  Technology:    '#0891B2',
+  Media:         '#9D174D',
+  Other:         '#6B7280',
 };
 
 export function sectorColor(sector: string): string {
-  return SECTOR_COLORS[sector] ?? COLORS.blue;
+  return SECTOR_COLORS[sector] ?? COLORS.accent;
 }
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -42,36 +47,46 @@ export function plotlyLayout(overrides: Record<string, any> = {}): Record<string
   return {
     paper_bgcolor: 'transparent',
     plot_bgcolor:  'transparent',
-    font:          { family: "'IBM Plex Mono', monospace", color: COLORS.snow, size: 11 },
-    margin:        { t: 20, b: 40, l: 48, r: 16 },
-    colorway:      [COLORS.blue, COLORS.green, COLORS.gold, COLORS.purple, COLORS.red],
+    font: {
+      family: "'Plus Jakarta Sans', sans-serif",
+      color:  COLORS.ink3,
+      size:   11,
+    },
+    margin:   { t: 12, b: 40, l: 52, r: 16 },
+    colorway: [
+      COLORS.accent, COLORS.teal, COLORS.gain, COLORS.warn,
+      COLORS.purple, COLORS.loss, '#0891B2', '#2D7D3A',
+    ],
     xaxis: {
-      gridcolor:    COLORS.border,
-      linecolor:    COLORS.border,
-      tickfont:     { size: 10, color: COLORS.muted },
+      gridcolor:     '#F0F2F5',
+      linecolor:     COLORS.border,
+      tickfont:      { size: 10, color: COLORS.ink4, family: "'JetBrains Mono', monospace" },
       zerolinecolor: COLORS.border,
+      zerolinewidth: 1,
     },
     yaxis: {
-      gridcolor:    COLORS.border,
-      linecolor:    COLORS.border,
-      tickfont:     { size: 10, color: COLORS.muted },
-      zerolinecolor: COLORS.border,
+      gridcolor:     '#F0F2F5',
+      linecolor:     COLORS.border,
+      tickfont:      { size: 10, color: COLORS.ink4, family: "'JetBrains Mono', monospace" },
+      zerolinecolor: COLORS['border-strong'],
+      zerolinewidth: 1.5,
     },
     legend: {
-      bgcolor:     'transparent',
-      font:        { size: 10, color: COLORS.snow },
+      bgcolor:     'rgba(255,255,255,0)',
+      font:        { size: 11, color: COLORS.ink2, family: "'Plus Jakarta Sans', sans-serif" },
+      borderwidth: 0,
     },
     hoverlabel: {
-      bgcolor:     COLORS.panel,
+      bgcolor:     '#FFFFFF',
       bordercolor: COLORS.border,
-      font:        { family: "'IBM Plex Mono', monospace", size: 11, color: COLORS.snow },
+      font:        { family: "'JetBrains Mono', monospace", size: 11, color: COLORS.ink },
     },
     ...overrides,
   };
 }
 
 export const PLOTLY_CONFIG = {
-  displayModeBar:  false,
-  responsive:      true,
-  staticPlot:      false,
+  displayModeBar: false,
+  responsive:     true,
+  staticPlot:     false,
 } as const;

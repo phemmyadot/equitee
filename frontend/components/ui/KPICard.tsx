@@ -1,6 +1,6 @@
 import clsx from 'clsx';
 
-type Accent = 'green' | 'gold' | 'blue' | 'red' | 'purple' | 'muted';
+type Accent = 'gain' | 'loss' | 'accent' | 'teal' | 'warn' | 'neutral';
 
 interface KPICardProps {
   label:   string;
@@ -10,36 +10,42 @@ interface KPICardProps {
   delay?:  number;
 }
 
-const ACCENT_STYLES: Record<Accent, { bar: string; value: string }> = {
-  green:  { bar: 'bg-[var(--green)]',  value: 'text-[var(--green)]'  },
-  gold:   { bar: 'bg-[var(--gold)]',   value: 'text-[var(--gold)]'   },
-  blue:   { bar: 'bg-[var(--blue)]',   value: 'text-[var(--blue)]'   },
-  red:    { bar: 'bg-[var(--red)]',    value: 'text-[var(--red)]'    },
-  purple: { bar: 'bg-[var(--purple)]', value: 'text-[var(--purple)]' },
-  muted:  { bar: 'bg-[var(--muted)]',  value: 'text-[var(--snow)]'   },
+const STYLES: Record<Accent, { value: string; dot: string; bg: string }> = {
+  gain:    { value: 'text-[var(--gain)]',   dot: 'bg-[var(--gain)]',   bg: 'bg-[var(--gain-light)]'  },
+  loss:    { value: 'text-[var(--loss)]',   dot: 'bg-[var(--loss)]',   bg: 'bg-[var(--loss-light)]'  },
+  accent:  { value: 'text-[var(--accent)]', dot: 'bg-[var(--accent)]', bg: 'bg-[var(--accent-light)]'},
+  teal:    { value: 'text-[var(--teal)]',   dot: 'bg-[var(--teal)]',   bg: 'bg-[#E0F2F7]'           },
+  warn:    { value: 'text-[var(--warn)]',   dot: 'bg-[var(--warn)]',   bg: 'bg-[var(--warn-light)]'  },
+  neutral: { value: 'text-[var(--ink)]',    dot: 'bg-[var(--ink-4)]',  bg: 'bg-[var(--sidebar)]'     },
 };
 
-export default function KPICard({ label, value, sub, accent = 'blue', delay = 0 }: KPICardProps) {
-  const styles = ACCENT_STYLES[accent];
+export default function KPICard({ label, value, sub, accent = 'neutral', delay = 0 }: KPICardProps) {
+  const s = STYLES[accent];
 
   return (
     <div
-      className="kpi-animate chart-card flex-1 min-w-[140px] flex flex-col gap-1"
+      className={clsx(
+        'kpi-animate card flex-1 min-w-[120px]',
+        'flex flex-col gap-1 px-4 py-4',
+      )}
       style={{ animationDelay: `${delay}ms` }}
     >
-      {/* Accent bar */}
-      <div className={clsx('w-5 h-0.5 rounded-full mb-1', styles.bar)} />
+      {/* Label row */}
+      <div className="flex items-center gap-1.5">
+        <span className={clsx('w-1.5 h-1.5 rounded-full shrink-0', s.dot)} />
+        <span className="text-[10px] font-semibold uppercase tracking-[0.07em] text-[var(--ink-4)]">
+          {label}
+        </span>
+      </div>
 
-      <span className="font-mono text-[9px] tracking-[0.1em] uppercase text-[var(--muted)]">
-        {label}
-      </span>
-
-      <span className={clsx('font-mono text-[18px] font-bold leading-tight', styles.value)}>
+      {/* Value */}
+      <span className={clsx('font-mono text-[20px] font-semibold leading-tight mt-0.5', s.value)}>
         {value}
       </span>
 
+      {/* Sub text */}
       {sub && (
-        <span className="font-mono text-[9px] text-[var(--muted)] mt-0.5 leading-relaxed">
+        <span className="text-[10px] text-[var(--ink-4)] leading-relaxed mt-0.5 font-mono">
           {sub}
         </span>
       )}
