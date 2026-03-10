@@ -116,7 +116,7 @@ export default function USPortfolioPage() {
       sortValue: (r: StockRow) => r.ReturnPct ?? 0,
     },
     { key: 'PriceSource', label: '', render: (v: string) => <SourceBadge source={v} /> },
-    { key: 'Ticker', label: '90d', render: (_: unknown, row: StockRow) => <Sparkline ticker={row.Ticker} /> },
+    { key: 'sparkline', label: '90d', render: (_: unknown, row: StockRow) => <Sparkline ticker={row.Ticker} /> },
   ];
 
   return (
