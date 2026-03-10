@@ -92,7 +92,7 @@ export default function Nav() {
       </nav>
 
       {/* ── Mobile bottom nav ── */}
-      <nav className="bottom-nav sm:hidden">
+      <nav className="bottom-nav sm:hidden!">
         {TABS.map((tab) => (
           <Link
             key={tab.href}

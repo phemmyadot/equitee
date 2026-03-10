@@ -46,6 +46,12 @@ class Settings:
         if o.strip()
     ]
 
+    # ── Database ─────────────────────────────────────────────────────────────
+    DATABASE_URL: str = os.getenv(
+        "DATABASE_URL",
+        f"sqlite:///{Path(__file__).parent.parent / 'portfolio.db'}"
+    )
+
     # ── Server ───────────────────────────────────────────────────────────────
     HOST: str = os.getenv("HOST", "0.0.0.0")
     PORT: int = int(os.getenv("PORT", "8000"))
