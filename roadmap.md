@@ -16,11 +16,12 @@ Track portfolio value over time. Unlocks the most valuable charts.
 - [ ] `snapshots` table — timestamp, total_ngx_ngn, total_us_usd, usdngn, total_usd
 - [ ] `price_history` table — date, ticker, market, price, change_pct
 - [ ] Background task: write snapshot on every `/api/data` call (once per TTL)
-- [ ] `GET /api/history/portfolio` — returns time series for portfolio value chart
-- [ ] `GET /api/history/prices/{ticker}` — returns price history for a single stock
-- [ ] Frontend: Portfolio Value Over Time line chart (NGX tab + Combined tab)
-- [ ] Frontend: Per-stock price sparklines in Holdings table
-- [ ] Frontend: P&L Over Time chart on Advanced tab
+- [x] `GET /api/history/portfolio` — returns time series for portfolio value chart
+- [x] `GET /api/history/prices/{ticker}` — returns price history for a single stock
+- [x] Frontend: Portfolio Value Over Time line chart (History tab)
+- [x] Frontend: NGX equity vs cost · US equity vs cost · G/L bars · FX rate charts
+- [x] Frontend: Per-stock price sparklines in NGX + US holdings tables
+- [x] Frontend: History tab added to nav with 7d/30d/90d/1y day selector
 
 ---
 
