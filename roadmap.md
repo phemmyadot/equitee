@@ -12,10 +12,10 @@
 ## Feature 2 — Historical P&L Database
 Track portfolio value over time. Unlocks the most valuable charts.
 
-- [ ] Add SQLite + SQLAlchemy to backend (`backend/app/db/`)
-- [ ] `snapshots` table — timestamp, total_ngx_ngn, total_us_usd, usdngn, total_usd
-- [ ] `price_history` table — date, ticker, market, price, change_pct
-- [ ] Background task: write snapshot on every `/api/data` call (once per TTL)
+- [x] Add SQLite + SQLAlchemy to backend (`backend/app/db/`)
+- [x] `snapshots` table — timestamp, total_ngx_ngn, total_us_usd, usdngn, total_usd
+- [x] `price_history` table — date, ticker, market, price, change_pct
+- [x] Background task: write snapshot on every `/api/data` call (once per TTL)
 - [x] `GET /api/history/portfolio` — returns time series for portfolio value chart
 - [x] `GET /api/history/prices/{ticker}` — returns price history for a single stock
 - [x] Frontend: Portfolio Value Over Time line chart (History tab)
