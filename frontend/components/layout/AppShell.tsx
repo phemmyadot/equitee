@@ -10,6 +10,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
 
   return (
     <div className="flex flex-col min-h-dvh bg-[var(--canvas)]">
+      {/* Header contains both the top bar AND the desktop nav */}
       <Header
         usdngn      = {data?.meta.usdngn}
         fxSource    = {data?.meta.fx_source}
@@ -17,6 +18,8 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
         loading     = {loading}
         onRefresh   = {refresh}
       />
+
+      {/* Mobile-only bottom nav */}
       <Nav />
 
       <main className="
