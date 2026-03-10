@@ -47,7 +47,24 @@ Replace static `avg_cost` in `portfolio.json` with real trade history.
 
 ---
 
-## Feature 5 — Export
+## Feature 5 — Settings Page ✅
+Manage portfolio holdings directly from the UI — no manual DB edits needed.
+
+- [x] List all active holdings (NGX + US) with market/sector filter
+- [x] Add new position (ticker, name, market, shares, avg cost, sector)
+- [x] Edit existing position (name, sector, avg cost, share count)
+- [x] Delete position (hard delete with confirmation warning)
+- [x] Buy more shares — recalculates weighted avg cost, shows preview
+- [x] Record a sale — partial or full, computes realized P/L, shows projected P/L before confirming
+- [x] Full sale → marks holding inactive, creates ClosedPosition record automatically
+- [x] Closed positions tab — history of all exits with realized P/L
+- [x] Toast notifications for all actions (success + error)
+- [x] Backend: `GET/POST/PUT/DELETE /api/settings/holdings` + `/buy` + `/sell` + `/closed`
+- [x] CORS expanded to allow POST, PUT, DELETE
+
+---
+
+## Feature 6 — Export
 - [ ] CSV export of holdings table (NGX + US)
 - [ ] CSV export of P&L summary
 - [ ] PDF report generation (one-page snapshot)

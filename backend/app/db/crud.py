@@ -50,7 +50,136 @@ def upsert_holding(db: Session, ticker: str, market: str, **kwargs) -> Holding:
     return obj
 
 
-# ── Closed positions ──────────────────────────────────────────────────────────
+# ── Holdings — settings CRUD ──────────────────────────────────────────────────
+
+def get_holding_by_id(db: Session, holding_id: int) -> Optional[Holding]:
+    return db.get(Holding, holding_id)
+
+
+def create_holding(
+    db: Session, ticker: str, name: str, market: str,
+    shares: float, avg_cost: float, sector: str,
+) -> Holding:
+    obj = Holding(
+        ticker    = ticker.upper(),
+        name      = name,
+        market    = market.lower(),
+        shares    = shares,
+        avg_cost  = avg_cost,
+        sector    = sector,
+        is_active = True,
+    )
+    db.add(obj)
+    db.commit()
+    db.refresh(obj)
+    log.info("Created holding %s (%s)", obj.ticker, obj.market)
+    return obj
+
+
+def update_holding(
+    db: Session, holding_id: int,
+    name: Optional[str]     = None,
+    sector: Optional[str]   = None,
+    avg_cost: Optional[float] = None,
+    shares: Optional[float]   = None,
+) -> Optional[Holding]:
+    obj = db.get(Holding, holding_id)
+    if obj is None:
+        return None
+    if name     is not None: obj.name     = name
+    if sector   is not None: obj.sector   = sector
+    if avg_cost is not None: obj.avg_cost = avg_cost
+    if shares   is not None: obj.shares   = shares
+    db.commit()
+    db.refresh(obj)
+    return obj
+
+
+def delete_holding(db: Session, holding_id: int) -> bool:
+    """Hard delete — removes all DB rows for this holding."""
+    obj = db.get(Holding, holding_id)
+    if obj is None:
+        return False
+    db.delete(obj)
+    db.commit()
+    log.info("Deleted holding id=%d (%s)", holding_id, obj.ticker)
+    return True
+
+
+def add_shares(
+    db: Session, holding_id: int,
+    new_shares: float, buy_price: float,
+) -> Optional[Holding]:
+    """
+    Buy more of an existing position.
+    Recalculates weighted avg_cost and adds to share count.
+    """
+    obj = db.get(Holding, holding_id)
+    if obj is None:
+        return None
+    old_cost_basis  = obj.shares * obj.avg_cost
+    new_cost_basis  = new_shares * buy_price
+    total_shares    = obj.shares + new_shares
+    obj.avg_cost    = (old_cost_basis + new_cost_basis) / total_shares
+    obj.shares      = total_shares
+    obj.is_active   = True
+    db.commit()
+    db.refresh(obj)
+    log.info("Added %.4f shares to %s @ %.4f → new avg %.4f",
+             new_shares, obj.ticker, buy_price, obj.avg_cost)
+    return obj
+
+
+def record_sale(
+    db: Session, holding_id: int,
+    shares_sold: float, sale_price: float,
+) -> tuple[Optional[Holding], Optional[ClosedPosition]]:
+    """
+    Sell shares_sold units at sale_price.
+    - Computes realized P&L = (sale_price - avg_cost) * shares_sold
+    - Reduces holding.shares by shares_sold
+    - If shares reach 0, marks holding is_active=False and creates ClosedPosition
+    - If partial sale, holding stays active with reduced share count
+    Returns (updated_holding, closed_position_or_None)
+    """
+    obj = db.get(Holding, holding_id)
+    if obj is None:
+        return None, None
+
+    shares_sold  = min(shares_sold, obj.shares)   # can't sell more than held
+    realized_pl  = (sale_price - obj.avg_cost) * shares_sold
+    obj.shares   = round(obj.shares - shares_sold, 8)
+
+    closed = None
+    if obj.shares <= 1e-8:
+        obj.shares    = 0.0
+        obj.is_active = False
+        closed = ClosedPosition(
+            ticker      = obj.ticker,
+            name        = obj.name,
+            market      = obj.market,
+            realized_pl = round(realized_pl, 4),
+        )
+        db.add(closed)
+        log.info("Full sale: %s → realized P/L %.4f", obj.ticker, realized_pl)
+    else:
+        log.info("Partial sale: %s sold %.4f shares → %.4f remaining, P/L %.4f",
+                 obj.ticker, shares_sold, obj.shares, realized_pl)
+
+    db.commit()
+    if closed:
+        db.refresh(closed)
+    db.refresh(obj)
+    return obj, closed
+
+
+# ── Closed positions — settings read ─────────────────────────────────────────
+
+def get_all_holdings(db: Session) -> list[Holding]:
+    """Return ALL holdings (active + inactive) for the settings page."""
+    stmt = select(Holding).order_by(Holding.market, Holding.ticker)
+    return list(db.scalars(stmt).all())
+
 
 def get_closed_positions(db: Session) -> list[ClosedPosition]:
     stmt = select(ClosedPosition).order_by(desc(ClosedPosition.closed_at))

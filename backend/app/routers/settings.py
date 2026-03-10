@@ -1,0 +1,173 @@
+"""
+Settings Router
+===============
+Full CRUD for portfolio holdings, plus buy/sell operations.
+
+GET    /api/settings/holdings              — all holdings (active + closed)
+POST   /api/settings/holdings              — add new position
+PUT    /api/settings/holdings/{id}         — edit name / sector / avg_cost / shares
+DELETE /api/settings/holdings/{id}         — hard delete
+POST   /api/settings/holdings/{id}/buy     — add shares (recalculates avg cost)
+POST   /api/settings/holdings/{id}/sell    — record a sale (partial or full)
+GET    /api/settings/closed                — all closed positions
+"""
+
+from fastapi import APIRouter, Depends, HTTPException
+from sqlalchemy.orm import Session
+from pydantic import BaseModel, Field
+from typing import Optional
+from datetime import datetime
+
+from app.db.engine import get_db
+from app.db.crud import (
+    get_all_holdings,
+    get_holding_by_id,
+    create_holding,
+    update_holding,
+    delete_holding,
+    add_shares,
+    record_sale,
+    get_closed_positions,
+)
+
+router = APIRouter(prefix="/api/settings", tags=["settings"])
+
+
+# ── Pydantic schemas ───────────────────────────────────────────────────────────
+
+class HoldingOut(BaseModel):
+    id:         int
+    ticker:     str
+    name:       str
+    market:     str
+    shares:     float
+    avg_cost:   float
+    sector:     str
+    is_active:  bool
+    created_at: datetime
+
+    class Config:
+        from_attributes = True
+
+
+class ClosedOut(BaseModel):
+    id:          int
+    ticker:      str
+    name:        str
+    market:      str
+    realized_pl: float
+    closed_at:   datetime
+
+    class Config:
+        from_attributes = True
+
+
+class CreateHoldingBody(BaseModel):
+    ticker:   str   = Field(..., min_length=1, max_length=20)
+    name:     str   = Field(..., min_length=1, max_length=120)
+    market:   str   = Field(..., pattern="^(ngx|us)$")
+    shares:   float = Field(..., gt=0)
+    avg_cost: float = Field(..., gt=0)
+    sector:   str   = Field(default="Other", max_length=60)
+
+
+class UpdateHoldingBody(BaseModel):
+    name:     Optional[str]   = Field(None, min_length=1, max_length=120)
+    sector:   Optional[str]   = Field(None, max_length=60)
+    avg_cost: Optional[float] = Field(None, gt=0)
+    shares:   Optional[float] = Field(None, ge=0)
+
+
+class BuyBody(BaseModel):
+    shares:    float = Field(..., gt=0, description="Number of new shares to add")
+    buy_price: float = Field(..., gt=0, description="Price per share paid")
+
+
+class SellBody(BaseModel):
+    shares_sold: float = Field(..., gt=0, description="Number of shares to sell")
+    sale_price:  float = Field(..., gt=0, description="Price per share received")
+
+
+class SellResponse(BaseModel):
+    holding:        HoldingOut
+    realized_pl:    float
+    fully_closed:   bool
+    closed_position: Optional[ClosedOut] = None
+
+
+# ── Endpoints ──────────────────────────────────────────────────────────────────
+
+@router.get("/holdings", response_model=list[HoldingOut])
+def list_holdings(db: Session = Depends(get_db)):
+    return get_all_holdings(db)
+
+
+@router.post("/holdings", response_model=HoldingOut, status_code=201)
+def add_holding(body: CreateHoldingBody, db: Session = Depends(get_db)):
+    try:
+        return create_holding(
+            db,
+            ticker   = body.ticker,
+            name     = body.name,
+            market   = body.market,
+            shares   = body.shares,
+            avg_cost = body.avg_cost,
+            sector   = body.sector,
+        )
+    except Exception as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+
+
+@router.put("/holdings/{holding_id}", response_model=HoldingOut)
+def edit_holding(holding_id: int, body: UpdateHoldingBody, db: Session = Depends(get_db)):
+    obj = update_holding(
+        db, holding_id,
+        name     = body.name,
+        sector   = body.sector,
+        avg_cost = body.avg_cost,
+        shares   = body.shares,
+    )
+    if obj is None:
+        raise HTTPException(status_code=404, detail="Holding not found")
+    return obj
+
+
+@router.delete("/holdings/{holding_id}", status_code=204)
+def remove_holding(holding_id: int, db: Session = Depends(get_db)):
+    if not delete_holding(db, holding_id):
+        raise HTTPException(status_code=404, detail="Holding not found")
+
+
+@router.post("/holdings/{holding_id}/buy", response_model=HoldingOut)
+def buy_more(holding_id: int, body: BuyBody, db: Session = Depends(get_db)):
+    obj = add_shares(db, holding_id, new_shares=body.shares, buy_price=body.buy_price)
+    if obj is None:
+        raise HTTPException(status_code=404, detail="Holding not found")
+    return obj
+
+
+@router.post("/holdings/{holding_id}/sell", response_model=SellResponse)
+def sell_shares(holding_id: int, body: SellBody, db: Session = Depends(get_db)):
+    holding = get_holding_by_id(db, holding_id)
+    if holding is None:
+        raise HTTPException(status_code=404, detail="Holding not found")
+    if body.shares_sold > holding.shares:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Cannot sell {body.shares_sold} shares — only {holding.shares} held"
+        )
+
+    realized_pl  = (body.sale_price - holding.avg_cost) * body.shares_sold
+    obj, closed  = record_sale(db, holding_id, body.shares_sold, body.sale_price)
+
+    return SellResponse(
+        holding          = obj,
+        realized_pl      = round(realized_pl, 4),
+        fully_closed     = not obj.is_active,
+        closed_position  = closed,
+    )
+
+
+@router.get("/closed", response_model=list[ClosedOut])
+def list_closed(db: Session = Depends(get_db)):
+    return get_closed_positions(db)

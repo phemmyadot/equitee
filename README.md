@@ -210,7 +210,8 @@ Stale cache is always served as a fallback if a source becomes unreachable.
 
 - [x] Feature 1 — Auto-refresh with configurable interval + countdown timer (frontend)
 - [x] Feature 2 — SQLite database: holdings, snapshots, price history
-- [ ] Feature 2 (cont.) — History API endpoints + frontend charts
+- [x] Feature 2 (cont.) — History API endpoints + frontend charts
 - [ ] Feature 3 — Price alerts
 - [ ] Feature 4 — Transaction ledger (replace static avg_cost with real trade history)
 - [ ] Feature 5 — CSV / PDF export
+- [ ] Feature 6 — Settings Page
