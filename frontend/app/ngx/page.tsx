@@ -5,6 +5,7 @@ import KPICard          from '@/components/ui/KPICard';
 import ChartCard        from '@/components/ui/ChartCard';
 import StockTable, { type ColDef } from '@/components/ui/StockTable';
 import SourceBadge      from '@/components/ui/Badge';
+import Sparkline        from '@/components/ui/Sparkline';
 import { ChartSkeleton, PriceBanner } from '@/components/ui/Feedback';
 import PlotlyChart      from '@/components/charts/PlotlyChart';
 import { plotlyLayout, COLORS, sectorColor } from '@/lib/theme';
@@ -144,6 +145,7 @@ export default function NGXOverviewPage() {
       sortValue: (r: StockRow) => r.ReturnPct ?? 0,
     },
     { key: 'PriceSource', label: '', render: (v: string) => <SourceBadge source={v} /> },
+    { key: 'Ticker', label: '90d', render: (_: unknown, row: StockRow) => <Sparkline ticker={row.Ticker} /> },
   ];
 
   return (

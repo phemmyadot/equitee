@@ -46,6 +46,16 @@ const TABS = [
       </svg>
     ),
   },
+  {
+    href: '/history',
+    label: 'History',
+    short: 'History',
+    icon: (
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+        <path d="M3 3v18h18"/><path d="m19 9-5 5-4-4-3 3"/>
+      </svg>
+    ),
+  },
 ] as const;
 
 export default function Nav() {
@@ -92,7 +102,7 @@ export default function Nav() {
       </nav>
 
       {/* ── Mobile bottom nav ── */}
-      <nav className="bottom-nav sm:hidden!">
+      <nav className="bottom-nav sm:hidden">
         {TABS.map((tab) => (
           <Link
             key={tab.href}

@@ -14,7 +14,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.config import settings
-from app.routers import data, prices, fx
+from app.routers import data, prices, fx, history
 from app.db.engine import engine, SessionLocal
 from app.db import models as db_models          # registers all ORM tables
 from app.db.seed import seed_from_json
@@ -64,6 +64,7 @@ app.add_middleware(
 app.include_router(data.router)
 app.include_router(prices.router)
 app.include_router(fx.router)
+app.include_router(history.router)
 
 
 # ── Health check ─────────────────────────────────────────────────────────────

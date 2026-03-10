@@ -143,9 +143,45 @@ async function get<T>(path: string): Promise<T> {
   return res.json() as Promise<T>;
 }
 
+// ── History types ─────────────────────────────────────────────────────────────
+
+export interface PortfolioPoint {
+  ts:             string;   // ISO datetime
+  ngx_equity_ngn: number;
+  ngx_cost_ngn:   number;
+  us_equity_usd:  number;
+  us_cost_usd:    number;
+  usdngn:         number;
+  total_usd:      number;
+  ngx_usd:        number;
+  ngx_gain_ngn:   number;
+  us_gain_usd:    number;
+}
+
+export interface PortfolioHistory {
+  days:   number;
+  count:  number;
+  points: PortfolioPoint[];
+}
+
+export interface PricePoint {
+  ts:          string;
+  price:       number | null;
+  change_pct:  number | null;
+}
+
+export interface PriceHistory {
+  ticker: string;
+  days:   number;
+  count:  number;
+  points: PricePoint[];
+}
+
 // ── Public API ────────────────────────────────────────────────────────────────
 
-export const fetchPortfolioData = () => get<PortfolioData>('/data');
-export const fetchFX            = () => get<FXRate>('/fx');
-export const fetchNGXPrices     = () => get<{ count: number; prices: Record<string, NGXPrice> }>('/prices/ngx');
-export const fetchUSPrices      = () => get<{ count: number; prices: Record<string, USPrice>  }>('/prices/us');
+export const fetchPortfolioData    = () => get<PortfolioData>('/data');
+export const fetchFX               = () => get<FXRate>('/fx');
+export const fetchNGXPrices        = () => get<{ count: number; prices: Record<string, NGXPrice> }>('/prices/ngx');
+export const fetchUSPrices         = () => get<{ count: number; prices: Record<string, USPrice>  }>('/prices/us');
+export const fetchPortfolioHistory = (days = 90) => get<PortfolioHistory>(`/history/portfolio?days=${days}`);
+export const fetchPriceHistory     = (ticker: string, days = 90) => get<PriceHistory>(`/history/prices/${ticker}?days=${days}`);
