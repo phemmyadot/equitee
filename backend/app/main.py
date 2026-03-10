@@ -8,11 +8,16 @@ Run:
 """
 
 import logging
+from contextlib import asynccontextmanager
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.config import settings
 from app.routers import data, prices, fx
+from app.db.engine import engine, SessionLocal
+from app.db import models as db_models          # registers all ORM tables
+from app.db.seed import seed_from_json
 
 logging.basicConfig(
     level   = logging.INFO,
@@ -20,10 +25,30 @@ logging.basicConfig(
     datefmt = "%H:%M:%S",
 )
 
+log = logging.getLogger(__name__)
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    # ── Startup ───────────────────────────────────────────────────────────────
+    log.info("Creating DB tables if not present…")
+    db_models.Base.metadata.create_all(bind=engine)
+
+    db = SessionLocal()
+    try:
+        seed_from_json(db)
+    finally:
+        db.close()
+
+    log.info("DB ready.")
+    yield
+    # ── Shutdown (nothing to do) ──────────────────────────────────────────────
+
 app = FastAPI(
     title       = "Portfolio Analyzer API",
     description = "NGX + US equity portfolio with live prices and FX conversion.",
     version     = "2.0.0",
+    lifespan    = lifespan,
 )
 
 # ── CORS ─────────────────────────────────────────────────────────────────────

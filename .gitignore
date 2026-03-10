@@ -1,16 +1,43 @@
-# Environment
+# ── Environment & secrets ─────────────────────────────────────────────────────
 .env
-*.env
+.env.*
+!.env.example          # keep the example template
 
-# Python
+# ── Database ──────────────────────────────────────────────────────────────────
+*.db
+*.sqlite
+*.sqlite3
+portfolio.db-shm       # SQLite shared memory file
+portfolio.db-wal       # SQLite write-ahead log
+
+# ── Portfolio data ────────────────────────────────────────────────────────────
+portfolio.json         # contains cost basis / personal financial data
+
+# ── Python ────────────────────────────────────────────────────────────────────
 __pycache__/
 *.py[cod]
 *.pyo
+*.pyd
 .venv/
 venv/
 env/
+*.egg-info/
+dist/
+build/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
 
-# Editor
+# ── Logs ──────────────────────────────────────────────────────────────────────
+*.log
+logs/
+
+# ── OS ────────────────────────────────────────────────────────────────────────
+.DS_Store
+Thumbs.db
+
+# ── Editor ────────────────────────────────────────────────────────────────────
 .vscode/
 .idea/
 *.swp
+*.swo
