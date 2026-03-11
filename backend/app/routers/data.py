@@ -56,12 +56,9 @@ async def get_dividends():
     """Return dividend data for all portfolio holdings"""
     try:
         holdings = load_holdings()
-        ngx_holdings = [
-            {"ticker": h["ticker"], "name": h.get("name", ""), "shares": h.get("shares", 0)}
-            for h in holdings.get("ngx", [])
-        ]
-        
-        return dividends_service.get_dividends(ngx_holdings)
+        ngx_tickers = [h["ticker"] for h in holdings["ngx"]]
+
+        return dividends_service.get_dividends(ngx_tickers)
     except Exception as exc:
         raise HTTPException(status_code=500, detail=str(exc))
 
