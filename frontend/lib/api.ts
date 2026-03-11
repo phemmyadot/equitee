@@ -177,11 +177,34 @@ export interface PriceHistory {
   points: PricePoint[];
 }
 
+export interface DividendInfo {
+  symbol:           string;
+  ex_dividend_date: string | null;
+  record_date:      string | null;
+  pay_date:         string | null;
+  cash_amount:      number | null;
+  currency:         string;
+  timestamp:        string | null;
+}
+
+export interface DividendRow {
+  Stock:            string;
+  Ticker:           string;
+  Shares:           number;
+  ExDividendDate:   string | null;
+  CashAmount:       number | null;
+  TotalDividend:    number;
+  RecordDate:       string | null;
+  PayDate:          string | null;
+  HasDividend:      boolean;
+}
+
 // ── Public API ────────────────────────────────────────────────────────────────
 
 export const fetchPortfolioData    = () => get<PortfolioData>('/data');
 export const fetchFX               = () => get<FXRate>('/fx');
 export const fetchNGXPrices        = () => get<{ count: number; prices: Record<string, NGXPrice> }>('/prices/ngx');
 export const fetchUSPrices         = () => get<{ count: number; prices: Record<string, USPrice>  }>('/prices/us');
+export const fetchDividends        = () => get<Record<string, DividendInfo | null>>('/dividends');
 export const fetchPortfolioHistory = (days = 90) => get<PortfolioHistory>(`/history/portfolio?days=${days}`);
 export const fetchPriceHistory     = (ticker: string, days = 90) => get<PriceHistory>(`/history/prices/${ticker}?days=${days}`);
