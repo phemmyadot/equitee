@@ -202,6 +202,7 @@ export interface DividendRow {
 // ── Public API ────────────────────────────────────────────────────────────────
 
 export const fetchPortfolioData    = () => get<PortfolioData>('/data');
+export const fetchTickerData       = (ticker: string) => get<any>(`/data/${ticker}`);
 export const fetchFX               = () => get<FXRate>('/fx');
 export const fetchNGXPrices        = () => get<{ count: number; prices: Record<string, NGXPrice> }>('/prices/ngx');
 export const fetchUSPrices         = () => get<{ count: number; prices: Record<string, USPrice>  }>('/prices/us');

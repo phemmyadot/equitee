@@ -1,5 +1,6 @@
 'use client';
 
+import Link from 'next/link';
 import { usePortfolio } from '@/lib/PortfolioContext';
 import KPICard          from '@/components/ui/KPICard';
 import ChartCard        from '@/components/ui/ChartCard';
@@ -85,67 +86,30 @@ export default function NGXOverviewPage() {
 
   const cols: ColDef<StockRow>[] = [
     { key: 'Ticker',  label: 'Ticker',
-      render: v => <span className="font-mono font-semibold text-[var(--ink)] text-[11px]">{v}</span>
+      render: (v: string) => (
+        <Link href={`/ngx/${v}`} className="font-mono font-semibold text-[var(--accent)] hover:underline">
+          {v}
+        </Link>
+      )
     },
     { key: 'Stock',   label: 'Company',
       render: v => <span className="text-[var(--ink-2)] text-[12px]">{v}</span>
     },
-    { key: 'Sector',  label: 'Sector',
-      render: (v: string) => (
-        <span className="inline-flex items-center gap-1.5">
-          <span className="w-2 h-2 rounded-full shrink-0" style={{ background: sectorColor(v) }} />
-          <span className="text-[var(--ink-3)]">{v}</span>
-        </span>
-      ),
-    },
-    { key: 'LivePrice', label: 'Price', right: true,
-      render: (v: number) => v != null
-        ? <span className="font-mono font-semibold text-[var(--ink)]">{fmtNGNFull(v)}</span>
-        : <span className="text-[var(--ink-4)]">—</span>,
-      sortValue: (r: StockRow) => r.LivePrice ?? 0,
-    },
-    { key: 'LiveChangePct', label: 'Day', right: true,
-      render: (v: number) => v != null
-        ? <span className={`font-mono font-medium text-[11px] ${isPositive(v) ? 'text-[var(--gain)]' : 'text-[var(--loss)]'}`}>{fmtPct2(v)}</span>
-        : <span className="text-[var(--ink-4)]">—</span>,
-      sortValue: (r: StockRow) => r.LiveChangePct ?? 0,
-    },
-    { key: 'DayHigh', label: 'High', right: true,
-      render: (v: number) => v != null ? <span className="font-mono text-[var(--ink-3)]">{fmtNGNFull(v)}</span> : '',
-    },
-    { key: 'DayLow', label: 'Low', right: true,
-      render: (v: number) => v != null ? <span className="font-mono text-[var(--ink-3)]">{fmtNGNFull(v)}</span> : '',
-    },
-    { key: 'Volume', label: 'Volume', right: true,
-      render: (v: number) => <span className="font-mono text-[var(--ink-3)]">{fmtVol(v)}</span>,
-      sortValue: (r: StockRow) => r.Volume ?? 0,
-    },
-    { key: 'RemainingCost', label: 'Cost', right: true,
-      render: (v: number) => <span className="font-mono text-[var(--ink-3)]">{fmtNGN(v)}</span>,
-      sortValue: (r: StockRow) => r.RemainingCost ?? 0,
+    { key: 'Shares', label: 'Shares', right: true,
+      render: (v: number) => <span className="font-mono text-[var(--ink-3)]">{v.toLocaleString()}</span>,
+      sortValue: (r: StockRow) => r.Shares ?? 0,
     },
     { key: 'CurrentEquity', label: 'Equity', right: true,
       render: (v: number) => <span className="font-mono font-semibold text-[var(--ink)]">{fmtNGN(v)}</span>,
       sortValue: (r: StockRow) => r.CurrentEquity ?? 0,
     },
-    { key: 'UnrealizedPL', label: 'G/L', right: true,
-      render: (v: number) => (
-        <span className={`font-mono font-medium text-[11px] ${isPositive(v) ? 'text-[var(--gain)]' : 'text-[var(--loss)]'}`}>
-          {fmtNGN(v)}
-        </span>
-      ),
-      sortValue: (r: StockRow) => r.UnrealizedPL ?? 0,
+    { key: 'allocation', label: 'Allocation', right: true,
+      render: (_: unknown, row: StockRow) => {
+        const allocation = (row.CurrentEquity ?? 0) / (k?.equity ?? 1) * 100;
+        return <span className="font-mono text-[var(--ink-3)]">{fmtPct(allocation)}</span>;
+      },
+      sortValue: (r: StockRow) => ((r.CurrentEquity ?? 0) / (k?.equity ?? 1)) * 100,
     },
-    { key: 'ReturnPct', label: 'Return', right: true,
-      render: (v: number) => (
-        <span className={`font-mono font-semibold text-[12px] ${isPositive(v) ? 'text-[var(--gain)]' : 'text-[var(--loss)]'}`}>
-          {fmtPct(v)}
-        </span>
-      ),
-      sortValue: (r: StockRow) => r.ReturnPct ?? 0,
-    },
-    { key: 'PriceSource', label: '', render: (v: string) => <SourceBadge source={v} /> },
-    { key: 'sparkline', label: '90d', render: (_: unknown, row: StockRow) => <Sparkline ticker={row.Ticker} /> },
   ];
 
   return (
