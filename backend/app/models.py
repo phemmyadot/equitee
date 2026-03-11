@@ -67,6 +67,26 @@ class DividendsResponse(BaseModel):
     dividends: dict[str, Optional[DividendInfo]]
 
 
+class DividendSummaryItem(BaseModel):
+    ticker:             str
+    name:               str
+    shares:             float
+    ex_dividend_date:   Optional[str] = None
+    cash_amount:        Optional[float] = None
+    total_dividend:     float = 0.0
+    record_date:        Optional[str] = None
+    pay_date:           Optional[str] = None
+    has_dividend:       bool = False
+
+
+class DividendSummary(BaseModel):
+    items:              list[DividendSummaryItem]
+    total_expected:     float
+    upcoming_count:     int
+    total_holdings:     int
+    cache_age:          Optional[int] = None
+
+
 # ── FX model ─────────────────────────────────────────────────────────────────
 
 class FXResponse(BaseModel):
