@@ -33,6 +33,9 @@ class Settings:
     )
     US_PRICE_TTL: int = int(os.getenv("US_PRICE_TTL", "120"))     # seconds
 
+    # ── Dividends ────────────────────────────────────────────────────────────
+    DIVIDEND_TTL: int = int(os.getenv("DIVIDEND_TTL", "3600"))    # seconds
+
     # ── FX ───────────────────────────────────────────────────────────────────
     FX_TTL: int          = int(os.getenv("FX_TTL", "600"))        # seconds
     USDNGN_FALLBACK: float = float(os.getenv("USDNGN_FALLBACK", "1580"))
