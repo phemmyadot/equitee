@@ -48,6 +48,25 @@ class USPricesResponse(BaseModel):
     prices:  dict[str, USPrice]
 
 
+# ── Dividend models ──────────────────────────────────────────────────────────
+
+class DividendInfo(BaseModel):
+    symbol:            str
+    ex_dividend_date:  Optional[str] = None
+    record_date:       Optional[str] = None
+    pay_date:          Optional[str] = None
+    cash_amount:       Optional[float] = None
+    currency:          str = "NGN"
+    timestamp:         Optional[str] = None
+
+
+class DividendsResponse(BaseModel):
+    count:   int
+    age_sec: int
+    source:  str
+    dividends: dict[str, Optional[DividendInfo]]
+
+
 # ── FX model ─────────────────────────────────────────────────────────────────
 
 class FXResponse(BaseModel):
