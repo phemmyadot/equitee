@@ -91,6 +91,16 @@ def _scrape_overview(ticker: str) -> Optional[Dict]:
                     overview["roe"] = value
                 elif "debt" in label and "equity" in label:
                     overview["debt_to_equity"] = value
+                elif "current ratio" in label:
+                    overview["current_ratio"] = value
+                elif "gross margin" in label or "gross profit margin" in label:
+                    overview["gross_margin"] = value
+                elif "profit margin" in label or ("margin" in label and "net" in label):
+                    overview["net_margin"] = value
+                elif "revenue" in label and "per" not in label and "growth" not in label:
+                    overview["revenue"] = value
+                elif "net income" in label and "growth" not in label:
+                    overview["net_income"] = value
 
     log.info(f"[Overview] Scraped overview for {ticker}")
     return overview
