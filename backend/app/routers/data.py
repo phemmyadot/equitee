@@ -115,6 +115,11 @@ async def get_ticker_data(
                 "roe": overview_data["roe"],
                 "debt_to_equity": overview_data["debt_to_equity"],
                 "book_value": overview_data["book_value"],
+                "current_ratio": overview_data["current_ratio"],
+                "gross_margin": overview_data["gross_margin"],
+                "net_margin": overview_data["net_margin"],
+                "revenue": overview_data["revenue"],
+                "net_income": overview_data["net_income"],
             } if overview_data else None,
             "performance": {
                 "beta": performance_data["beta"],
