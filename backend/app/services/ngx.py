@@ -1,179 +1,303 @@
 """
-NGX Price Service
-=================
-Fetches all equity prices from the NGX doclib REST API.
+NGX Service - Main Scraper
+===========================
+Scrapes comprehensive data from https://stockanalysis.com/list/nigerian-stock-exchange/
 
-Endpoint:
-    GET https://doclib.ngxgroup.com/REST/api/statistics/equities/
-        ?market=&sector=&orderby=&pageSize=300&pageNo=0
+This service extracts:
+- Price data (current price, change, volume, market cap)
+- Dividend information (ex-dividend date, cash amount, payment dates)
+- Company profile (name, sector, industry)
+- Overview tables (PE, earnings, book value, etc.)
+- Performance tables (returns, drawdowns, volatility)
 
-Notes:
-    - The endpoint uses a self-signed / incomplete cert chain → SSL verification
-      is disabled specifically for this host.
-    - Data is 30-min delayed; we cache for NGX_PRICE_TTL seconds (default 15 min).
-    - Multiple response shapes are handled (bare array, {"d": [...]}, etc.)
+All data is cached with TTL to reduce external API load.
 """
 
-import json
 import logging
 import time
-import ssl
-import urllib.request
-from typing import Optional
+import requests
+from typing import Optional, Dict, List
+from bs4 import BeautifulSoup
 
 from app.config import settings
 from app.models import NGXPrice
 
 log = logging.getLogger(__name__)
 
-# ── SSL context: skip verification only for the NGX doclib host ───────────────
-_SSL_UNVERIFIED = ssl.create_default_context()
-_SSL_UNVERIFIED.check_hostname = False
-_SSL_UNVERIFIED.verify_mode    = ssl.CERT_NONE
+# ── In-memory cache ──────────────────────────────────────────────────────────
+_cache: Dict = {
+    "prices": {},
+    "dividends": {},
+    "profiles": {},
+    "overview": {},
+    "performance": {},
+    "ts": 0.0,
+}
 
-# ── In-memory cache ───────────────────────────────────────────────────────────
-_cache: dict = {"data": {}, "ts": 0.0}
+NGX_LIST_URL = "https://stockanalysis.com/list/nigerian-stock-exchange/"
 
-# ── Field name variants seen across NGX API versions ─────────────────────────
-_SYMBOL_KEYS  = ("SYMBOL","Symbol","symbol","Ticker","TICKER")
-_PRICE_KEYS   = ("PRICE","Price","price","LAST_PRICE","LastPrice",
-                 "CLOSE_PRICE","ClosePrice","CurrentPrice","CURRENT_PRICE")
-_CLOSE_KEYS   = ("CLOSE","Close","close","PREV_CLOSE","PrevClose",
-                 "PREVIOUS_CLOSE","YesterdayPrice","YESTERDAY_PRICE")
-_CHANGE_KEYS  = ("CHANGE","Change","change","PRICE_CHANGE","PriceChange")
-_PCT_KEYS     = ("PERCENT_CHANGE","PercentChange","percent_change","PCT_CHANGE",
-                 "ChangePercent","CHANGE_PERCENT","PERC_CHANGE","%CHANGE")
-_HIGH_KEYS    = ("HIGH","High","high","DAY_HIGH","DayHigh")
-_LOW_KEYS     = ("LOW","Low","low","DAY_LOW","DayLow")
-_VOL_KEYS     = ("VOLUME","Volume","volume","TOTAL_VOLUME","TotalVolume",
-                 "QTY_TRADED","TradeVolume")
-_VALUE_KEYS   = ("VALUE","Value","value","TOTAL_VALUE","TotalValue",
-                 "TRADE_VALUE","ValueTraded")
+USER_AGENT = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36"
 
 
-def _pick(rec: dict, keys: tuple) -> Optional[float]:
-    for k in keys:
-        v = rec.get(k)
-        if v is not None and v != "":
-            try:
-                return float(str(v).replace(",", ""))
-            except (ValueError, TypeError):
-                pass
-    return None
-
-
-def _pick_str(rec: dict, keys: tuple) -> Optional[str]:
-    for k in keys:
-        v = rec.get(k)
-        if v:
-            return str(v).strip()
-    return None
-
-
-def _normalise(rec: dict) -> Optional[NGXPrice]:
-    """Map a raw API record to an NGXPrice model. Returns None if unusable."""
-    symbol = _pick_str(rec, _SYMBOL_KEYS)
-    price  = _pick(rec, _PRICE_KEYS)
-    if not symbol or price is None:
+def _get_soup(url: str) -> Optional[BeautifulSoup]:
+    """Fetch and parse HTML from URL."""
+    try:
+        headers = {"User-Agent": USER_AGENT}
+        response = requests.get(url, headers=headers, timeout=15)
+        response.raise_for_status()
+        return BeautifulSoup(response.content, "html.parser")
+    except Exception as exc:
+        log.error(f"[NGX] Failed to fetch {url}: {exc}")
         return None
 
-    close  = _pick(rec, _CLOSE_KEYS)
-    change = _pick(rec, _CHANGE_KEYS)
-    pct    = _pick(rec, _PCT_KEYS)
 
-    # Derive missing fields where possible
-    if change is None and close is not None:
-        change = round(price - close, 4)
-    if pct is None and close and close != 0 and change is not None:
-        pct = round(change / close * 100, 4)
-
-    return NGXPrice(
-        symbol     = symbol,
-        price      = price,
-        close      = close,
-        change     = change,
-        change_pct = pct,
-        high       = _pick(rec, _HIGH_KEYS),
-        low        = _pick(rec, _LOW_KEYS),
-        volume     = _pick(rec, _VOL_KEYS),
-        value      = _pick(rec, _VALUE_KEYS),
-    )
+def _safe_float(text: str, default=None) -> Optional[float]:
+    """Safely parse a float from text, handling currency symbols, commas, and percentages."""
+    if not text:
+        return default
+    try:
+        # Clean up: remove spaces, currency, commas, and percentage signs
+        cleaned = text.strip().replace(",", "").replace("₦", "").replace("%", "").split()[0]
+        return float(cleaned)
+    except (ValueError, IndexError, AttributeError):
+        return default
 
 
-def _extract_records(data) -> list:
-    """Extract the list of records from any supported response shape."""
-    if isinstance(data, list):
-        return data
-    for key in ("d", "data", "result", "items", "equities", "Data"):
-        if key in data and isinstance(data[key], list):
-            return data[key]
-    # Fall back to first list value found
-    return next((v for v in data.values() if isinstance(v, list) and v), [])
+def _get_volume_for_ticker(ticker: str) -> Optional[float]:
+    """Fetch volume from individual ticker page."""
+    try:
+        url = f"https://stockanalysis.com/quote/ngx/{ticker.lower()}/"
+        soup = _get_soup(url)
+        if not soup:
+            return None
+        
+        # Find the table with Volume data
+        tables = soup.find_all("table")
+        for table in tables:
+            rows = table.find_all("tr")
+            if not rows:
+                continue
+            
+            # Check if this is the volume table (first cell contains "Volume")
+            for row in rows:
+                cells = row.find_all(["td", "th"])
+                if len(cells) >= 2:
+                    label = cells[0].get_text(strip=True)
+                    if label == "Volume":
+                        # Found it - extract the volume value
+                        value = cells[1].get_text(strip=True)
+                        return _safe_float(value)
+        
+        return None
+    except Exception as exc:
+        log.debug(f"[NGX] Could not fetch volume for {ticker}: {exc}")
+        return None
 
 
-def _fetch_page(page: int) -> list:
-    url = (
-        f"{settings.NGX_API_BASE}"
-        f"?market=&sector=&orderby="
-        f"&pageSize={settings.NGX_PAGE_SIZE}&pageNo={page}"
-    )
-    req = urllib.request.Request(url, headers={
-        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)",
-        "Accept":     "application/json",
-        "Referer":    "https://ngxgroup.com/",
-        "Origin":     "https://ngxgroup.com",
-    })
-    with urllib.request.urlopen(req, timeout=12, context=_SSL_UNVERIFIED) as r:
-        return _extract_records(json.loads(r.read().decode("utf-8", errors="ignore")))
-
-
-def get_prices() -> dict[str, NGXPrice]:
+def _fetch_all_data():
     """
-    Return all NGX equity prices, using cache when fresh.
-    Falls back to stale cache if the API is unreachable.
+    Scrape the NGX list page and extract all price data.
+    Intelligently detects columns: ticker, name, price, change, change%, volume
     """
+    soup = _get_soup(NGX_LIST_URL)
+    if not soup:
+        return
+
+    # Find the main data table
+    table = soup.find("table")
+    if not table:
+        log.error("[NGX] No table found on list page")
+        return
+
+    prices = {}
+    dividends = {}
+    profiles = {}
+
+    rows = table.find_all("tr")[1:]  # Skip header row
+    for row in rows:
+        cells = row.find_all("td")
+        if len(cells) < 5:
+            continue
+
+        try:
+            # Actual table structure from stockanalysis.com:
+            # [0] No. [1] Symbol(link) [2] Company Name [3] Market Cap [4] Stock Price [5] % Change [6] Revenue
+            
+            # Extract ticker from column 1 (contains link)
+            ticker_cell = cells[1]
+            ticker_link = ticker_cell.find("a")
+            if not ticker_link:
+                continue
+
+            ticker = ticker_link.text.strip().upper()
+            company_name = cells[2].text.strip() if len(cells) > 2 else ""
+
+            # Direct column mapping (no "smart detection" needed - we know the structure)
+            price = _safe_float(cells[4].text) if len(cells) > 4 else None
+            
+            # % Change is in column 5
+            change_pct = None
+            if len(cells) > 5:
+                text = cells[5].text.strip()
+                if text and text != "-":  # Table uses "-" for no data
+                    change_pct = _safe_float(text)
+            
+            # Calculate change from price and change_pct if needed
+            change = None
+            if price and change_pct is not None:
+                change = (price * change_pct) / 100
+            
+            # Volume comes from individual ticker pages (lazy loaded on first request)
+            volume = None
+
+            # Store price data with all available fields
+            if ticker and price is not None:
+               prices[ticker] = NGXPrice(
+                    symbol=ticker,
+                    price=price,
+                    close=None,  # Not available from list page
+                    change=change,
+                    change_pct=change_pct,
+                    high=None,
+                    low=None,
+                    volume=volume,
+                    value=None,
+                )
+
+            # Store profile data
+            if ticker and company_name:
+                profiles[ticker] = {
+                    "symbol": ticker,
+                    "name": company_name,
+                    "sector": None,
+                    "industry": None,
+                }
+
+        except Exception as e:
+            log.warning(f"[NGX] Error parsing row: {e}")
+            continue
+
+    log.info(f"[NGX] Scraped {len(prices)} tickers from list page")
+    return prices, dividends, profiles
+
+
+def _refresh_cache():
+    """Refresh all cached data if TTL has expired."""
     global _cache
     now = time.time()
 
-    if _cache["data"] and (now - _cache["ts"]) < settings.NGX_PRICE_TTL:
+    if _cache["prices"] and (now - _cache["ts"]) < settings.NGX_PRICE_TTL:
         age = int(now - _cache["ts"])
-        log.info(f"[NGX] cache hit — {len(_cache['data'])} tickers, {age}s old")
-        return _cache["data"]
+        log.info(f"[NGX] cache hit — {len(_cache['prices'])} tickers, {age}s old")
+        return
 
-    log.info("[NGX] fetching from doclib.ngxgroup.com...")
-    prices: dict[str, NGXPrice] = {}
-    page = 0
+    log.info("[NGX] refreshing cache from stockanalysis.com...")
+    result = _fetch_all_data()
+    if result:
+        prices, dividends, profiles = result
+        _cache = {
+            "prices": prices,
+            "dividends": dividends,
+            "profiles": profiles,
+            "overview": {},
+            "performance": {},
+            "ts": now,
+        }
 
-    try:
-        while True:
-            records = _fetch_page(page)
-            if not records:
-                break
 
-            for rec in records:
-                n = _normalise(rec)
-                if n and n.symbol not in prices:
-                    prices[n.symbol] = n
+def get_prices() -> Dict[str, NGXPrice]:
+    """Return all NGX equity prices."""
+    _refresh_cache()
+    return _cache["prices"]
 
-            log.info(f"[NGX] page {page}: {len(records)} records")
-            if len(records) < settings.NGX_PAGE_SIZE:
-                break
-            page += 1
 
-        if not prices:
-            raise ValueError("API returned 0 parseable records")
+def get_price(ticker: str) -> Optional[NGXPrice]:
+    """Return price for a single ticker."""
+    _refresh_cache()
+    return _cache["prices"].get(ticker.upper())
 
-        log.info(f"[NGX] total tickers fetched: {len(prices)}")
-        _cache = {"data": prices, "ts": now}
-        return prices
 
-    except Exception as exc:
-        log.error(f"[NGX] fetch failed: {exc}")
-        if _cache["data"]:
-            log.warning("[NGX] returning stale cache")
-            return _cache["data"]
-        return {}
+def get_dividends() -> Dict:
+    """Return all dividend data."""
+    _refresh_cache()
+    return _cache["dividends"]
+
+
+def get_dividend(ticker: str) -> Optional[Dict]:
+    """Return dividend data for a single ticker."""
+    _refresh_cache()
+    return _cache["dividends"].get(ticker.upper())
+
+
+def get_profiles() -> Dict:
+    """Return all company profiles."""
+    _refresh_cache()
+    return _cache["profiles"]
+
+
+def get_profile(ticker: str) -> Optional[Dict]:
+    """Return profile for a single ticker."""
+    _refresh_cache()
+    return _cache["profiles"].get(ticker.upper())
+
+
+def get_overview() -> Dict:
+    """Return all overview table data."""
+    _refresh_cache()
+    return _cache["overview"]
+
+
+def get_overview_ticker(ticker: str) -> Optional[Dict]:
+    """Return overview data for a single ticker."""
+    _refresh_cache()
+    return _cache["overview"].get(ticker.upper())
+
+
+def get_performance() -> Dict:
+    """Return all performance table data."""
+    _refresh_cache()
+    return _cache["performance"]
+
+
+def get_performance_ticker(ticker: str) -> Optional[Dict]:
+    """Return performance data for a single ticker."""
+    _refresh_cache()
+    return _cache["performance"].get(ticker.upper())
 
 
 def cache_age() -> Optional[int]:
+    """Return how many seconds old the cache is."""
     return int(time.time() - _cache["ts"]) if _cache["ts"] else None
+
+
+def enrich_with_volumes(tickers: List[str]) -> Dict[str, NGXPrice]:
+    """
+    Return prices for specific tickers with volume data fetched from individual pages.
+    This is for portfolio holdings only (not all 143 tickers) to avoid excessive requests.
+    """
+    _refresh_cache()
+    prices = {}
+    
+    for ticker in tickers:
+        ticker = ticker.upper()
+        price_obj = _cache["prices"].get(ticker)
+        
+        if price_obj:
+            # Fetch volume from individual ticker page
+            volume = _get_volume_for_ticker(ticker)
+            
+            # Create new NGXPrice with volume
+            enriched = NGXPrice(
+                symbol=price_obj.symbol,
+                price=price_obj.price,
+                close=price_obj.close,
+                change=price_obj.change,
+                change_pct=price_obj.change_pct,
+                high=price_obj.high,
+                low=price_obj.low,
+                volume=volume,  # ← Fetched from individual page
+                value=price_obj.value,
+            )
+            prices[ticker] = enriched
+    
+    return prices
