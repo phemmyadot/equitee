@@ -35,8 +35,8 @@ def _get_soup(url: str) -> Optional[BeautifulSoup]:
 
 
 def _scrape_performance(ticker: str) -> Optional[Dict]:
-    """Scrape performance data for a single ticker."""
-    url = f"https://stockanalysis.com/quote/ngx/{ticker.lower()}/"
+    """Scrape performance and valuation metrics from the statistics page."""
+    url = f"https://stockanalysis.com/quote/ngx/{ticker.lower()}/statistics/"
     
     soup = _get_soup(url)
     if not soup:
@@ -58,35 +58,36 @@ def _scrape_performance(ticker: str) -> Optional[Dict]:
         "correlation_market": None,
     }
 
-    # Look for performance/statistics tables
+    # Extract data from all tables on statistics page
     tables = soup.find_all("table")
     for table in tables:
         rows = table.find_all("tr")
         for row in rows:
-            cols = row.find_all("td")
+            cols = row.find_all(["td", "th"])
             if len(cols) >= 2:
-                label = cols[0].text.strip().lower()
-                value_text = cols[1].text.strip()
+                label = cols[0].get_text(strip=True).lower()
+                value_text = cols[1].get_text(strip=True)
                 
                 # Try to parse numeric value
                 try:
                     value = value_text.replace("%", "").replace(",", "").strip()
-                    value = float(value) if value else None
+                    value = float(value) if value and value not in ['n/a', '-', 'none'] else None
                 except (ValueError, AttributeError):
-                    value = value_text
+                    value = None
                 
                 # Map labels to performance fields
-                if "1 day" in label or "1d return" in label:
+                if "1 day" in label or "1d return" in label or "1d%" in label:
                     performance["return_1d"] = value
-                elif "1 week" in label or "1w return" in label:
+                elif "1 week" in label or "1w" in label or "1w return" in label:
                     performance["return_1w"] = value
-                elif "1 month" in label or "1m return" in label:
+                elif "1 month" in label or "1m" in label or "1m return" in label:
                     performance["return_1m"] = value
-                elif "3 month" in label or "3m return" in label:
+                elif "3 month" in label or "3m" in label:
                     performance["return_3m"] = value
-                elif "6 month" in label or "6m return" in label:
+                elif "6 month" in label or "6m" in label:
                     performance["return_6m"] = value
-                elif "1 year" in label or "1y return" in label:
+                elif "1 year" in label or "1y" in label or "1y return" in label or "52-week" in label:
+                    # Use 52-week price change as proxy for 1-year return
                     performance["return_1y"] = value
                 elif "year to date" in label or "ytd" in label:
                     performance["return_ytd"] = value
@@ -94,10 +95,12 @@ def _scrape_performance(ticker: str) -> Optional[Dict]:
                     performance["volatility"] = value
                 elif "sharpe" in label:
                     performance["sharpe_ratio"] = value
-                elif "max drawdown" in label:
+                elif "max drawdown" in label or "maximum drawdown" in label:
                     performance["max_drawdown"] = value
-                elif "beta" in label:
+                elif "beta" in label and "correlation" not in label:
                     performance["beta"] = value
+                elif "correlation" in label:
+                    performance["correlation_market"] = value
 
     log.info(f"[Performance] Scraped performance for {ticker}")
     return performance
