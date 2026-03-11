@@ -35,8 +35,8 @@ def _get_soup(url: str) -> Optional[BeautifulSoup]:
 
 
 def _scrape_overview(ticker: str) -> Optional[Dict]:
-    """Scrape overview/fundamental data for a single ticker."""
-    url = f"https://stockanalysis.com/quote/ngx/{ticker.lower()}/"
+    """Scrape fundamental data from the statistics page."""
+    url = f"https://stockanalysis.com/quote/ngx/{ticker.lower()}/statistics/"
     
     soup = _get_soup(url)
     if not soup:
@@ -59,34 +59,33 @@ def _scrape_overview(ticker: str) -> Optional[Dict]:
         "net_income": None,
     }
 
-    # Look for overview/metrics tables
+    # Extract data from all tables on statistics page
     tables = soup.find_all("table")
     for table in tables:
         rows = table.find_all("tr")
         for row in rows:
-            cols = row.find_all("td")
+            cols = row.find_all(["td", "th"])
             if len(cols) >= 2:
-                label = cols[0].text.strip().lower()
-                value_text = cols[1].text.strip()
+                label = cols[0].get_text(strip=True).lower()
+                value_text = cols[1].get_text(strip=True)
                 
                 # Try to parse numeric value
                 try:
-                    # Remove common suffixes
-                    value = value_text.replace("%", "").replace("B", "").replace("M", "").replace(",", "").strip()
-                    value = float(value) if value else None
+                    value = value_text.replace("%", "").replace(",", "").replace("T", "").replace("B", "").replace("M", "").strip()
+                    value = float(value) if value and value not in ['n/a', '-', 'none'] else None
                 except (ValueError, AttributeError):
-                    value = value_text
+                    value = None
                 
-                # Map labels to fields
-                if "market cap" in label or "market capitalization" in label:
+                # Map labels to overview fields (fundamentals)
+                if "market cap" in label:
                     overview["market_cap"] = value
-                elif "pe ratio" in label:
+                elif "pe ratio" in label and "forward" not in label:
                     overview["pe_ratio"] = value
-                elif "eps" in label or "earnings per share" in label:
+                elif "eps" in label and "forward" not in label:
                     overview["eps"] = value
-                elif "book value" in label:
+                elif "pb ratio" in label or "price to book" in label:
                     overview["book_value"] = value
-                elif "dividend yield" in label:
+                elif "dividend" in label and "yield" in label:
                     overview["dividend_yield"] = value
                 elif "roe" in label or "return on equity" in label:
                     overview["roe"] = value

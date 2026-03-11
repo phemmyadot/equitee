@@ -35,8 +35,8 @@ def _get_soup(url: str) -> Optional[BeautifulSoup]:
 
 
 def _scrape_profile(ticker: str) -> Optional[Dict]:
-    """Scrape profile data for a single ticker from stockanalysis.com"""
-    url = f"https://stockanalysis.com/quote/ngx/{ticker.lower()}/"
+    """Scrape profile data from the company page"""
+    url = f"https://stockanalysis.com/quote/ngx/{ticker.lower()}/company/"
     
     soup = _get_soup(url)
     if not soup:
@@ -59,25 +59,32 @@ def _scrape_profile(ticker: str) -> Optional[Dict]:
     if title:
         profile["name"] = title.text.strip()
 
-    # Look for info boxes or details sections
-    info_items = soup.find_all("div", class_="info-item") or soup.find_all("li", class_="info")
-    for item in info_items:
-        text = item.text.strip().lower()
-        value = None
-        
-        # Try to find the corresponding value
-        value_elem = item.find("span", class_="info-value") or item.find("span", class_="value")
-        if value_elem:
-            value = value_elem.text.strip()
-        
-        if "sector" in text:
-            profile["sector"] = value
-        elif "industry" in text:
-            profile["industry"] = value
-        elif "website" in text or "homepage" in text:
-            link = item.find("a")
-            if link:
-                profile["website"] = link.get("href")
+    # Extract data from tables on the company page
+    tables = soup.find_all("table")
+    for table in tables:
+        rows = table.find_all("tr")
+        for row in rows:
+            cols = row.find_all(["td", "th"])
+            if len(cols) >= 2:
+                label = cols[0].get_text(strip=True).lower()
+                value = cols[1].get_text(strip=True)
+                
+                # Map table cells to profile fields
+                if "industry" in label:
+                    profile["industry"] = value
+                elif "founded" in label or "incorporated" in label:
+                    profile["founded"] = value
+                elif "employees" in label:
+                    profile["employees"] = value
+                elif "website" in label or "homepage" in label:
+                    # Check if there's a link
+                    link = cols[1].find("a")
+                    if link:
+                        profile["website"] = link.get("href")
+                    else:
+                        profile["website"] = value
+                elif "hq" in label or "headquarters" in label:
+                    profile["headquarters"] = value
 
     log.info(f"[Profile] Scraped profile for {ticker}")
     return profile
