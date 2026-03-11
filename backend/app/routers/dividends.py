@@ -1,47 +1,25 @@
 """
 Dividends Router
 ================
-GET /api/dividends/{ticker}   — upcoming dividend for single ticker
-GET /api/dividends            — upcoming dividends for portfolio holdings
+GET /api/dividends   — dividend summary with totals (sorted by upcoming)
 """
 
 from fastapi import APIRouter, HTTPException
 from app.services import dividends as dividends_service
 from app.services.portfolio import load_holdings
-from app.models import DividendInfo, DividendsResponse
+from app.models import DividendSummary
 
 router = APIRouter(prefix="/api/dividends", tags=["dividends"])
 
-
-@router.get("/{ticker}", response_model=DividendInfo)
-async def get_dividend(ticker: str):
-    """Get upcoming dividend information for a single ticker."""
-    try:
-        result = dividends_service.get_dividend(ticker.upper())
-        if result is None:
-            raise HTTPException(status_code=404, 
-                              detail=f"No dividend data found for {ticker}")
-        return result
-    except HTTPException:
-        raise
-    except Exception as exc:
-        raise HTTPException(status_code=500, detail=str(exc))
-
-
-@router.get("", response_model=DividendsResponse)
-async def get_all_dividends():
-    """Get upcoming dividend information for all NGX portfolio holdings."""
+@router.get("", response_model=DividendSummary)
+async def get_dividends():
+    """Get dividend summary for portfolio holdings with totals (sorted by upcoming)."""
     try:
         holdings = load_holdings()
-        tickers = [h["ticker"] for h in holdings["ngx"]]
+        ngx_holdings = holdings["ngx"]
         
-        dividends = dividends_service.get_dividends(tickers)
+        summary = dividends_service.get_dividends(ngx_holdings)
         
-        return DividendsResponse(
-            count=sum(1 for d in dividends.values() if d is not None),
-            age_sec=dividends_service.cache_age() or 0,
-            source="stockanalysis.com",
-            dividends=dividends,
-        )
+        return DividendSummary(**summary)
     except Exception as exc:
         raise HTTPException(status_code=500, detail=str(exc))
