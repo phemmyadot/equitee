@@ -56,6 +56,26 @@ def _scrape_performance(ticker: str) -> Optional[Dict]:
         "max_drawdown": None,
         "beta": None,
         "correlation_market": None,
+        # Additional margins & ratios from statistics page
+        "operating_margin": None,
+        "ebitda_margin": None,
+        "fcf_margin": None,
+        "pretax_margin": None,
+        "roa": None,
+        "roic": None,
+        "roce": None,
+        "free_cash_flow": None,
+        "fcf_per_share": None,
+        "operating_cash_flow": None,
+        "capex": None,
+        "fcf_yield": None,
+        "ev_ebitda": None,
+        "ev_fcf": None,
+        "interest_coverage": None,
+        "debt_ebitda": None,
+        "quick_ratio": None,
+        "net_debt": None,
+        "asset_turnover": None,
     }
 
     # Extract data from all tables on statistics page
@@ -101,6 +121,49 @@ def _scrape_performance(ticker: str) -> Optional[Dict]:
                     performance["beta"] = value
                 elif "correlation" in label:
                     performance["correlation_market"] = value
+                # Margin metrics
+                elif "operating margin" in label or "operating margin %" in label or "ebit margin" in label:
+                    performance["operating_margin"] = value
+                elif "ebitda margin" in label:
+                    performance["ebitda_margin"] = value
+                elif "fcf margin" in label or "free cash flow margin" in label:
+                    performance["fcf_margin"] = value
+                elif "pretax margin" in label or "pretax income margin" in label:
+                    performance["pretax_margin"] = value
+                # Efficiency metrics
+                elif "return on assets" in label or "roa" in label:
+                    performance["roa"] = value
+                elif "return on invested capital" in label or "roic" in label:
+                    performance["roic"] = value
+                elif "return on capital employed" in label or "roce" in label:
+                    performance["roce"] = value
+                elif "asset turnover" in label:
+                    performance["asset_turnover"] = value
+                # Cash flow metrics
+                elif "free cash flow" in label and "margin" not in label and "yield" not in label and "per share" not in label:
+                    performance["free_cash_flow"] = value
+                elif "fcf per share" in label or "free cash flow per share" in label:
+                    performance["fcf_per_share"] = value
+                elif "operating cash flow" in label or "operating cash flow" in label:
+                    performance["operating_cash_flow"] = value
+                elif "capital expenditure" in label or "capex" in label:
+                    performance["capex"] = value
+                elif "fcf yield" in label:
+                    performance["fcf_yield"] = value
+                # Enterprise value ratios
+                elif "ev / ebitda" in label or "ev/ebitda" in label:
+                    performance["ev_ebitda"] = value
+                elif "ev / fcf" in label or "ev/fcf" in label:
+                    performance["ev_fcf"] = value
+                # Financial health
+                elif "interest coverage" in label:
+                    performance["interest_coverage"] = value
+                elif "debt / ebitda" in label or "debt/ebitda" in label:
+                    performance["debt_ebitda"] = value
+                elif "quick ratio" in label:
+                    performance["quick_ratio"] = value
+                elif "net debt" in label and "per share" not in label and "net cash" not in label:
+                    performance["net_debt"] = value
 
     log.info(f"[Performance] Scraped performance for {ticker}")
     return performance

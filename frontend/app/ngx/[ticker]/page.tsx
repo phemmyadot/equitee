@@ -176,35 +176,164 @@ export default function StockDetailsPage() {
 
       {/* Risk & Performance Metrics */}
       <div className="space-y-3">
-        <h3 className="text-sm font-semibold text-[var(--ink)] uppercase">Risk & Performance</h3>
+        <h3 className="text-sm font-semibold text-[var(--ink)] uppercase">Profitability & Margins</h3>
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
+          {isFirstLoad
+            ? [...Array(5)].map((_, i) => <ChartSkeleton key={i} height={88} />)
+            : tickerData && (
+                <>
+                  <KPICard
+                    label="Gross Margin"
+                    value={tickerData.overview?.gross_margin != null ? fmtPct(tickerData.overview.gross_margin) : '—'}
+                    accent="neutral"
+                    delay={0}
+                  />
+                  <KPICard
+                    label="Operating Margin"
+                    value={tickerData.performance?.operating_margin != null ? fmtPct(tickerData.performance.operating_margin) : '—'}
+                    accent={tickerData.performance?.operating_margin && isPositive(tickerData.performance.operating_margin) ? 'gain' : 'neutral'}
+                    delay={50}
+                  />
+                  <KPICard
+                    label="Net Margin"
+                    value={tickerData.overview?.net_margin != null ? fmtPct(tickerData.overview.net_margin) : '—'}
+                    accent={tickerData.overview?.net_margin && isPositive(tickerData.overview.net_margin) ? 'gain' : 'neutral'}
+                    delay={100}
+                  />
+                  <KPICard
+                    label="EBITDA Margin"
+                    value={tickerData.performance?.ebitda_margin != null ? fmtPct(tickerData.performance.ebitda_margin) : '—'}
+                    accent="neutral"
+                    delay={150}
+                  />
+                  <KPICard
+                    label="FCF Margin"
+                    value={tickerData.performance?.fcf_margin != null ? fmtPct(tickerData.performance.fcf_margin) : '—'}
+                    accent={tickerData.performance?.fcf_margin && isPositive(tickerData.performance.fcf_margin) ? 'gain' : 'neutral'}
+                    delay={200}
+                  />
+                </>
+              )}
+        </div>
+      </div>
+
+      {/* Efficiency Metrics */}
+      <div className="space-y-3">
+        <h3 className="text-sm font-semibold text-[var(--ink)] uppercase">Efficiency & Returns</h3>
         <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
           {isFirstLoad
             ? [...Array(4)].map((_, i) => <ChartSkeleton key={i} height={88} />)
             : tickerData && (
                 <>
                   <KPICard
-                    label="1Y Return"
-                    value={tickerData.performance?.return_1y != null ? fmtPct(tickerData.performance.return_1y) : '—'}
-                    accent={tickerData.performance?.return_1y != null && isPositive(tickerData.performance.return_1y) ? 'gain' : 'loss'}
+                    label="ROA"
+                    value={tickerData.performance?.roa != null ? fmtPct(tickerData.performance.roa) : '—'}
+                    accent={tickerData.performance?.roa && isPositive(tickerData.performance.roa) ? 'gain' : 'neutral'}
                     delay={0}
                   />
                   <KPICard
-                    label="Beta"
-                    value={tickerData.performance?.beta ? `${tickerData.performance.beta.toFixed(2)}` : '—'}
+                    label="ROIC"
+                    value={tickerData.performance?.roic != null ? fmtPct(tickerData.performance.roic) : '—'}
+                    accent={tickerData.performance?.roic && isPositive(tickerData.performance.roic) ? 'gain' : 'neutral'}
+                    delay={50}
+                  />
+                  <KPICard
+                    label="ROCE"
+                    value={tickerData.performance?.roce != null ? fmtPct(tickerData.performance.roce) : '—'}
+                    accent={tickerData.performance?.roce && isPositive(tickerData.performance.roce) ? 'gain' : 'neutral'}
+                    delay={100}
+                  />
+                  <KPICard
+                    label="Asset Turnover"
+                    value={tickerData.performance?.asset_turnover != null ? `${tickerData.performance.asset_turnover.toFixed(2)}x` : '—'}
+                    accent="neutral"
+                    delay={150}
+                  />
+                </>
+              )}
+        </div>
+      </div>
+
+      {/* Cash Flow Metrics */}
+      <div className="space-y-3">
+        <h3 className="text-sm font-semibold text-[var(--ink)] uppercase">Cash Flow</h3>
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
+          {isFirstLoad
+            ? [...Array(5)].map((_, i) => <ChartSkeleton key={i} height={88} />)
+            : tickerData && (
+                <>
+                  <KPICard
+                    label="Free Cash Flow"
+                    value={tickerData.performance?.free_cash_flow != null ? fmtNGN(tickerData.performance.free_cash_flow) : '—'}
+                    accent="neutral"
+                    delay={0}
+                  />
+                  <KPICard
+                    label="FCF Per Share"
+                    value={tickerData.performance?.fcf_per_share != null ? fmtNGN(tickerData.performance.fcf_per_share) : '—'}
                     accent="neutral"
                     delay={50}
                   />
                   <KPICard
-                    label="Debt/Equity"
-                    value={tickerData.overview?.debt_to_equity ? `${tickerData.overview.debt_to_equity.toFixed(2)}x` : '—'}
+                    label="Operating CF"
+                    value={tickerData.performance?.operating_cash_flow != null ? fmtNGN(tickerData.performance.operating_cash_flow) : '—'}
                     accent="neutral"
                     delay={100}
                   />
                   <KPICard
-                    label="Daily Volume"
-                    value={tickerData.price?.volume ? fmtVol(tickerData.price.volume) : '—'}
+                    label="CapEx"
+                    value={tickerData.performance?.capex != null ? fmtNGN(tickerData.performance.capex) : '—'}
                     accent="neutral"
                     delay={150}
+                  />
+                  <KPICard
+                    label="FCF Yield"
+                    value={tickerData.performance?.fcf_yield != null ? fmtPct(tickerData.performance.fcf_yield) : '—'}
+                    accent={tickerData.performance?.fcf_yield && isPositive(tickerData.performance.fcf_yield) ? 'gain' : 'neutral'}
+                    delay={200}
+                  />
+                </>
+              )}
+        </div>
+      </div>
+
+      {/* Risk & Performance Metrics */}
+      <div className="space-y-3">
+        <h3 className="text-sm font-semibold text-[var(--ink)] uppercase">Valuation & Financial Health</h3>
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
+          {isFirstLoad
+            ? [...Array(5)].map((_, i) => <ChartSkeleton key={i} height={88} />)
+            : tickerData && (
+                <>
+                  <KPICard
+                    label="EV/EBITDA"
+                    value={tickerData.performance?.ev_ebitda != null ? `${tickerData.performance.ev_ebitda.toFixed(2)}x` : '—'}
+                    accent="neutral"
+                    delay={0}
+                  />
+                  <KPICard
+                    label="EV/FCF"
+                    value={tickerData.performance?.ev_fcf != null ? `${tickerData.performance.ev_fcf.toFixed(2)}x` : '—'}
+                    accent="neutral"
+                    delay={50}
+                  />
+                  <KPICard
+                    label="Current Ratio"
+                    value={tickerData.overview?.current_ratio != null ? `${tickerData.overview.current_ratio.toFixed(2)}` : '—'}
+                    accent={tickerData.overview?.current_ratio && tickerData.overview.current_ratio >= 1 ? 'gain' : 'warn'}
+                    delay={100}
+                  />
+                  <KPICard
+                    label="Interest Coverage"
+                    value={tickerData.performance?.interest_coverage != null ? `${tickerData.performance.interest_coverage.toFixed(2)}x` : '—'}
+                    accent={tickerData.performance?.interest_coverage && tickerData.performance.interest_coverage >= 3 ? 'gain' : 'warn'}
+                    delay={150}
+                  />
+                  <KPICard
+                    label="Debt/EBITDA"
+                    value={tickerData.performance?.debt_ebitda != null ? `${tickerData.performance.debt_ebitda.toFixed(2)}x` : '—'}
+                    accent={tickerData.performance?.debt_ebitda && tickerData.performance.debt_ebitda <= 3 ? 'gain' : 'neutral'}
+                    delay={200}
                   />
                 </>
               )}
