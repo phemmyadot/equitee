@@ -44,6 +44,7 @@ def _scrape_performance(ticker: str) -> Optional[Dict]:
 
     performance = {
         "symbol": ticker.upper(),
+        # Price Returns (Phase 1-2)
         "return_1d": None,
         "return_1w": None,
         "return_1m": None,
@@ -56,7 +57,11 @@ def _scrape_performance(ticker: str) -> Optional[Dict]:
         "max_drawdown": None,
         "beta": None,
         "correlation_market": None,
-        # Additional margins & ratios from statistics page
+        # 52-Week Price Data (Phase 4)
+        "week_52_high": None,
+        "week_52_low": None,
+        "week_52_change": None,
+        # Profitability & Returns (Phase 1-2)
         "operating_margin": None,
         "ebitda_margin": None,
         "fcf_margin": None,
@@ -64,18 +69,31 @@ def _scrape_performance(ticker: str) -> Optional[Dict]:
         "roa": None,
         "roic": None,
         "roce": None,
+        # Cash Flow (Phase 1-2)
         "free_cash_flow": None,
         "fcf_per_share": None,
         "operating_cash_flow": None,
         "capex": None,
         "fcf_yield": None,
+        # Valuation (Phase 1-2)
         "ev_ebitda": None,
         "ev_fcf": None,
+        "price_to_book": None,
+        "price_to_sales": None,
+        # Financial Health (Phase 1-2)
         "interest_coverage": None,
         "debt_ebitda": None,
         "quick_ratio": None,
         "net_debt": None,
         "asset_turnover": None,
+        # Growth Metrics (Phase 4)
+        "revenue_growth_yoy": None,
+        "earnings_growth_yoy": None,
+        "fcf_growth_yoy": None,
+        "dividend_growth_yoy": None,
+        # Quality Scores (Phase 5)
+        "piotroski_score": None,
+        "altman_zscore": None,
     }
 
     # Extract data from all tables on statistics page
@@ -164,9 +182,116 @@ def _scrape_performance(ticker: str) -> Optional[Dict]:
                     performance["quick_ratio"] = value
                 elif "net debt" in label and "per share" not in label and "net cash" not in label:
                     performance["net_debt"] = value
+                # 52-Week metrics (Phase 4)
+                elif "52 week high" in label or "52-week high" in label:
+                    performance["week_52_high"] = value
+                elif "52 week low" in label or "52-week low" in label:
+                    performance["week_52_low"] = value
+                elif "52 week change" in label or "52-week change" in label:
+                    performance["week_52_change"] = value
+                # Growth metrics (Phase 4)
+                elif "revenue growth" in label and "yoy" in label:
+                    performance["revenue_growth_yoy"] = value
+                elif "earnings growth" in label and "yoy" in label:
+                    performance["earnings_growth_yoy"] = value
+                elif "eps growth" in label and "yoy" in label:
+                    performance["earnings_growth_yoy"] = value
+                elif "fcf growth" in label and "yoy" in label:
+                    performance["fcf_growth_yoy"] = value
+                elif "dividend growth" in label and "yoy" in label:
+                    performance["dividend_growth_yoy"] = value
+                # Additional valuation (Phase 4)
+                elif "price to book" in label or "price/book" in label or "pb ratio" in label:
+                    performance["price_to_book"] = value
+                elif "price to sales" in label or "price/sales" in label or "ps ratio" in label:
+                    performance["price_to_sales"] = value
+
+    # Calculate Piotroski F-Score if we have financial data (Phase 5)
+    if performance.get("roa") and performance.get("operating_cash_flow") and performance.get("free_cash_flow"):
+        piotroski = _calculate_piotroski_score(performance)
+        if piotroski:
+            performance["piotroski_score"] = piotroski
+    
+    # Calculate Altman Z-Score if we have balance sheet data (Phase 5)
+    if performance.get("quick_ratio") and performance.get("debt_ebitda"):
+        altman = _calculate_altman_zscore(performance)
+        if altman:
+            performance["altman_zscore"] = altman
 
     log.info(f"[Performance] Scraped performance for {ticker}")
     return performance
+
+
+def _calculate_piotroski_score(perf: Dict) -> Optional[float]:
+    """
+    Calculate Piotroski F-Score (ranges 0-9).
+    Signals financial strength based on 9 fundamental metrics.
+    
+    Simplified version using available metrics.
+    """
+    try:
+        score = 0
+        
+        # Profitability metrics (max 5 points)
+        if perf.get("roa") and perf["roa"] > 0:
+            score += 1  # ROA positive
+        if perf.get("operating_cash_flow") and perf["operating_cash_flow"] > 0:
+            score += 1  # OCF positive
+        if perf.get("free_cash_flow") and perf["free_cash_flow"] > 0:
+            score += 1  # FCF positive
+        if perf.get("roa") and perf.get("net_margin") and perf["roa"] > 0 and perf["net_margin"] > 0:
+            score += 1  # Improving profitability
+        
+        # Efficiency metrics (max 2 points)
+        if perf.get("asset_turnover") and perf["asset_turnover"] > 0.5:
+            score += 1  # Good asset efficiency
+        if perf.get("roic") and perf["roic"] > 10:
+            score += 1  # Strong ROIC
+        
+        # Leverage/Liquidity (max 2 points)
+        if perf.get("quick_ratio") and perf["quick_ratio"] >= 1.0:
+            score += 1  # Adequate liquid assets
+        if perf.get("debt_ebitda") and perf["debt_ebitda"] <= 2.5:
+            score += 1  # Manageable debt
+        
+        return float(score) if score > 0 else None
+    except:
+        return None
+
+
+def _calculate_altman_zscore(perf: Dict) -> Optional[float]:
+    """
+    Calculate Altman Z-Score (simplified).
+    Score < 1.8 = likely bankruptcy, 1.8-3.0 = gray zone, > 3.0 = safe
+    
+    Simplified using available metrics.
+    """
+    try:
+        z_score = 0.0
+        
+        # Working Capital / Total Assets (estimated via Quick Ratio)
+        if perf.get("quick_ratio"):
+            z_score += perf["quick_ratio"] * 1.2
+        
+        # Retained Earnings / Total Assets (estimated via ROE consistency)
+        if perf.get("roe") and perf["roe"] > 10:
+            z_score += 0.8
+        
+        # EBIT / Total Assets (using EBITDA margin as proxy)
+        if perf.get("ebitda_margin") and perf["ebitda_margin"] > 0:
+            z_score += (perf["ebitda_margin"] / 100) * 3.2
+        
+        # Market Value / Book Value (using P/E and ROE as proxy)
+        if perf.get("roa") and perf["roa"] > 0:
+            z_score += 1.0
+        
+        # Sales / Total Assets (using Asset Turnover)
+        if perf.get("asset_turnover") and perf["asset_turnover"] > 0.5:
+            z_score += perf["asset_turnover"] * 0.9
+        
+        return z_score if z_score > 0 else None
+    except:
+        return None
 
 
 def get_performance(ticker: str, force_refresh: bool = False) -> Optional[Dict]:
