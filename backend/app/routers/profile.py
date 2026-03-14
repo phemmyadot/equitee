@@ -3,8 +3,10 @@ Profile Router
 ==============
 GET /api/profile/ngx/{ticker}                  — company profile
 GET /api/profile/ngx/{ticker}/dividend         — latest dividend record
+GET /api/profile/ngx/{ticker}/price-history    — OHLCV price history (scraped)
 GET /api/profile/ngx/{ticker}/earnings         — quarterly earnings history (8 quarters)
 GET /api/profile/ngx/{ticker}/balance-sheet    — annual balance sheet trend (4 years)
+GET /api/profile/ngx/{ticker}/full             — all data combined
 """
 
 from fastapi import APIRouter, HTTPException
@@ -14,6 +16,10 @@ from typing import Optional
 from app.services.profile    import get_profile
 from app.services.dividends  import get_dividend
 from app.services.financials import get_earnings_history, get_balance_sheet
+from app.db.engine  import get_db
+from app.db.crud    import get_price_history as db_get_price_history
+from sqlalchemy.orm import Session
+from fastapi        import Depends
 from app.models import DividendInfo
 
 router = APIRouter(prefix="/api/profile", tags=["profile"])
@@ -49,6 +55,42 @@ def ngx_dividend(ticker: str):
 
 
 # ── Financials response models ────────────────────────────────────────────────
+
+
+class PriceHistoryResponse(BaseModel):
+    ticker:     str
+    days:       int
+    count:      int
+    dates:      list[str]
+    close:      list[Optional[float]]
+    change_pct: list[Optional[float]]
+
+
+@router.get("/ngx/{ticker}/price-history", response_model=PriceHistoryResponse)
+def ngx_price_history(
+    ticker: str,
+    days:   int = 90,
+    db:     Session = Depends(get_db),
+):
+    """
+    Price history for a single NGX ticker from our local DB snapshots.
+    Written every NGX_PRICE_TTL seconds by /api/data calls.
+    """
+    rows = db_get_price_history(db, ticker=ticker.upper(), days=days)
+    if not rows:
+        raise HTTPException(
+            status_code=404,
+            detail=f"No price history in DB for {ticker.upper()} — call /api/data a few times first to build history.",
+        )
+    return PriceHistoryResponse(
+        ticker     = ticker.upper(),
+        days       = days,
+        count      = len(rows),
+        dates      = [r["ts"][:10] for r in rows],   # YYYY-MM-DD
+        close      = [r["price"]      for r in rows],
+        change_pct = [r["change_pct"] for r in rows],
+    )
+
 
 class EarningsHistoryResponse(BaseModel):
     ticker:     str

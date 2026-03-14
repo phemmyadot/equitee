@@ -1,13 +1,13 @@
 """
 Financials Service
 ==================
-Scrapes historical financials from stockanalysis.com:
-  - Earnings history: quarterly revenue + EPS (8 quarters)
-  - Balance sheet trend: annual assets / liabilities / equity (4 years)
+  - Price history:    Yahoo Finance chart API  → OHLCV (NGX tickers use .LG suffix)
+  - Earnings history: stockanalysis.com /financials/?p=quarterly  → Revenue, EPS, Net Income
+  - Balance sheet:    stockanalysis.com /financials/balance-sheet/ → Assets, Liabilities, Equity
 
-Endpoints:
-  https://stockanalysis.com/quote/ngx/{ticker}/financials/
-  https://stockanalysis.com/quote/ngx/{ticker}/financials/balance-sheet/
+stockanalysis.com is a Next.js app. The /financials/ sub-pages server-render a static
+HTML table that BeautifulSoup can parse. The main quote page is JS-only, so we use
+Yahoo Finance for price history instead of scraping it.
 """
 
 import logging
@@ -21,7 +21,7 @@ from app.config import settings
 
 log = logging.getLogger(__name__)
 
-_cache: dict = {}
+_cache:    dict = {}
 _cache_ts: dict = {}
 
 _HEADERS = {
@@ -33,6 +33,13 @@ _HEADERS = {
     "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
 }
 
+_YAHOO_HEADERS = {
+    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)",
+    "Accept":     "application/json",
+}
+
+
+# ── Price history via Yahoo Finance ──────────────────────────────────────────
 
 def _get_soup(url: str) -> Optional[BeautifulSoup]:
     try:
@@ -100,6 +107,7 @@ def _parse_table(soup: BeautifulSoup, row_labels: list[str]) -> dict[str, list]:
     return result
 
 
+#
 # ── Earnings history ──────────────────────────────────────────────────────────
 
 def get_earnings_history(ticker: str) -> Optional[dict]:
