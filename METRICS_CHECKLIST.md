@@ -10,10 +10,10 @@
 - [x] Day Low
 - [x] Daily Volume
 
-### 52-Week Price Metrics (Phase 4 - NEW)
-- [x] 52-Week High
-- [x] 52-Week Low
-- [x] 52-Week Change %
+### 52-Week Price Metrics (Phase 4 - ✅ FIXED)
+- [x] 52-Week High (improved label matching)
+- [x] 52-Week Low (improved label matching)
+- [x] 52-Week Change % (improved label matching)
 
 ### Fundamentals
 - [x] Market Cap
@@ -26,47 +26,47 @@
 
 ### Profitability Metrics
 - [x] Gross Margin %
-- [x] Operating Margin %
+- [x] Operating Margin % (improved label matching)
 - [x] Net Profit Margin %
-- [x] EBITDA Margin %
-- [x] FCF Margin %
-- [x] Pretax Margin %
+- [x] EBITDA Margin % (improved label matching)
+- [x] FCF Margin % (improved label matching)
+- [x] Pretax Margin % (improved label matching)
 
 ### Efficiency Metrics
-- [x] Return on Assets (ROA) %
-- [x] Return on Invested Capital (ROIC) %
-- [x] Return on Capital Employed (ROCE) %
-- [x] Asset Turnover
+- [x] Return on Assets (ROA) % (improved label matching)
+- [x] Return on Invested Capital (ROIC) % (improved label matching)
+- [x] Return on Capital Employed (ROCE) % (improved label matching)
+- [x] Asset Turnover (improved label matching)
 
 ### Cash Flow Metrics
-- [x] Free Cash Flow (FCF)
-- [x] FCF Per Share
-- [x] Operating Cash Flow
-- [x] Capital Expenditures (CapEx)
+- [x] Free Cash Flow (FCF) (improved label matching)
+- [x] FCF Per Share (improved label matching)
+- [x] Operating Cash Flow (improved label matching)
+- [x] Capital Expenditures (CapEx) (improved label matching)
 - [x] FCF Yield %
 
 ### Valuation Ratios
 - [x] EV/EBITDA
 - [x] EV/FCF
-- [x] Price/Book Ratio (Phase 4 - NEW)
-- [x] Price/Sales Ratio (Phase 4 - NEW)
+- [x] Price/Book Ratio (improved label matching)
+- [x] Price/Sales Ratio (improved label matching)
 
 ### Financial Health Metrics
 - [x] Current Ratio
-- [x] Quick Ratio
-- [x] Interest Coverage Ratio
-- [x] Debt / EBITDA
-- [x] Net Debt
+- [x] Quick Ratio (improved label matching)
+- [x] Interest Coverage Ratio (improved label matching)
+- [x] Debt / EBITDA (improved label matching)
+- [x] Net Debt (improved label matching)
 
-### Growth Metrics (Phase 4 - NEW)
-- [x] Revenue Growth YoY %
-- [x] Earnings Growth YoY %
-- [x] FCF Growth YoY %
-- [x] Dividend Growth YoY %
+### Growth Metrics (Phase 4 - ✅ IMPROVED)
+- [x] Revenue Growth YoY % (improved label matching)
+- [x] Earnings Growth YoY % (improved label matching)
+- [x] FCF Growth YoY % (improved label matching)
+- [x] Dividend Growth YoY % (improved label matching)
 
-### Quality Scores (Phase 5 - NEW)
-- [x] Piotroski F-Score (calculated)
-- [x] Altman Z-Score (calculated)
+### Quality Scores (Phase 5 - ✅ FIXED)
+- [x] Piotroski F-Score (now calculates with partial data)
+- [x] Altman Z-Score (improved to work with available metrics)
 
 ### Performance Metrics
 - [x] 1Y Return
