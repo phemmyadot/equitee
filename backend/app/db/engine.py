@@ -3,6 +3,8 @@ Database engine, session factory and declarative Base.
 All other db modules import from here — never recreate these objects.
 """
 
+import logging
+import os
 import re
 from pathlib import Path
 
@@ -11,28 +13,42 @@ from sqlalchemy.orm import sessionmaker, DeclarativeBase
 
 from app.config import settings
 
+log = logging.getLogger(__name__)
+
 
 def _ensure_db_dir(url: str) -> None:
     """
-    If the DATABASE_URL points to a local SQLite file, make sure the parent
-    directory exists. Render (and other PaaS) mount persistent disks after the
-    container starts — the directory may not exist on first boot.
+    For SQLite URLs, ensure the parent directory exists.
+    Logs exactly what path it resolves to so we can debug Render disk issues.
     """
-    # Match both sqlite:/// (relative) and sqlite://// (absolute) forms
     m = re.match(r"sqlite:/{3,4}(.+)", url)
     if not m:
+        log.info("[DB] Non-SQLite URL — skipping dir creation: %s", url[:40])
         return
-    db_path = Path(m.group(1))
-    if not db_path.is_absolute():
-        db_path = Path.cwd() / db_path
-    db_path.parent.mkdir(parents=True, exist_ok=True)
+
+    raw = m.group(1)
+    db_path = Path(raw) if os.path.isabs(raw) else Path.cwd() / raw
+    db_path = db_path.resolve()
+
+    log.info("[DB] DATABASE_URL  : %s", url)
+    log.info("[DB] Resolved path : %s", db_path)
+    log.info("[DB] Parent dir    : %s", db_path.parent)
+    log.info("[DB] Parent exists : %s", db_path.parent.exists())
+    log.info("[DB] CWD           : %s", Path.cwd())
+
+    try:
+        db_path.parent.mkdir(parents=True, exist_ok=True)
+        log.info("[DB] Directory ready: %s", db_path.parent)
+    except OSError as exc:
+        log.error("[DB] Could not create directory %s: %s", db_path.parent, exc)
+        raise
 
 
 _ensure_db_dir(settings.DATABASE_URL)
 
 engine = create_engine(
     settings.DATABASE_URL,
-    connect_args={"check_same_thread": False},  # required for SQLite + FastAPI
+    connect_args={"check_same_thread": False},
     echo=False,
 )
 
