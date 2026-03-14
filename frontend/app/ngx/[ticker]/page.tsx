@@ -10,6 +10,7 @@ import {
 import { usePortfolio } from '@/lib/PortfolioContext';
 import ChartCard from '@/components/ui/ChartCard';
 import { ErrorMessage } from '@/components/ui/Feedback';
+import SignalScore from '@/components/ui/Signalscore';
 import PlotlyChart from '@/components/charts/PlotlyChart';
 import { plotlyLayout, COLORS, sectorColor } from '@/lib/theme';
 import { fmtNGNFull, fmtNGN, fmtPct, fmtPct2, fmtVol, isPositive } from '@/lib/formatters';
@@ -502,6 +503,16 @@ export default function NGXProfilePage() {
       </div>
 
       {error && <ErrorMessage message={error} />}
+
+      {/* ── Signal Score ────────────────────────────────────────────────── */}
+      <SignalScore
+        ov={ov}
+        perf={perf}
+        livePrice={livePrice}
+        posRow={posRow}
+        dividend={dividend}
+        loading={loading}
+      />
 
       {/* ── Dividend card ──────────────────────────────────────────────── */}
       {(divLoading || dividend) && (
