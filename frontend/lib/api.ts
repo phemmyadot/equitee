@@ -177,6 +177,15 @@ export interface PriceHistory {
   points: PricePoint[];
 }
 
+export interface DBPriceHistory {
+  ticker:     string;
+  days:       number;
+  count:      number;
+  dates:      string[];
+  close:      (number | null)[];
+  change_pct: (number | null)[];
+}
+
 export interface EarningsHistory {
   ticker:     string;
   periods:    string[];
@@ -321,3 +330,4 @@ export const fetchNGXDividend      = (ticker: string) => get<DividendInfo>(`/pro
 export const fetchDividends        = () => get<DividendsResponse>('/dividends');
 export const fetchNGXEarnings      = (ticker: string) => get<EarningsHistory>(`/profile/ngx/${ticker}/earnings`);
 export const fetchNGXBalanceSheet  = (ticker: string) => get<BalanceSheet>(`/profile/ngx/${ticker}/balance-sheet`);
+export const fetchNGXPriceHistory  = (ticker: string, days = 90) => get<DBPriceHistory>(`/profile/ngx/${ticker}/price-history?days=${days}`);
