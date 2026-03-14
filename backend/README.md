@@ -78,7 +78,6 @@ API docs available at: **http://localhost:8000/docs**
 | Variable           | Default                                        | Description                        |
 |--------------------|------------------------------------------------|------------------------------------|
 | `PORTFOLIO_FILE`   | `./portfolio.json`                             | Path to holdings file              |
-| `NGX_API_BASE`     | `https://doclib.ngxgroup.com/REST/api/...`     | NGX price API URL                  |
 | `NGX_PRICE_TTL`    | `900`                                          | NGX cache duration (seconds)       |
 | `US_PRICE_TTL`     | `120`                                          | Yahoo cache duration (seconds)     |
 | `FX_TTL`           | `600`                                          | FX rate cache duration (seconds)   |
