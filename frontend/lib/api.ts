@@ -187,25 +187,102 @@ export interface DividendInfo {
   timestamp:        string | null;
 }
 
-export interface DividendRow {
-  Stock:            string;
-  Ticker:           string;
-  Shares:           number;
-  ExDividendDate:   string | null;
-  CashAmount:       number | null;
-  TotalDividend:    number;
-  RecordDate:       string | null;
-  PayDate:          string | null;
-  HasDividend:      boolean;
+export interface CompanyProfile {
+  symbol:        string;
+  name:          string | null;
+  sector:        string | null;
+  industry:      string | null;
+  website:       string | null;
+  description:   string | null;
+  headquarters:  string | null;
+  founded:       string | null;
+  employees:     string | null;
+}
+
+export interface TickerPrice {
+  symbol:     string;
+  price:      number | null;
+  change:     number | null;
+  change_pct: number | null;
+  volume:     number | null;
+}
+
+export interface TickerOverview {
+  market_cap:     string | null;
+  pe_ratio:       string | null;
+  eps:            string | null;
+  dividend_yield: string | null;
+  roe:            string | null;
+  debt_to_equity: string | null;
+  book_value:     string | null;
+  current_ratio:  string | null;
+  gross_margin:   string | null;
+  net_margin:     string | null;
+  revenue:        string | null;
+  net_income:     string | null;
+}
+
+export interface TickerPerformance {
+  beta:               string | null;
+  return_1y:          string | null;
+  return_ytd:         string | null;
+  return_1d:          string | null;
+  return_1w:          string | null;
+  return_1m:          string | null;
+  return_3m:          string | null;
+  return_6m:          string | null;
+  week_52_high:       string | null;
+  week_52_low:        string | null;
+  week_52_change:     string | null;
+  operating_margin:   string | null;
+  ebitda_margin:      string | null;
+  fcf_margin:         string | null;
+  pretax_margin:      string | null;
+  roa:                string | null;
+  roic:               string | null;
+  roce:               string | null;
+  free_cash_flow:     string | null;
+  fcf_per_share:      string | null;
+  operating_cash_flow: string | null;
+  capex:              string | null;
+  fcf_yield:          string | null;
+  ev_ebitda:          string | null;
+  ev_fcf:             string | null;
+  price_to_book:      string | null;
+  price_to_sales:     string | null;
+  interest_coverage:  string | null;
+  debt_ebitda:        string | null;
+  quick_ratio:        string | null;
+  net_debt:           string | null;
+  asset_turnover:     string | null;
+  revenue_growth_yoy: string | null;
+  earnings_growth_yoy: string | null;
+  fcf_growth_yoy:     string | null;
+  dividend_growth_yoy: string | null;
+  piotroski_score:    string | null;
+  altman_zscore:      string | null;
+  volatility:         string | null;
+  sharpe_ratio:       string | null;
+  max_drawdown:       string | null;
+}
+
+export interface TickerData {
+  ticker:      string;
+  price:       TickerPrice | null;
+  profile:     Pick<CompanyProfile, 'symbol' | 'name' | 'industry' | 'website' | 'founded'> | null;
+  overview:    TickerOverview | null;
+  performance: TickerPerformance | null;
+  cached_at:   number | null;
 }
 
 // ── Public API ────────────────────────────────────────────────────────────────
 
 export const fetchPortfolioData    = () => get<PortfolioData>('/data');
-export const fetchTickerData       = (ticker: string) => get<any>(`/data/${ticker}`);
 export const fetchFX               = () => get<FXRate>('/fx');
 export const fetchNGXPrices        = () => get<{ count: number; prices: Record<string, NGXPrice> }>('/prices/ngx');
 export const fetchUSPrices         = () => get<{ count: number; prices: Record<string, USPrice>  }>('/prices/us');
-export const fetchDividends        = () => get<Record<string, DividendInfo | null>>('/dividends');
 export const fetchPortfolioHistory = (days = 90) => get<PortfolioHistory>(`/history/portfolio?days=${days}`);
 export const fetchPriceHistory     = (ticker: string, days = 90) => get<PriceHistory>(`/history/prices/${ticker}?days=${days}`);
+export const fetchNGXProfile       = (ticker: string) => get<CompanyProfile>(`/profile/ngx/${ticker}`);
+export const fetchNGXTickerData    = (ticker: string) => get<TickerData>(`/data/${ticker}`);
+export const fetchNGXDividend      = (ticker: string) => get<DividendInfo>(`/profile/ngx/${ticker}/dividend`);
