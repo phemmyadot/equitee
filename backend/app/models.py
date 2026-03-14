@@ -8,6 +8,18 @@ from typing import Optional
 from pydantic import BaseModel
 
 
+# ── Dividend model ───────────────────────────────────────────────────────────
+
+class DividendInfo(BaseModel):
+    symbol:           str
+    ex_dividend_date: Optional[str] = None
+    record_date:      Optional[str] = None
+    pay_date:         Optional[str] = None
+    cash_amount:      Optional[float] = None
+    currency:         str = "NGN"
+    timestamp:        Optional[str] = None
+
+
 # ── Price models ─────────────────────────────────────────────────────────────
 
 class NGXPrice(BaseModel):
@@ -46,45 +58,6 @@ class USPricesResponse(BaseModel):
     age_sec: int
     source:  str
     prices:  dict[str, USPrice]
-
-
-# ── Dividend models ──────────────────────────────────────────────────────────
-
-class DividendInfo(BaseModel):
-    symbol:            str
-    ex_dividend_date:  Optional[str] = None
-    record_date:       Optional[str] = None
-    pay_date:          Optional[str] = None
-    cash_amount:       Optional[float] = None
-    currency:          str = "NGN"
-    timestamp:         Optional[str] = None
-
-
-class DividendsResponse(BaseModel):
-    count:   int
-    age_sec: int
-    source:  str
-    dividends: dict[str, Optional[DividendInfo]]
-
-
-class DividendSummaryItem(BaseModel):
-    ticker:             str
-    name:               str
-    shares:             float
-    ex_dividend_date:   Optional[str] = None
-    cash_amount:        Optional[float] = None
-    total_dividend:     float = 0.0
-    record_date:        Optional[str] = None
-    pay_date:           Optional[str] = None
-    has_dividend:       bool = False
-
-
-class DividendSummary(BaseModel):
-    items:              list[DividendSummaryItem]
-    total_expected:     float
-    upcoming_count:     int
-    total_holdings:     int
-    cache_age:          Optional[int] = None
 
 
 # ── FX model ─────────────────────────────────────────────────────────────────
