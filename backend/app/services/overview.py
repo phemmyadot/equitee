@@ -109,114 +109,120 @@ def _scrape_performance(ticker: str) -> Optional[Dict]:
                 # Try to parse numeric value
                 try:
                     value = value_text.replace("%", "").replace(",", "").strip()
-                    value = float(value) if value and value not in ['n/a', '-', 'none'] else None
+                    value = float(value) if value and value not in ['n/a', '-', 'none', 'nan'] else None
                 except (ValueError, AttributeError):
                     value = None
                 
-                # Map labels to performance fields
-                if "1 day" in label or "1d return" in label or "1d%" in label:
-                    performance["return_1d"] = value
-                elif "1 week" in label or "1w" in label or "1w return" in label:
-                    performance["return_1w"] = value
-                elif "1 month" in label or "1m" in label or "1m return" in label:
-                    performance["return_1m"] = value
-                elif "3 month" in label or "3m" in label:
+                if value is None:
+                    continue
+                
+                # Clean label for matching
+                label_clean = label.replace("-", " ").replace("/", " ").replace("(", " ").replace(")", " ")
+                
+                # Map labels to performance fields - Made more flexible
+                if "1 day" in label_clean or "1day" in label_clean or "1d" in label_clean:
+                    if "return" in label_clean or "%" in label_clean or "change" in label_clean:
+                        performance["return_1d"] = value
+                elif "1 week" in label_clean or "1week" in label_clean or "1w" in label_clean:
+                    if "return" in label_clean or "%" in label_clean:
+                        performance["return_1w"] = value
+                elif "1 month" in label_clean or "1month" in label_clean or "1m" in label_clean:
+                    if "return" in label_clean or "%" in label_clean and "12m" not in label_clean:
+                        performance["return_1m"] = value
+                elif "3 month" in label_clean or "3month" in label_clean or "3m" in label_clean:
                     performance["return_3m"] = value
-                elif "6 month" in label or "6m" in label:
+                elif "6 month" in label_clean or "6month" in label_clean or "6m" in label_clean:
                     performance["return_6m"] = value
-                elif "1 year" in label or "1y" in label or "1y return" in label or "52-week" in label:
-                    # Use 52-week price change as proxy for 1-year return
+                elif ("1 year" in label_clean or "1year" in label_clean or "52 week" in label_clean or "52week" in label_clean) and "return" in label_clean:
                     performance["return_1y"] = value
-                elif "year to date" in label or "ytd" in label:
+                elif "year to date" in label_clean or "ytd" in label_clean:
                     performance["return_ytd"] = value
-                elif "volatility" in label:
+                elif "volatility" in label and not "correlation" in label:
                     performance["volatility"] = value
                 elif "sharpe" in label:
                     performance["sharpe_ratio"] = value
-                elif "max drawdown" in label or "maximum drawdown" in label:
+                elif ("max drawdown" in label or "maximum drawdown" in label or "maxdrawdown" in label):
                     performance["max_drawdown"] = value
                 elif "beta" in label and "correlation" not in label:
                     performance["beta"] = value
-                elif "correlation" in label:
+                elif "correlation" in label and "market" in label:
                     performance["correlation_market"] = value
                 # Margin metrics
-                elif "operating margin" in label or "operating margin %" in label or "ebit margin" in label:
+                elif "operating margin" in label_clean:
                     performance["operating_margin"] = value
-                elif "ebitda margin" in label:
+                elif "ebitda margin" in label_clean or "ebit margin" in label_clean:
                     performance["ebitda_margin"] = value
-                elif "fcf margin" in label or "free cash flow margin" in label:
+                elif "fcf margin" in label_clean or "free cash flow margin" in label_clean:
                     performance["fcf_margin"] = value
-                elif "pretax margin" in label or "pretax income margin" in label:
+                elif "pretax margin" in label_clean or "profit before tax" in label_clean:
                     performance["pretax_margin"] = value
                 # Efficiency metrics
-                elif "return on assets" in label or "roa" in label:
+                elif "return on assets" in label_clean or "roa" in label_clean:
                     performance["roa"] = value
-                elif "return on invested capital" in label or "roic" in label:
+                elif "return on invested capital" in label_clean or "roic" in label_clean:
                     performance["roic"] = value
-                elif "return on capital employed" in label or "roce" in label:
+                elif "return on capital employed" in label_clean or "roce" in label_clean:
                     performance["roce"] = value
-                elif "asset turnover" in label:
+                elif "asset turnover" in label_clean or "asseturnover" in label_clean:
                     performance["asset_turnover"] = value
                 # Cash flow metrics
-                elif "free cash flow" in label and "margin" not in label and "yield" not in label and "per share" not in label:
+                elif "free cash flow" in label_clean and "margin" not in label_clean and "yield" not in label_clean and "per share" not in label_clean:
                     performance["free_cash_flow"] = value
-                elif "fcf per share" in label or "free cash flow per share" in label:
+                elif ("fcf per share" in label_clean or "free cash flow per share" in label_clean) and "yield" not in label_clean:
                     performance["fcf_per_share"] = value
-                elif "operating cash flow" in label or "operating cash flow" in label:
+                elif "operating cash flow" in label_clean or "operating cf" in label_clean or "ocf" in label_clean:
                     performance["operating_cash_flow"] = value
-                elif "capital expenditure" in label or "capex" in label:
+                elif "capital expenditure" in label_clean or "capex" in label_clean or "cap ex" in label_clean:
                     performance["capex"] = value
-                elif "fcf yield" in label:
+                elif "fcf yield" in label_clean or "free cash flow yield" in label_clean:
                     performance["fcf_yield"] = value
                 # Enterprise value ratios
-                elif "ev / ebitda" in label or "ev/ebitda" in label:
+                elif "ev" in label_clean and "ebitda" in label_clean:
                     performance["ev_ebitda"] = value
-                elif "ev / fcf" in label or "ev/fcf" in label:
+                elif "ev" in label_clean and "fcf" in label_clean:
                     performance["ev_fcf"] = value
-                # Financial health
-                elif "interest coverage" in label:
-                    performance["interest_coverage"] = value
-                elif "debt / ebitda" in label or "debt/ebitda" in label:
-                    performance["debt_ebitda"] = value
-                elif "quick ratio" in label:
-                    performance["quick_ratio"] = value
-                elif "net debt" in label and "per share" not in label and "net cash" not in label:
-                    performance["net_debt"] = value
-                # 52-Week metrics (Phase 4)
-                elif "52 week high" in label or "52-week high" in label:
-                    performance["week_52_high"] = value
-                elif "52 week low" in label or "52-week low" in label:
-                    performance["week_52_low"] = value
-                elif "52 week change" in label or "52-week change" in label:
-                    performance["week_52_change"] = value
-                # Growth metrics (Phase 4)
-                elif "revenue growth" in label and "yoy" in label:
-                    performance["revenue_growth_yoy"] = value
-                elif "earnings growth" in label and "yoy" in label:
-                    performance["earnings_growth_yoy"] = value
-                elif "eps growth" in label and "yoy" in label:
-                    performance["earnings_growth_yoy"] = value
-                elif "fcf growth" in label and "yoy" in label:
-                    performance["fcf_growth_yoy"] = value
-                elif "dividend growth" in label and "yoy" in label:
-                    performance["dividend_growth_yoy"] = value
-                # Additional valuation (Phase 4)
-                elif "price to book" in label or "price/book" in label or "pb ratio" in label:
+                # Valuation ratios
+                elif ("price to book" in label_clean or "price book" in label_clean or "pb" in label_clean) and "ratio" in label_clean:
                     performance["price_to_book"] = value
-                elif "price to sales" in label or "price/sales" in label or "ps ratio" in label:
+                elif ("price to sales" in label_clean or "price sales" in label_clean or "ps" in label_clean) and "ratio" in label_clean:
                     performance["price_to_sales"] = value
+                # Financial health
+                elif "interest coverage" in label_clean:
+                    performance["interest_coverage"] = value
+                elif ("debt" in label_clean and "ebitda" in label_clean):
+                    performance["debt_ebitda"] = value
+                elif "quick ratio" in label_clean:
+                    performance["quick_ratio"] = value
+                elif "net debt" in label_clean and "per share" not in label_clean:
+                    performance["net_debt"] = value
+                # 52-Week metrics
+                elif "52" in label_clean and "high" in label_clean:
+                    performance["week_52_high"] = value
+                elif "52" in label_clean and "low" in label_clean:
+                    performance["week_52_low"] = value
+                elif ("52" in label_clean or "52 week" in label_clean) and ("change" in label_clean or "%" in label or "return" in label_clean):
+                    if "high" not in label_clean and "low" not in label_clean:
+                        performance["week_52_change"] = value
+                # Growth metrics
+                elif "revenue" in label_clean and "growth" in label_clean:
+                    performance["revenue_growth_yoy"] = value
+                elif ("earnings growth" in label_clean or "eps growth" in label_clean or "net income growth" in label_clean):
+                    performance["earnings_growth_yoy"] = value
+                elif "fcf growth" in label_clean or "free cash flow growth" in label_clean:
+                    performance["fcf_growth_yoy"] = value
+                elif "dividend growth" in label_clean:
+                    performance["dividend_growth_yoy"] = value
 
     # Calculate Piotroski F-Score if we have financial data (Phase 5)
-    if performance.get("roa") and performance.get("operating_cash_flow") and performance.get("free_cash_flow"):
-        piotroski = _calculate_piotroski_score(performance)
-        if piotroski:
-            performance["piotroski_score"] = piotroski
+    # Make it work with partial data instead of requiring all metrics
+    piotroski = _calculate_piotroski_score(performance)
+    if piotroski:
+        performance["piotroski_score"] = piotroski
     
     # Calculate Altman Z-Score if we have balance sheet data (Phase 5)
-    if performance.get("quick_ratio") and performance.get("debt_ebitda"):
-        altman = _calculate_altman_zscore(performance)
-        if altman:
-            performance["altman_zscore"] = altman
+    altman = _calculate_altman_zscore(performance)
+    if altman:
+        performance["altman_zscore"] = altman
 
     log.info(f"[Performance] Scraped performance for {ticker}")
     return performance
@@ -227,35 +233,56 @@ def _calculate_piotroski_score(perf: Dict) -> Optional[float]:
     Calculate Piotroski F-Score (ranges 0-9).
     Signals financial strength based on 9 fundamental metrics.
     
-    Simplified version using available metrics.
+    Works with partial data - calculates based on available metrics.
     """
     try:
         score = 0
+        count = 0
         
-        # Profitability metrics (max 5 points)
-        if perf.get("roa") and perf["roa"] > 0:
-            score += 1  # ROA positive
+        # Profitability metrics
+        if perf.get("roic") and perf["roic"] > 0:
+            score += 1
+            count += 1
+        if perf.get("roe") and perf["roe"] > 0:
+            score += 1
+            count += 1
+        if perf.get("net_margin") and perf["net_margin"] > 0:
+            score += 1
+            count += 1
+        
+        # Cash flow metrics
         if perf.get("operating_cash_flow") and perf["operating_cash_flow"] > 0:
-            score += 1  # OCF positive
+            score += 1
+            count += 1
         if perf.get("free_cash_flow") and perf["free_cash_flow"] > 0:
-            score += 1  # FCF positive
-        if perf.get("roa") and perf.get("net_margin") and perf["roa"] > 0 and perf["net_margin"] > 0:
-            score += 1  # Improving profitability
+            score += 1
+            count += 1
+        if perf.get("fcf_yield") and perf["fcf_yield"] > 0:
+            score += 1
+            count += 1
         
-        # Efficiency metrics (max 2 points)
+        # Efficiency metrics
         if perf.get("asset_turnover") and perf["asset_turnover"] > 0.5:
-            score += 1  # Good asset efficiency
-        if perf.get("roic") and perf["roic"] > 10:
-            score += 1  # Strong ROIC
+            score += 1
+            count += 1
+        if perf.get("roa") and perf["roa"] > 5:
+            score += 1
+            count += 1
         
-        # Leverage/Liquidity (max 2 points)
+        # Financial health
         if perf.get("quick_ratio") and perf["quick_ratio"] >= 1.0:
-            score += 1  # Adequate liquid assets
-        if perf.get("debt_ebitda") and perf["debt_ebitda"] <= 2.5:
-            score += 1  # Manageable debt
+            score += 1
+            count += 1
         
-        return float(score) if score > 0 else None
-    except:
+        # Return normalized score (0-9)
+        if count > 0:
+            # Scale to 0-9 based on available metrics
+            normalized_score = (score / count) * 9
+            return normalized_score
+        
+        return None
+    except Exception as e:
+        log.error(f"[Performance] Failed to calculate Piotroski: {e}")
         return None
 
 
@@ -264,33 +291,44 @@ def _calculate_altman_zscore(perf: Dict) -> Optional[float]:
     Calculate Altman Z-Score (simplified).
     Score < 1.8 = likely bankruptcy, 1.8-3.0 = gray zone, > 3.0 = safe
     
-    Simplified using available metrics.
+    Works with available data - not all factors required.
     """
     try:
         z_score = 0.0
         
-        # Working Capital / Total Assets (estimated via Quick Ratio)
+        # X1: Working Capital / Total Assets (estimated via Quick Ratio)
         if perf.get("quick_ratio"):
             z_score += perf["quick_ratio"] * 1.2
         
-        # Retained Earnings / Total Assets (estimated via ROE consistency)
+        # X2: Retained Earnings / Total Assets (estimated via profitability)
         if perf.get("roe") and perf["roe"] > 10:
             z_score += 0.8
+        elif perf.get("net_margin") and perf["net_margin"] > 10:
+            z_score += 0.6
         
-        # EBIT / Total Assets (using EBITDA margin as proxy)
+        # X3: EBIT / Total Assets (using margins as proxy)
         if perf.get("ebitda_margin") and perf["ebitda_margin"] > 0:
             z_score += (perf["ebitda_margin"] / 100) * 3.2
+        elif perf.get("operating_margin") and perf["operating_margin"] > 0:
+            z_score += (perf["operating_margin"] / 100) * 2.8
         
-        # Market Value / Book Value (using P/E and ROE as proxy)
+        # X4: Market Value / Book Value (using ROE as proxy for profitability)
         if perf.get("roa") and perf["roa"] > 0:
             z_score += 1.0
+        elif perf.get("roic") and perf["roic"] > 0:
+            z_score += 0.9
         
-        # Sales / Total Assets (using Asset Turnover)
+        # X5: Sales / Total Assets (using Asset Turnover)
         if perf.get("asset_turnover") and perf["asset_turnover"] > 0.5:
             z_score += perf["asset_turnover"] * 0.9
         
-        return z_score if z_score > 0 else None
-    except:
+        # Debt adjustment - penalize high debt
+        if perf.get("debt_ebitda") and perf["debt_ebitda"] > 4:
+            z_score -= 0.5
+        
+        return max(0.5, z_score) if z_score > 0 else None
+    except Exception as e:
+        log.error(f"[Performance] Failed to calculate Altman: {e}")
         return None
 
 
