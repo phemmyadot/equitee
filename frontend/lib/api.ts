@@ -177,6 +177,22 @@ export interface PriceHistory {
   points: PricePoint[];
 }
 
+export interface EarningsHistory {
+  ticker:     string;
+  periods:    string[];
+  revenue:    (number | null)[];
+  eps:        (number | null)[];
+  net_income: (number | null)[];
+}
+
+export interface BalanceSheet {
+  ticker:      string;
+  periods:     string[];
+  assets:      (number | null)[];
+  liabilities: (number | null)[];
+  equity:      (number | null)[];
+}
+
 export interface DividendHolding {
   ticker:           string;
   name:             string;
@@ -224,62 +240,62 @@ export interface TickerPrice {
 }
 
 export interface TickerOverview {
-  market_cap:     string | null;
-  pe_ratio:       string | null;
-  eps:            string | null;
-  dividend_yield: string | null;
-  roe:            string | null;
-  debt_to_equity: string | null;
-  book_value:     string | null;
-  current_ratio:  string | null;
-  gross_margin:   string | null;
-  net_margin:     string | null;
-  revenue:        string | null;
-  net_income:     string | null;
+  market_cap:     string | number | null;
+  pe_ratio:       string | number | null;
+  eps:            string | number | null;
+  dividend_yield: string | number | null;
+  roe:            string | number | null;
+  debt_to_equity: string | number | null;
+  book_value:     string | number | null;
+  current_ratio:  string | number | null;
+  gross_margin:   string | number | null;
+  net_margin:     string | number | null;
+  revenue:        string | number | null;
+  net_income:     string | number | null;
 }
 
 export interface TickerPerformance {
-  beta:               string | null;
-  return_1y:          string | null;
-  return_ytd:         string | null;
-  return_1d:          string | null;
-  return_1w:          string | null;
-  return_1m:          string | null;
-  return_3m:          string | null;
-  return_6m:          string | null;
-  week_52_high:       string | null;
-  week_52_low:        string | null;
-  week_52_change:     string | null;
-  operating_margin:   string | null;
-  ebitda_margin:      string | null;
-  fcf_margin:         string | null;
-  pretax_margin:      string | null;
-  roa:                string | null;
-  roic:               string | null;
-  roce:               string | null;
-  free_cash_flow:     string | null;
-  fcf_per_share:      string | null;
-  operating_cash_flow: string | null;
-  capex:              string | null;
-  fcf_yield:          string | null;
-  ev_ebitda:          string | null;
-  ev_fcf:             string | null;
-  price_to_book:      string | null;
-  price_to_sales:     string | null;
-  interest_coverage:  string | null;
-  debt_ebitda:        string | null;
-  quick_ratio:        string | null;
-  net_debt:           string | null;
-  asset_turnover:     string | null;
-  revenue_growth_yoy: string | null;
-  earnings_growth_yoy: string | null;
-  fcf_growth_yoy:     string | null;
-  dividend_growth_yoy: string | null;
-  piotroski_score:    string | null;
-  altman_zscore:      string | null;
-  volatility:         string | null;
-  sharpe_ratio:       string | null;
-  max_drawdown:       string | null;
+  beta:               string | number | null;
+  return_1y:          string | number | null;
+  return_ytd:         string | number | null;
+  return_1d:          string | number | null;
+  return_1w:          string | number | null;
+  return_1m:          string | number | null;
+  return_3m:          string | number | null;
+  return_6m:          string | number | null;
+  week_52_high:       string | number | null;
+  week_52_low:        string | number | null;
+  week_52_change:     string | number | null;
+  operating_margin:   string | number | null;
+  ebitda_margin:      string | number | null;
+  fcf_margin:         string | number | null;
+  pretax_margin:      string | number | null;
+  roa:                string | number | null;
+  roic:               string | number | null;
+  roce:               string | number | null;
+  free_cash_flow:     string | number | null;
+  fcf_per_share:      string | number | null;
+  operating_cash_flow: string | number | null;
+  capex:              string | number | null;
+  fcf_yield:          string | number | null;
+  ev_ebitda:          string | number | null;
+  ev_fcf:             string | number | null;
+  price_to_book:      string | number | null;
+  price_to_sales:     string | number | null;
+  interest_coverage:  string | number | null;
+  debt_ebitda:        string | number | null;
+  quick_ratio:        string | number | null;
+  net_debt:           string | number | null;
+  asset_turnover:     string | number | null;
+  revenue_growth_yoy: string | number | null;
+  earnings_growth_yoy: string | number | null;
+  fcf_growth_yoy:     string | number | null;
+  dividend_growth_yoy: string | number | null;
+  piotroski_score:    string | number | null;
+  altman_zscore:      string | number | null;
+  volatility:         string | number | null;
+  sharpe_ratio:       string | number | null;
+  max_drawdown:       string | number | null;
 }
 
 export interface TickerData {
@@ -300,6 +316,8 @@ export const fetchUSPrices         = () => get<{ count: number; prices: Record<s
 export const fetchPortfolioHistory = (days = 90) => get<PortfolioHistory>(`/history/portfolio?days=${days}`);
 export const fetchPriceHistory     = (ticker: string, days = 90) => get<PriceHistory>(`/history/prices/${ticker}?days=${days}`);
 export const fetchNGXProfile       = (ticker: string) => get<CompanyProfile>(`/profile/ngx/${ticker}`);
-export const fetchNGXTickerData    = (ticker: string) => get<TickerData>(`/data/${ticker}`);
+export const fetchNGXTickerData    = (ticker: string) => get<TickerData>(`/profile/ngx/${ticker}/full`);
 export const fetchNGXDividend      = (ticker: string) => get<DividendInfo>(`/profile/ngx/${ticker}/dividend`);
 export const fetchDividends        = () => get<DividendsResponse>('/dividends');
+export const fetchNGXEarnings      = (ticker: string) => get<EarningsHistory>(`/profile/ngx/${ticker}/earnings`);
+export const fetchNGXBalanceSheet  = (ticker: string) => get<BalanceSheet>(`/profile/ngx/${ticker}/balance-sheet`);
