@@ -18,11 +18,7 @@ class Settings:
                   str(Path(__file__).parent.parent / "portfolio.json"))
     )
 
-    # ── NGX API ─────────────────────────────────────────────────────────────
-    NGX_API_BASE: str = os.getenv(
-        "NGX_API_BASE",
-        "https://doclib.ngxgroup.com/REST/api/statistics/equities/"
-    )
+    # ── NGX ─────────────────────────────────────────────────────────────
     NGX_PAGE_SIZE: int = int(os.getenv("NGX_PAGE_SIZE", "300"))
     NGX_PRICE_TTL: int = int(os.getenv("NGX_PRICE_TTL", "900"))   # seconds
 

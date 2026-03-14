@@ -131,8 +131,6 @@ LIMIT 20;
 |-------------------|---------------------------------------------|------------------------------------------|
 | `DATABASE_URL`    | `sqlite:///./portfolio.db`                  | SQLAlchemy connection string             |
 | `PORTFOLIO_FILE`  | `./portfolio.json`                          | Seed file path (first boot only)         |
-| `NGX_API_BASE`    | `https://doclib.ngxgroup.com/REST/api/...`  | NGX price API URL                        |
-| `NGX_PRICE_TTL`   | `900`                                       | NGX cache + snapshot interval (seconds)  |
 | `US_PRICE_TTL`    | `120`                                       | Yahoo cache duration (seconds)           |
 | `FX_TTL`          | `600`                                       | FX rate cache duration (seconds)         |
 | `USDNGN_FALLBACK` | `1580`                                      | FX fallback if all sources fail          |
