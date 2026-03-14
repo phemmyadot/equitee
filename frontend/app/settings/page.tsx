@@ -176,7 +176,7 @@ export default function SettingsPage() {
   const fmtValue = (h: HoldingRecord) => h.market === 'ngx' ? fmtNGN(h.shares * h.avg_cost) : fmtUSD(h.shares * h.avg_cost);
 
   return (
-    <div className="space-y-5 max-w-5xl">
+    <div className="space-y-5">
 
       {/* ── Page header ── */}
       <div className="flex items-center justify-between">

@@ -177,6 +177,22 @@ export interface PriceHistory {
   points: PricePoint[];
 }
 
+export interface DividendHolding {
+  ticker:           string;
+  name:             string;
+  shares:           number;
+  avg_cost:         number;
+  dividend:         DividendInfo | null;
+  projected_payout: number | null;
+  yield_on_cost:    number | null;
+}
+
+export interface DividendsResponse {
+  holdings:               DividendHolding[];
+  cache_age_sec:          number | null;
+  total_projected_payout: number | null;
+}
+
 export interface DividendInfo {
   symbol:           string;
   ex_dividend_date: string | null;
@@ -286,3 +302,4 @@ export const fetchPriceHistory     = (ticker: string, days = 90) => get<PriceHis
 export const fetchNGXProfile       = (ticker: string) => get<CompanyProfile>(`/profile/ngx/${ticker}`);
 export const fetchNGXTickerData    = (ticker: string) => get<TickerData>(`/data/${ticker}`);
 export const fetchNGXDividend      = (ticker: string) => get<DividendInfo>(`/profile/ngx/${ticker}/dividend`);
+export const fetchDividends        = () => get<DividendsResponse>('/dividends');

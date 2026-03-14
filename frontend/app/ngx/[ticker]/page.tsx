@@ -189,7 +189,7 @@ export default function NGXProfilePage() {
   }
 
   return (
-    <div className="space-y-5 max-w-5xl">
+    <div className="space-y-5">
 
       {/* ── Breadcrumb ─────────────────────────────────────────────────── */}
       <nav className="flex items-center gap-1.5 text-[11px] text-[var(--ink-4)]">
