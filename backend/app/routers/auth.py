@@ -2,12 +2,13 @@
 Authentication endpoints: register, login, logout, refresh, me, invite management.
 """
 
+import re
 import uuid
 import logging
 from datetime import datetime, timezone, timedelta
 
 from fastapi import APIRouter, Depends, HTTPException, Response, Request, status
-from pydantic import BaseModel, EmailStr
+from pydantic import BaseModel, EmailStr, field_validator
 from sqlalchemy.orm import Session
 
 from app.config import settings
@@ -21,29 +22,50 @@ log = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/auth", tags=["auth"])
 
-_COOKIE_OPTS = dict(httponly=True, samesite="lax", secure=False)  # secure=True in prod (set via env)
-
-
 def _set_auth_cookies(response: Response, user: User, db: Session) -> None:
     """Issue access token cookie and create+store a refresh token cookie."""
     access_token = create_access_token(user.id)
-    response.set_cookie("access_token", access_token,
-                        max_age=settings.ACCESS_TOKEN_EXPIRE_MINUTES * 60, **_COOKIE_OPTS)
+    response.set_cookie(
+        "access_token", access_token,
+        max_age=settings.ACCESS_TOKEN_EXPIRE_MINUTES * 60,
+        httponly=True, samesite="lax", secure=False,
+    )
 
     refresh_token = str(uuid.uuid4())
     expires_at = datetime.now(timezone.utc) + timedelta(days=settings.REFRESH_TOKEN_EXPIRE_DAYS)
     crud.create_refresh_token(db, user.id, refresh_token, expires_at)
-    response.set_cookie("refresh_token", refresh_token,
-                        max_age=settings.REFRESH_TOKEN_EXPIRE_DAYS * 86400, **_COOKIE_OPTS)
+    response.set_cookie(
+        "refresh_token", refresh_token,
+        max_age=settings.REFRESH_TOKEN_EXPIRE_DAYS * 86400,
+        httponly=True, samesite="lax", secure=False,
+    )
 
 
 # ── Schemas ───────────────────────────────────────────────────────────────────
 
 class RegisterRequest(BaseModel):
-    email: str
+    email: EmailStr
     username: str
     password: str
     invite_code: str | None = None
+
+    @field_validator("password")
+    @classmethod
+    def validate_password(cls, v: str) -> str:
+        errors = []
+        if len(v) < 8:
+            errors.append("at least 8 characters")
+        if not re.search(r"[A-Z]", v):
+            errors.append("one uppercase letter")
+        if not re.search(r"[a-z]", v):
+            errors.append("one lowercase letter")
+        if not re.search(r"\d", v):
+            errors.append("one number")
+        if not re.search(r"[!@#$%^&*()_+\-=\[\]{};':\"\\|,.<>/?`~]", v):
+            errors.append("one special character")
+        if errors:
+            raise ValueError("Password must contain: " + ", ".join(errors))
+        return v
 
 
 class LoginRequest(BaseModel):
@@ -133,8 +155,11 @@ def refresh(request: Request, response: Response, db: Session = Depends(get_db))
         raise HTTPException(status_code=401, detail="User not found or disabled")
 
     access_token = create_access_token(user.id)
-    response.set_cookie("access_token", access_token,
-                        max_age=settings.ACCESS_TOKEN_EXPIRE_MINUTES * 60, **_COOKIE_OPTS)
+    response.set_cookie(
+        "access_token", access_token,
+        max_age=settings.ACCESS_TOKEN_EXPIRE_MINUTES * 60,
+        httponly=True, samesite="lax", secure=False,
+    )
     return {"ok": True}
 
 

@@ -6,20 +6,86 @@ import { useAuth } from '@/lib/AuthContext';
 
 const REGISTRATION_MODE = process.env.NEXT_PUBLIC_REGISTRATION_MODE ?? 'invite';
 
+// ── Validation ────────────────────────────────────────────────────────────────
+
+function validateEmail(v: string): string {
+  if (!v) return 'Email is required';
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v)) return 'Enter a valid email address';
+  return '';
+}
+
+function validatePassword(v: string): string[] {
+  const missing: string[] = [];
+  if (v.length < 8)               missing.push('at least 8 characters');
+  if (!/[A-Z]/.test(v))           missing.push('one uppercase letter');
+  if (!/[a-z]/.test(v))           missing.push('one lowercase letter');
+  if (!/\d/.test(v))              missing.push('one number');
+  if (!/[!@#$%^&*()_+\-=\[\]{};':"\\|,.<>/?`~]/.test(v)) missing.push('one special character');
+  return missing;
+}
+
+// ── Password strength indicator ───────────────────────────────────────────────
+
+function PasswordStrength({ password }: { password: string }) {
+  if (!password) return null;
+  const missing = validatePassword(password);
+  const score   = 5 - missing.length;   // 0–5
+
+  const label  = score <= 1 ? 'Weak' : score <= 3 ? 'Fair' : score === 4 ? 'Good' : 'Strong';
+  const color  = score <= 1 ? 'var(--loss)' : score <= 3 ? 'var(--warn)' : 'var(--gain)';
+  const widths = ['20%', '20%', '40%', '60%', '80%', '100%'];
+
+  return (
+    <div className="mt-1 space-y-1.5">
+      <div className="h-1 w-full rounded-full bg-[var(--border)]">
+        <div
+          className="h-1 rounded-full transition-all duration-300"
+          style={{ width: widths[score], background: color }}
+        />
+      </div>
+      <div className="flex items-center justify-between">
+        <span className="text-[10px] font-semibold" style={{ color }}>{label}</span>
+        {missing.length > 0 && (
+          <span className="text-[10px] text-[var(--ink-4)]">
+            Needs: {missing.join(', ')}
+          </span>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ── Page ──────────────────────────────────────────────────────────────────────
+
 export default function RegisterPage() {
   const { register } = useAuth();
-  const [email,       setEmail]       = useState('');
-  const [username,    setUsername]    = useState('');
-  const [password,    setPassword]    = useState('');
-  const [inviteCode,  setInviteCode]  = useState('');
-  const [error,       setError]       = useState('');
-  const [loading,     setLoading]     = useState(false);
+  const [email,      setEmail]      = useState('');
+  const [username,   setUsername]   = useState('');
+  const [password,   setPassword]   = useState('');
+  const [inviteCode, setInviteCode] = useState('');
+  const [errors,     setErrors]     = useState<Record<string, string>>({});
+  const [error,      setError]      = useState('');
+  const [loading,    setLoading]    = useState(false);
+  const [touched,    setTouched]    = useState<Record<string, boolean>>({});
 
   const needsInvite = REGISTRATION_MODE === 'invite';
+
+  const touch = (field: string) => setTouched(t => ({ ...t, [field]: true }));
+
+  const emailError    = touched.email    ? validateEmail(email)    : '';
+  const passwordMsgs  = touched.password ? validatePassword(password) : [];
+  const passwordError = passwordMsgs.length > 0 ? `Needs: ${passwordMsgs.join(', ')}` : '';
+
+  function validate(): boolean {
+    const allTouched = { email: true, password: true };
+    setTouched(t => ({ ...t, ...allTouched }));
+    return !validateEmail(email) && validatePassword(password).length === 0;
+  }
 
   async function handleSubmit(e: FormEvent) {
     e.preventDefault();
     setError('');
+    if (!validate()) return;
     setLoading(true);
     try {
       await register(email, username, password, needsInvite ? (inviteCode || undefined) : undefined);
@@ -29,6 +95,14 @@ export default function RegisterPage() {
       setLoading(false);
     }
   }
+
+  const inputClass = (field: string) => [
+    'h-9 px-3 text-[13px] border rounded-lg bg-[var(--canvas)] text-[var(--ink)]',
+    'placeholder:text-[var(--ink-4)] outline-none transition',
+    errors[field] || (field === 'email' && emailError) || (field === 'password' && passwordError)
+      ? 'border-[var(--loss)] focus:border-[var(--loss)] focus:ring-2 focus:ring-red-100'
+      : 'border-[var(--border)] focus:border-[var(--accent)] focus:ring-2 focus:ring-[var(--accent)]/10',
+  ].join(' ');
 
   return (
     <div className="min-h-dvh flex items-center justify-center bg-[var(--canvas)] px-4">
@@ -63,6 +137,7 @@ export default function RegisterPage() {
           )}
 
           <form onSubmit={handleSubmit} className="flex flex-col gap-4">
+
             {needsInvite && (
               <div className="flex flex-col gap-1.5">
                 <label className="text-[11px] font-semibold text-[var(--ink-3)] uppercase tracking-wide">
@@ -80,6 +155,7 @@ export default function RegisterPage() {
               </div>
             )}
 
+            {/* Email */}
             <div className="flex flex-col gap-1.5">
               <label className="text-[11px] font-semibold text-[var(--ink-3)] uppercase tracking-wide">
                 Email
@@ -88,13 +164,18 @@ export default function RegisterPage() {
                 type="email"
                 value={email}
                 onChange={e => setEmail(e.target.value)}
+                onBlur={() => touch('email')}
                 required
                 autoComplete="email"
                 placeholder="you@example.com"
-                className="h-9 px-3 text-[13px] border border-[var(--border)] rounded-lg bg-[var(--canvas)] text-[var(--ink)] placeholder:text-[var(--ink-4)] outline-none focus:border-[var(--accent)] focus:ring-2 focus:ring-[var(--accent)]/10 transition"
+                className={inputClass('email')}
               />
+              {emailError && (
+                <span className="text-[11px] text-[var(--loss)]">{emailError}</span>
+              )}
             </div>
 
+            {/* Username */}
             <div className="flex flex-col gap-1.5">
               <label className="text-[11px] font-semibold text-[var(--ink-3)] uppercase tracking-wide">
                 Username
@@ -110,6 +191,7 @@ export default function RegisterPage() {
               />
             </div>
 
+            {/* Password */}
             <div className="flex flex-col gap-1.5">
               <label className="text-[11px] font-semibold text-[var(--ink-3)] uppercase tracking-wide">
                 Password
@@ -118,11 +200,16 @@ export default function RegisterPage() {
                 type="password"
                 value={password}
                 onChange={e => setPassword(e.target.value)}
+                onBlur={() => touch('password')}
                 required
                 autoComplete="new-password"
                 placeholder="••••••••"
-                className="h-9 px-3 text-[13px] border border-[var(--border)] rounded-lg bg-[var(--canvas)] text-[var(--ink)] placeholder:text-[var(--ink-4)] outline-none focus:border-[var(--accent)] focus:ring-2 focus:ring-[var(--accent)]/10 transition"
+                className={inputClass('password')}
               />
+              <PasswordStrength password={password} />
+              {touched.password && passwordError && (
+                <span className="text-[11px] text-[var(--loss)]">{passwordError}</span>
+              )}
             </div>
 
             <button
