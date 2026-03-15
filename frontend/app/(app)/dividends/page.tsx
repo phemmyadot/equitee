@@ -6,6 +6,7 @@ import { fmtNGN, fmtNGNFull } from '@/lib/formatters';
 import { sectorColor }        from '@/lib/theme';
 import { usePortfolio }       from '@/lib/PortfolioContext';
 import type { DividendHolding } from '@/lib/api';
+import { IconTrendingUp, IconCheck } from '@/components/ui/icons';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Helpers
@@ -101,10 +102,7 @@ function DividendCard({ h, sector }: { h: DividendHolding; sector?: string }) {
           {/* Sector dot */}
           <div className="w-8 h-8 rounded-lg shrink-0 flex items-center justify-center"
                style={{ background: `${sCol}15`, border: `1.5px solid ${sCol}35` }}>
-            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke={sCol} strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-              <line x1="12" y1="1" x2="12" y2="23"/>
-              <path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/>
-            </svg>
+            <IconTrendingUp width={13} height={13} style={{ stroke: sCol }} />
           </div>
           <div>
             <div className="flex items-center gap-2">
@@ -228,9 +226,7 @@ function Timeline({ holdings }: { holdings: DividendHolding[] }) {
                     : 'bg-white border-[var(--border-strong)]'
                 }`}>
                   {isNext && (
-                    <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="3">
-                      <polyline points="20 6 9 17 4 12"/>
-                    </svg>
+                    <IconCheck width={10} height={10} style={{ stroke: 'white' }} />
                   )}
                 </div>
 

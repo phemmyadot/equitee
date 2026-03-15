@@ -17,6 +17,9 @@ import { fmtNGNFull, fmtNGN, fmtPct, fmtPct2, fmtVol, isPositive } from '@/lib/f
 import type {
   TickerData, DividendInfo, EarningsHistory, BalanceSheet, DBPriceHistory, StockRow,
 } from '@/lib/api';
+import {
+  IconChevronRight, IconChartLine, IconExternalLink, IconShield, IconChartHistory,
+} from '@/components/ui/icons';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Primitives
@@ -394,7 +397,7 @@ export default function NGXProfilePage() {
       {/* ── Breadcrumb ─────────────────────────────────────────────────── */}
       <nav className="flex items-center gap-1.5 text-[11px] text-[var(--ink-4)]">
         <Link href="/ngx" className="hover:text-[var(--ink)] transition-colors">NGX Overview</Link>
-        <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><polyline points="9 18 15 12 9 6" /></svg>
+        <IconChevronRight width={10} height={10} />
         <span className="text-[var(--ink-3)] font-semibold">{ticker}</span>
       </nav>
 
@@ -406,9 +409,7 @@ export default function NGXProfilePage() {
           <div className="flex items-start gap-3.5">
             <div className="w-10 h-10 rounded-lg shrink-0 flex items-center justify-center"
               style={{ background: `${sectorCol}18`, border: `1.5px solid ${sectorCol}40` }}>
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke={sectorCol} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <polyline points="22 12 18 12 15 21 9 3 6 12 2 12" />
-              </svg>
+              <IconChartLine width={16} height={16} style={{ stroke: sectorCol }} />
             </div>
             <div>
               {loading
@@ -486,10 +487,7 @@ export default function NGXProfilePage() {
               <a href={prof.website.startsWith('http') ? prof.website : `https://${prof.website}`}
                 target="_blank" rel="noreferrer"
                 className="flex items-center gap-1 text-[11px] text-[var(--accent)] hover:underline">
-                <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
-                  <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6" />
-                  <polyline points="15 3 21 3 21 9" /><line x1="10" y1="14" x2="21" y2="3" />
-                </svg>
+                <IconExternalLink width={11} height={11} />
                 {prof.website.replace(/^https?:\/\//, '').replace(/\/$/, '')}
               </a>
             )}
@@ -564,7 +562,7 @@ export default function NGXProfilePage() {
                 </div>
                 {posRow && dividend.cash_amount != null && (
                   <div className="sm:col-span-4 mt-1 pt-3 border-t border-[var(--border)] flex items-center gap-3">
-                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="var(--ink-4)" strokeWidth="2.5"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" /></svg>
+                    <IconShield width={12} height={12} style={{ stroke: 'var(--ink-4)' }} />
                     <span className="text-[11px] text-[var(--ink-3)]">
                       My projected payout
                       <span className="font-mono font-bold text-[var(--gain)] ml-2 text-[12px]">
@@ -628,9 +626,7 @@ export default function NGXProfilePage() {
           ? <div className="skeleton rounded-lg" style={{ height: 300 }} />
           : !ohlcv || !ohlcv.dates.length
             ? <div className="flex flex-col items-center justify-center h-[300px] gap-2 text-center px-6">
-              <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="var(--ink-4)" strokeWidth="1.5">
-                <path d="M3 3v18h18" /><path d="m19 9-5 5-4-4-3 3" />
-              </svg>
+              <IconChartHistory width={28} height={28} style={{ stroke: 'var(--ink-4)', strokeWidth: 1.5 }} />
               <p className="text-[12px] text-[var(--ink-4)]">No snapshots yet for {ticker}.</p>
               <p className="text-[11px] text-[var(--ink-4)] max-w-[280px]">
                 Snapshots are written each time the main dashboard refreshes.
