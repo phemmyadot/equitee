@@ -187,7 +187,8 @@ export default function Header({ usdngn, fxSource, lastUpdated, loading, onRefre
               </span>
               <button
                 onClick={logout}
-                className="flex items-center gap-1.5 h-8 px-2.5 rounded-lg border border-[#F5C6C6] bg-[var(--loss-light)] text-[var(--loss)] text-[11px] font-semibold hover:bg-red-100 hover:border-red-300 transition-colors shrink-0"
+                className="flex items-center gap-1.5 h-8 px-3 rounded-lg bg-[var(--loss)] text-white text-[11px] font-semibold hover:bg-red-700 transition-colors shrink-0"
+                style={{ boxShadow: '0 1px 3px rgba(190,27,27,0.25)' }}
               >
                 {LOGOUT_ICON}
                 <span className="hidden lg:inline">Sign out</span>
@@ -202,7 +203,7 @@ export default function Header({ usdngn, fxSource, lastUpdated, loading, onRefre
               <button
                 onClick={logout}
                 title="Sign out"
-                className="flex items-center justify-center w-7 h-7 rounded-lg border border-[#F5C6C6] bg-[var(--loss-light)] text-[var(--loss)] hover:bg-red-100 transition-colors"
+                className="flex items-center justify-center w-7 h-7 rounded-lg bg-[var(--loss)] text-white hover:bg-red-700 transition-colors"
               >
                 {LOGOUT_ICON}
               </button>
@@ -212,16 +213,16 @@ export default function Header({ usdngn, fxSource, lastUpdated, loading, onRefre
 
         <div className="w-px h-5 bg-[var(--border)] shrink-0" />
 
-        {/* ── Subtle refresh icon button ─────────────────────────────── */}
+        {/* ── Ghost refresh icon ─────────────────────────────────────── */}
         <button
           onClick={onRefresh}
           disabled={loading}
           title={loading ? 'Refreshing…' : 'Refresh data'}
-          className="flex items-center justify-center w-8 h-8 rounded-lg border border-[var(--border)] bg-[var(--canvas)] text-[var(--ink-4)] hover:text-[var(--ink)] hover:border-[var(--border-strong)] disabled:opacity-40 disabled:cursor-not-allowed transition-colors duration-150 shrink-0"
+          className="flex items-center justify-center w-7 h-7 rounded-md text-[var(--ink-4)] hover:text-[var(--ink-3)] disabled:opacity-30 disabled:cursor-not-allowed transition-colors duration-150 shrink-0"
         >
           <svg
             className={loading ? 'animate-spin' : ''}
-            width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"
+            width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"
           >
             {loading
               ? <path d="M21 12a9 9 0 1 1-6.219-8.56"/>

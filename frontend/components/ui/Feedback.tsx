@@ -43,7 +43,7 @@ export function PriceBanner({
         <span>positions with live prices</span>
         <span className="font-semibold text-[var(--ink-2)]">({pct}%)</span>
       </span>
-      <span className="text-[var(--warn)] font-medium">{source}</span>
+      {source && <span className="text-[var(--warn)] font-medium">{source}</span>}
       {age !== null && (
         <span className="text-[var(--ink-4)]">
           cached {age}m ago

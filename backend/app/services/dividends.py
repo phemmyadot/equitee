@@ -68,7 +68,7 @@ def _fetch_dividend_beautifulsoup(ticker: str) -> Optional[DividendInfo]:
     Returns the most recent dividend information.
     First row = header, second row = latest dividend data.
     """
-    url = f"https://stockanalysis.com/quote/ngx/{ticker}/dividend/"
+    url = f"{settings.SOURCE_BASE_URL}/quote/ngx/{ticker}/dividend/"
     
     try:
         headers = {
@@ -134,7 +134,7 @@ def _fetch_dividend_urllib(ticker: str) -> Optional[DividendInfo]:
     Scrape upcoming dividend information using urllib (fallback).
     Returns the most recent dividend information.
     """
-    url = f"https://stockanalysis.com/quote/ngx/{ticker}/dividend/"
+    url = f"{settings.SOURCE_BASE_URL}/quote/ngx/{ticker}/dividend/"
     
     req = urllib.request.Request(url, headers={
         "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",

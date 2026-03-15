@@ -175,7 +175,7 @@ def build_portfolio_response(
     usdngn   = fx["rate"]
     holdings = load_holdings_from_db(db, user_id)
 
-    ngx_stocks = build_stock_rows(holdings["ngx"], ngx_prices, "ngx-api")
+    ngx_stocks = build_stock_rows(holdings["ngx"], ngx_prices, "stockanalysis")
     us_stocks  = build_stock_rows(holdings["us"],  us_prices,  "yahoo")
 
     sold = [
@@ -236,9 +236,9 @@ def build_portfolio_response(
             fx_source        = fx["source"],
             hhi              = round(hhi, 1),
             hhi_label        = hhi_label,
-            ngx_price_source = "NGX REST API (30-min delayed)",
+            ngx_price_source = "",
             us_price_source  = "Yahoo Finance",
-            ngx_prices_live  = sum(1 for s in ngx_stocks if s.PriceSource == "ngx-api"),
+            ngx_prices_live  = sum(1 for s in ngx_stocks if s.PriceSource == "stockanalysis"),
             ngx_prices_total = len(ngx_stocks),
             us_prices_live   = sum(1 for s in us_stocks  if s.PriceSource == "yahoo"),
             us_prices_total  = len(us_stocks),
