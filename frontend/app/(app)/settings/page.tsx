@@ -152,8 +152,16 @@ type Tab = 'active' | 'closed';
 interface InviteCode {
   code:       string;
   created_at: string;
-  used_by:    number | null;
+  used:       boolean;
   used_at:    string | null;
+}
+
+function fmtDate(iso: string | null | undefined): string {
+  if (!iso) return '—';
+  // Normalise: replace space separator with T so all browsers parse correctly
+  const d = new Date(iso.replace(' ', 'T'));
+  if (isNaN(d.getTime())) return '—';
+  return d.toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' });
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -234,17 +242,17 @@ function AdminInvitePanel({ showToast }: { showToast: (msg: string, type?: 'succ
                     </span>
                   </td>
                   <td className="text-[var(--ink-4)] font-mono text-[11px]">
-                    {new Date(inv.created_at).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })}
+                    {fmtDate(inv.created_at)}
                   </td>
                   <td>
-                    {inv.used_by ? (
+                    {inv.used ? (
                       <span className="badge badge-nodata">Used</span>
                     ) : (
                       <span className="badge badge-live">Available</span>
                     )}
                   </td>
                   <td className="right">
-                    {!inv.used_by && (
+                    {!inv.used && (
                       <Btn size="xs" variant="ghost" onClick={() => copy(inv.code)}>
                         {copied === inv.code ? (
                           <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><polyline points="20 6 9 17 4 12"/></svg>
