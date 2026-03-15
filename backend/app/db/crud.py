@@ -13,7 +13,7 @@ from typing import Optional
 from sqlalchemy import select, desc
 from sqlalchemy.orm import Session
 
-from app.db.models import Holding, ClosedPosition, PortfolioSnapshot, PriceHistory
+from app.db.models import Holding, ClosedPosition, PortfolioSnapshot, PriceHistory, User, RefreshToken, InviteCode
 
 log = logging.getLogger(__name__)
 
@@ -290,3 +290,82 @@ def get_price_history(db: Session, ticker: str, days: int = 90) -> list[dict]:
         }
         for row in db.execute(stmt).all()
     ]
+
+
+# ── Users ─────────────────────────────────────────────────────────────────────
+
+def create_user(
+    db: Session, email: str, username: str,
+    hashed_pw: str, is_admin: bool = False,
+) -> User:
+    user = User(email=email, username=username, hashed_pw=hashed_pw, is_admin=is_admin)
+    db.add(user)
+    db.commit()
+    db.refresh(user)
+    log.info("Created user %r (admin=%s)", username, is_admin)
+    return user
+
+
+def get_user_by_id(db: Session, user_id: int) -> Optional[User]:
+    return db.get(User, user_id)
+
+
+def get_user_by_email(db: Session, email: str) -> Optional[User]:
+    return db.scalars(select(User).where(User.email == email)).first()
+
+
+def get_user_by_username(db: Session, username: str) -> Optional[User]:
+    return db.scalars(select(User).where(User.username == username)).first()
+
+
+# ── Refresh tokens ────────────────────────────────────────────────────────────
+
+def create_refresh_token(db: Session, user_id: int, token: str, expires_at: datetime) -> RefreshToken:
+    obj = RefreshToken(user_id=user_id, token=token, expires_at=expires_at)
+    db.add(obj)
+    db.commit()
+    db.refresh(obj)
+    return obj
+
+
+def get_refresh_token(db: Session, token: str) -> Optional[RefreshToken]:
+    return db.scalars(select(RefreshToken).where(RefreshToken.token == token)).first()
+
+
+def delete_refresh_token(db: Session, token: str) -> bool:
+    obj = db.scalars(select(RefreshToken).where(RefreshToken.token == token)).first()
+    if obj is None:
+        return False
+    db.delete(obj)
+    db.commit()
+    return True
+
+
+# ── Invite codes ──────────────────────────────────────────────────────────────
+
+def create_invite_code(db: Session, code: str, created_by: int) -> InviteCode:
+    obj = InviteCode(code=code, created_by=created_by)
+    db.add(obj)
+    db.commit()
+    db.refresh(obj)
+    return obj
+
+
+def get_invite_code(db: Session, code: str) -> Optional[InviteCode]:
+    return db.scalars(select(InviteCode).where(InviteCode.code == code)).first()
+
+
+def use_invite_code(db: Session, code: str, user_id: int) -> Optional[InviteCode]:
+    obj = get_invite_code(db, code)
+    if obj is None or obj.used_by is not None:
+        return None
+    obj.used_by = user_id
+    obj.used_at = datetime.now(timezone.utc)
+    db.commit()
+    db.refresh(obj)
+    return obj
+
+
+def list_invite_codes(db: Session, created_by: int) -> list[InviteCode]:
+    stmt = select(InviteCode).where(InviteCode.created_by == created_by).order_by(desc(InviteCode.created_at))
+    return list(db.scalars(stmt).all())

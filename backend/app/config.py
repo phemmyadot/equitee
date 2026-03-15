@@ -56,5 +56,14 @@ class Settings:
     PORT: int = int(os.getenv("PORT", "8000"))
     RELOAD: bool = os.getenv("RELOAD", "true").lower() == "true"
 
+    # ── Auth ─────────────────────────────────────────────────────────────────
+    SECRET_KEY: str = os.getenv("SECRET_KEY", "")
+    ACCESS_TOKEN_EXPIRE_MINUTES: int = int(os.getenv("ACCESS_TOKEN_EXPIRE_MINUTES", "30"))
+    REFRESH_TOKEN_EXPIRE_DAYS: int   = int(os.getenv("REFRESH_TOKEN_EXPIRE_DAYS", "30"))
+    # 'open' = anyone can register; 'invite' = requires invite code from admin
+    REGISTRATION_MODE: str = os.getenv("REGISTRATION_MODE", "invite")
+    FIRST_ADMIN_EMAIL: str    = os.getenv("FIRST_ADMIN_EMAIL", "")
+    FIRST_ADMIN_PASSWORD: str = os.getenv("FIRST_ADMIN_PASSWORD", "")
+
 
 settings = Settings()

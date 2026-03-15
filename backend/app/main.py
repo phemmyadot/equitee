@@ -15,9 +15,11 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from app.config import settings
 from app.routers import data, prices, fx, history, profile, settings as settings_router
+from app.routers import auth as auth_router
 from app.db.engine import engine, SessionLocal
 from app.db import models as db_models          # registers all ORM tables
 from app.db.seed import seed_from_json
+from app.auth.security import hash_password
 
 logging.basicConfig(
     level   = logging.INFO,
@@ -26,6 +28,24 @@ logging.basicConfig(
 )
 
 log = logging.getLogger(__name__)
+
+
+def ensure_first_admin(db) -> None:
+    """Create the first admin user from env vars if the users table is empty."""
+    from sqlalchemy import select, func
+    from app.db.models import User
+    count = db.scalar(select(func.count()).select_from(User))
+    if count == 0 and settings.FIRST_ADMIN_EMAIL and settings.FIRST_ADMIN_PASSWORD:
+        admin = User(
+            email     = settings.FIRST_ADMIN_EMAIL,
+            username  = "admin",
+            hashed_pw = hash_password(settings.FIRST_ADMIN_PASSWORD),
+            is_admin  = True,
+            is_active = True,
+        )
+        db.add(admin)
+        db.commit()
+        log.info("Created first admin user: %s", settings.FIRST_ADMIN_EMAIL)
 
 
 @asynccontextmanager
@@ -37,6 +57,7 @@ async def lifespan(app: FastAPI):
     db = SessionLocal()
     try:
         seed_from_json(db)
+        ensure_first_admin(db)
     finally:
         db.close()
 
@@ -61,6 +82,7 @@ app.add_middleware(
 )
 
 # ── Routers ───────────────────────────────────────────────────────────────────
+app.include_router(auth_router.router)
 app.include_router(data.router)
 app.include_router(prices.router)
 app.include_router(fx.router)
