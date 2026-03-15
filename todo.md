@@ -10,12 +10,12 @@
 - [x] 7. Create `routers/auth.py` — login, register, logout, refresh, me, invite endpoints
 - [x] 8. Register auth router + add `ensure_first_admin()` to lifespan in `main.py`
 - [x] 9. Initialize Alembic + write Migration 001 (create auth tables)
-- [ ] 10. **TEST**: register, login, verify cookie, call `/api/auth/me`
+- [x] 10. **TEST**: register, login, verify cookie, call `/api/auth/me`
 
 ## Phase 2 — DB Schema Migration
 - [x] 11. Write Alembic Migration 002 — add `user_id DEFAULT 1` to `holdings`, `closed_positions`, `portfolio_snapshots`
 - [x] 12. Add `user_id` columns + relationships to existing ORM models in `db/models.py`
-- [ ] 13. **TEST**: run migration locally, confirm existing data gets `user_id=1`
+- [x] 13. **TEST**: run migration locally, confirm existing data gets `user_id=1`
 
 ## Phase 3 — Backend Query Scoping
 - [ ] 14. Update all CRUD query functions in `db/crud.py` — add `user_id` param + filter
