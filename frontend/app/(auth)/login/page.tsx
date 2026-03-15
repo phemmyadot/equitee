@@ -28,17 +28,9 @@ export default function LoginPage() {
     <div className="min-h-dvh flex items-center justify-center bg-[var(--canvas)] px-4">
       <div className="w-full max-w-sm">
 
-        {/* Logo */}
-        <div className="flex items-center gap-2.5 justify-center mb-8">
-          <div className="w-8 h-8 rounded-[10px] bg-[var(--accent)] flex items-center justify-center"
-               style={{ boxShadow: '0 2px 12px rgba(26,86,219,0.35)' }}>
-            <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
-              <path d="M2 10L5.5 6.5L8 9L12 4" stroke="white" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"/>
-            </svg>
-          </div>
-          <span className="font-bold text-[15px] text-[var(--ink)] tracking-tight">
-            Portfolio <span className="font-normal text-[var(--ink-4)]">Analyzer</span>
-          </span>
+        {/* Tagline lockup */}
+        <div className="flex justify-center mb-8">
+          <img src="/equitee-lockup-tagline.svg" alt="equitee — Your edge in the market." width={260} height={98} />
         </div>
 
         {/* Card */}
@@ -87,8 +79,8 @@ export default function LoginPage() {
             <button
               type="submit"
               disabled={loading}
-              className="mt-1 h-9 px-4 text-[13px] font-semibold bg-[var(--accent)] text-white rounded-lg hover:bg-[#1447C0] disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-              style={{ boxShadow: '0 1px 4px rgba(26,86,219,0.2)' }}
+              className="mt-1 h-9 px-4 text-[13px] font-semibold bg-[var(--accent)] text-white rounded-lg hover:bg-[#17A06B] disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+              style={{ boxShadow: '0 1px 4px rgba(29,184,122,0.25)' }}
             >
               {loading ? 'Signing in…' : 'Sign in'}
             </button>

@@ -3,8 +3,9 @@ import './globals.css';
 import { AuthProvider } from '@/lib/AuthContext';
 
 export const metadata: Metadata = {
-  title:       'Portfolio Analyzer',
-  description: 'NGX + US equity portfolio dashboard with live prices',
+  title:       'equitee',
+  description: 'Your edge in the market.',
+  icons: { icon: '/favicon.svg' },
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {

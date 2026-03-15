@@ -1,0 +1,9 @@
+<svg width="560" height="210" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 560 210">
+  <rect width="560" height="210" fill="#FFFFFF" rx="16"/>
+  <rect x="28" y="24" width="88" height="88" fill="#0B1F3A" rx="18"/>
+  <polyline points="36.25,84.50 52.75,59.75 66.50,73.50 83.00,48.75 96.75,57.00" stroke="#1DB87A" stroke-width="5.5" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+  <circle cx="96.75" cy="43.25" r="8.25" fill="#1DB87A"/>
+  <text x="134" y="88" font-family="Arial,sans-serif" font-size="60" font-weight="600" letter-spacing="-1" fill="#0B1F3A"><tspan>equite</tspan><tspan fill="#1DB87A">e</tspan></text>
+  <line x1="134" y1="108" x2="530" y2="108" stroke="#E4E7EC" stroke-width="1"/>
+  <text x="134" y="150" font-family="Arial,sans-serif" font-size="24" font-weight="400" letter-spacing="1" fill="#6B7280">Your edge in the market.</text>
+</svg>

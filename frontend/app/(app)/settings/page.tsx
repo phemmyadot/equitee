@@ -74,7 +74,7 @@ function Btn({
   const base = 'inline-flex items-center gap-1.5 font-semibold rounded-md transition-colors duration-150 disabled:opacity-50 disabled:cursor-not-allowed whitespace-nowrap';
   const sizes = { sm: 'px-3 py-1.5 text-[11px]', xs: 'px-2 py-1 text-[10px]' };
   const variants = {
-    primary:   'bg-[var(--accent)] text-white hover:bg-[#1447C0]',
+    primary:   'bg-[var(--accent)] text-white hover:bg-[#17A06B]',
     secondary: 'bg-white border border-[var(--border)] text-[var(--ink-2)] hover:border-[var(--border-strong)] hover:text-[var(--ink)]',
     danger:    'bg-white border border-[#F5C6C6] text-[var(--loss)] hover:bg-[var(--loss-light)]',
     ghost:     'text-[var(--ink-3)] hover:text-[var(--ink)] hover:bg-[var(--canvas)]',
