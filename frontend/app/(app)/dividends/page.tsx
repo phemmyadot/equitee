@@ -1,12 +1,11 @@
 'use client';
 
-import { useState, useEffect, useMemo } from 'react';
-import Link                              from 'next/link';
-import { fetchDividends }                from '@/lib/api';
-import { fmtNGN, fmtNGNFull, fmtPct }   from '@/lib/formatters';
-import { sectorColor }                   from '@/lib/theme';
-import { usePortfolio }                  from '@/lib/PortfolioContext';
-import type { DividendsResponse, DividendHolding } from '@/lib/api';
+import { useState, useMemo } from 'react';
+import Link                  from 'next/link';
+import { fmtNGN, fmtNGNFull } from '@/lib/formatters';
+import { sectorColor }        from '@/lib/theme';
+import { usePortfolio }       from '@/lib/PortfolioContext';
+import type { DividendHolding } from '@/lib/api';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Helpers
@@ -272,23 +271,9 @@ function Timeline({ holdings }: { holdings: DividendHolding[] }) {
 type Filter = 'all' | 'upcoming' | 'no-data';
 
 export default function DividendsPage() {
-  const [resp,    setResp]    = useState<DividendsResponse | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [error,   setError]   = useState<string | null>(null);
-  const [filter,  setFilter]  = useState<Filter>('all');
-  const [refresh, setRefresh] = useState(0);
+  const [filter, setFilter] = useState<Filter>('all');
 
-  const { data: portfolio } = usePortfolio();
-
-  useEffect(() => {
-    let cancelled = false;
-    setLoading(true);
-    setError(null);
-    fetchDividends()
-      .then(d  => { if (!cancelled) { setResp(d);  setLoading(false); } })
-      .catch(e => { if (!cancelled) { setError(e.message); setLoading(false); } });
-    return () => { cancelled = true; };
-  }, [refresh]);
+  const { data: portfolio, dividendsData: resp, dividendsLoading: loading, refresh } = usePortfolio();
 
   // Sector lookup from portfolio context
   const sectorMap = useMemo(() => {
@@ -325,7 +310,7 @@ export default function DividendsPage() {
           </p>
         </div>
         <button
-          onClick={() => setRefresh(r => r + 1)}
+          onClick={refresh}
           disabled={loading}
           className="flex items-center gap-1.5 h-8 px-3 text-[11px] font-semibold bg-[var(--accent)] text-white rounded-lg hover:bg-[#1447C0] disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
         >
@@ -338,13 +323,6 @@ export default function DividendsPage() {
           Refresh
         </button>
       </div>
-
-      {error && (
-        <div className="text-[12px] text-[var(--loss)] bg-[var(--loss-light)] border border-[#F5C6C6] rounded-lg px-4 py-3 flex items-center gap-2">
-          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
-          {error}
-        </div>
-      )}
 
       {/* ── KPI strip ── */}
       {(loading || resp) && (
