@@ -39,12 +39,21 @@ async function request<T>(
   method: string,
   body?: unknown,
 ): Promise<T> {
-  const res = await fetch(`${BASE}${path}`, {
+  const opts = {
     method,
-    headers: body ? { 'Content-Type': 'application/json' } : {},
+    headers: body ? { 'Content-Type': 'application/json' } : {} as Record<string, string>,
     body:    body ? JSON.stringify(body) : undefined,
-    cache:   'no-store',
-  });
+    cache:   'no-store' as RequestCache,
+  };
+
+  let res = await fetch(`${BASE}${path}`, opts);
+
+  if (res.status === 401) {
+    const r = await fetch('/api/auth/refresh', { method: 'POST' });
+    if (!r.ok) { window.location.href = '/login'; throw new Error('Session expired'); }
+    res = await fetch(`${BASE}${path}`, opts);
+  }
+
   if (res.status === 204) return undefined as T;
   const data = await res.json().catch(() => ({}));
   if (!res.ok) throw new Error((data as { detail?: string }).detail ?? res.statusText);

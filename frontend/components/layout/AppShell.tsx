@@ -4,11 +4,13 @@ import { usePortfolio } from '@/lib/PortfolioContext';
 import Header from './Header';
 import Nav    from './Nav';
 import { ErrorMessage } from '@/components/ui/Feedback';
+import ProtectedRoute from '@/components/auth/ProtectedRoute';
 
 export default function AppShell({ children }: { children: React.ReactNode }) {
   const { data, loading, error, lastUpdated, refresh } = usePortfolio();
 
   return (
+    <ProtectedRoute>
     <div className="flex flex-col min-h-dvh bg-[var(--canvas)]">
       {/* Header contains both the top bar AND the desktop nav */}
       <Header
@@ -39,5 +41,6 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
         </div>
       </main>
     </div>
+    </ProtectedRoute>
   );
 }

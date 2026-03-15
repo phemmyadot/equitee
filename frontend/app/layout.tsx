@@ -1,5 +1,6 @@
 import type { Metadata } from 'next';
 import './globals.css';
+import { AuthProvider } from '@/lib/AuthContext';
 import { PortfolioProvider } from '@/lib/PortfolioContext';
 import AppShell from '@/components/layout/AppShell';
 
@@ -12,9 +13,11 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
   return (
     <html lang="en">
       <body>
-        <PortfolioProvider>
-          <AppShell>{children}</AppShell>
-        </PortfolioProvider>
+        <AuthProvider>
+          <PortfolioProvider>
+            <AppShell>{children}</AppShell>
+          </PortfolioProvider>
+        </AuthProvider>
       </body>
     </html>
   );
