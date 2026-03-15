@@ -1,5 +1,5 @@
 """
-Portfolio Analyzer — FastAPI Application
+equitee — FastAPI Application
 =========================================
 Entry point. Creates the app, configures CORS, registers all routers.
 
@@ -71,7 +71,7 @@ async def lifespan(app: FastAPI):
     # ── Shutdown (nothing to do) ──────────────────────────────────────────────
 
 app = FastAPI(
-    title       = "Portfolio Analyzer API",
+    title       = "equitee API",
     description = "NGX + US equity portfolio with live prices and FX conversion.",
     version     = "2.0.0",
     lifespan    = lifespan,

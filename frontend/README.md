@@ -1,4 +1,4 @@
-# Portfolio Analyzer — Frontend
+# equitee — Frontend
 
 Next.js 16 (App Router) frontend for the NGX + US equity portfolio dashboard.
 Deployed on **Netlify**, proxies all `/api/*` requests to the Render backend.

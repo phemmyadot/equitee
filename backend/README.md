@@ -1,4 +1,4 @@
-# Portfolio Analyzer — Backend
+# equitee — Backend
 
 FastAPI backend serving portfolio data for NGX (Nigerian Stock Exchange) and US equities.
 Deployed on **Render** with a persistent SQLite database.

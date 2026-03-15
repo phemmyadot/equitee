@@ -1,4 +1,4 @@
-# Portfolio Analyzer
+# equitee
 
 A personal portfolio tracker for **NGX** (Nigerian Stock Exchange) and **US** equities.
 Track holdings, monitor live prices, view dividends, analyse performance, and manage positions — all in one place.
