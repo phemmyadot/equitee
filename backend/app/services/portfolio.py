@@ -175,7 +175,7 @@ def build_portfolio_response(
     usdngn   = fx["rate"]
     holdings = load_holdings_from_db(db, user_id)
 
-    ngx_stocks = build_stock_rows(holdings["ngx"], ngx_prices, "stockanalysis")
+    ngx_stocks = build_stock_rows(holdings["ngx"], ngx_prices, "ngx")
     us_stocks  = build_stock_rows(holdings["us"],  us_prices,  "yahoo")
 
     sold = [
@@ -238,7 +238,7 @@ def build_portfolio_response(
             hhi_label        = hhi_label,
             ngx_price_source = "",
             us_price_source  = "Yahoo Finance",
-            ngx_prices_live  = sum(1 for s in ngx_stocks if s.PriceSource == "stockanalysis"),
+            ngx_prices_live  = sum(1 for s in ngx_stocks if s.PriceSource == "ngx"),
             ngx_prices_total = len(ngx_stocks),
             us_prices_live   = sum(1 for s in us_stocks  if s.PriceSource == "yahoo"),
             us_prices_total  = len(us_stocks),

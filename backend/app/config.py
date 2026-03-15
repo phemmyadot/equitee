@@ -21,7 +21,7 @@ class Settings:
     # ── NGX ─────────────────────────────────────────────────────────────
     NGX_PAGE_SIZE: int = int(os.getenv("NGX_PAGE_SIZE", "300"))
     NGX_PRICE_TTL: int = int(os.getenv("NGX_PRICE_TTL", "900"))   # seconds
-    SOURCE_BASE_URL: str = os.getenv("SOURCE_BASE_URL", "https://stockanalysis.com")
+    NGX_SOURCE_BASE_URL: str = os.getenv("NGX_SOURCE_BASE_URL", "https://stockanalysis.com")
 
     # ── Yahoo Finance ────────────────────────────────────────────────────────
     YAHOO_API: str = os.getenv(

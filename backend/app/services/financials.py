@@ -2,10 +2,10 @@
 Financials Service
 ==================
   - Price history:    Yahoo Finance chart API  → OHLCV (NGX tickers use .LG suffix)
-  - Earnings history: SOURCE_BASE_URL /financials/?p=quarterly  → Revenue, EPS, Net Income
-  - Balance sheet:    SOURCE_BASE_URL /financials/balance-sheet/ → Assets, Liabilities, Equity
+  - Earnings history: NGX_SOURCE_BASE_URL /financials/?p=quarterly  → Revenue, EPS, Net Income
+  - Balance sheet:    NGX_SOURCE_BASE_URL /financials/balance-sheet/ → Assets, Liabilities, Equity
 
-SOURCE_BASE_URL is a Next.js app. The /financials/ sub-pages server-render a static
+NGX_SOURCE_BASE_URL is a Next.js app. The /financials/ sub-pages server-render a static
 HTML table that BeautifulSoup can parse. The main quote page is JS-only, so we use
 Yahoo Finance for price history instead of scraping it.
 """
@@ -125,7 +125,7 @@ def get_earnings_history(ticker: str) -> Optional[dict]:
     if cache_key in _cache and (now - _cache_ts.get(cache_key, 0)) < settings.NGX_PRICE_TTL * 4:
         return _cache[cache_key]
 
-    url  = f"{settings.SOURCE_BASE_URL}/quote/ngx/{ticker.lower()}/financials/?p=quarterly"
+    url  = f"{settings.NGX_SOURCE_BASE_URL}/quote/ngx/{ticker.lower()}/financials/?p=quarterly"
     soup = _get_soup(url)
     if not soup:
         return None
@@ -164,7 +164,7 @@ def get_balance_sheet(ticker: str) -> Optional[dict]:
     if cache_key in _cache and (now - _cache_ts.get(cache_key, 0)) < settings.NGX_PRICE_TTL * 4:
         return _cache[cache_key]
 
-    url  = f"{settings.SOURCE_BASE_URL}/quote/ngx/{ticker.lower()}/financials/balance-sheet/"
+    url  = f"{settings.NGX_SOURCE_BASE_URL}/quote/ngx/{ticker.lower()}/financials/balance-sheet/"
     soup = _get_soup(url)
     if not soup:
         return None

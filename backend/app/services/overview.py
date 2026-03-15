@@ -1,7 +1,7 @@
 """
 Performance Service
 ===================
-Extracts historical performance and volatility metrics from SOURCE_BASE_URL
+Extracts historical performance and volatility metrics from NGX_SOURCE_BASE_URL
 
 Returns returns over various periods, volatility, sharpe ratio, max drawdown, etc.
 """
@@ -36,7 +36,7 @@ def _get_soup(url: str) -> Optional[BeautifulSoup]:
 
 def _scrape_performance(ticker: str) -> Optional[Dict]:
     """Scrape performance and valuation metrics from the statistics page."""
-    url = f"{settings.SOURCE_BASE_URL}/quote/ngx/{ticker.lower()}/statistics/"
+    url = f"{settings.NGX_SOURCE_BASE_URL}/quote/ngx/{ticker.lower()}/statistics/"
     
     soup = _get_soup(url)
     if not soup:

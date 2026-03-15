@@ -1,10 +1,10 @@
 """
 Stock Analysis Dividend Scraper Service
 ========================================
-Scrapes upcoming dividend information from SOURCE_BASE_URL
+Scrapes upcoming dividend information from NGX_SOURCE_BASE_URL
 
 Endpoint:
-    {SOURCE_BASE_URL}/quote/ngx/{TICKER}/dividend/
+    {NGX_SOURCE_BASE_URL}/quote/ngx/{TICKER}/dividend/
     
 Extracts: Ex-Dividend Date, Cash Amount, Record Date, Pay Date
 Cache TTL: 3600 seconds (1 hour) since dividend data changes infrequently
@@ -68,7 +68,7 @@ def _fetch_dividend_beautifulsoup(ticker: str) -> Optional[DividendInfo]:
     Returns the most recent dividend information.
     First row = header, second row = latest dividend data.
     """
-    url = f"{settings.SOURCE_BASE_URL}/quote/ngx/{ticker}/dividend/"
+    url = f"{settings.NGX_SOURCE_BASE_URL}/quote/ngx/{ticker}/dividend/"
     
     try:
         headers = {
@@ -134,7 +134,7 @@ def _fetch_dividend_urllib(ticker: str) -> Optional[DividendInfo]:
     Scrape upcoming dividend information using urllib (fallback).
     Returns the most recent dividend information.
     """
-    url = f"{settings.SOURCE_BASE_URL}/quote/ngx/{ticker}/dividend/"
+    url = f"{settings.NGX_SOURCE_BASE_URL}/quote/ngx/{ticker}/dividend/"
     
     req = urllib.request.Request(url, headers={
         "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
@@ -198,7 +198,7 @@ def _fetch_dividend_urllib(ticker: str) -> Optional[DividendInfo]:
 
 def _fetch_dividend(ticker: str) -> Optional[DividendInfo]:
     """
-    Scrape upcoming dividend information from SOURCE_BASE_URL
+    Scrape upcoming dividend information from NGX_SOURCE_BASE_URL
     Uses BeautifulSoup if available, falls back to urllib/regex.
     """
     if HAS_BEAUTIFULSOUP:
