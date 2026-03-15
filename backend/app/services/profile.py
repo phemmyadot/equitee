@@ -36,7 +36,7 @@ def _get_soup(url: str) -> Optional[BeautifulSoup]:
 
 def _scrape_profile(ticker: str) -> Optional[Dict]:
     """Scrape profile data from the company page"""
-    url = f"https://stockanalysis.com/quote/ngx/{ticker.lower()}/company/"
+    url = f"{settings.SOURCE_BASE_URL}/quote/ngx/{ticker.lower()}/company/"
     
     soup = _get_soup(url)
     if not soup:

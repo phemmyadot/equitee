@@ -86,7 +86,14 @@ export default function NGXOverviewPage() {
 
   const cols: ColDef<StockRow>[] = [
     { key: 'Ticker',  label: 'Ticker',
-      render: v => <span className="font-mono font-semibold text-[var(--ink)] text-[11px]">{v}</span>
+      render: (v: string) => (
+        <Link
+          href={`/ngx/profile?ticker=${v}`}
+          className="font-mono font-semibold text-[11px] text-[var(--accent)] hover:underline"
+        >
+          {v}
+        </Link>
+      ),
     },
     { key: 'Stock',   label: 'Company',
       render: v => <span className="text-[var(--ink-2)] text-[12px]">{v}</span>
@@ -147,17 +154,6 @@ export default function NGXOverviewPage() {
     },
     { key: 'PriceSource', label: '', render: (v: string) => <SourceBadge source={v} /> },
     { key: 'sparkline', label: '90d', render: (_: unknown, row: StockRow) => <Sparkline ticker={row.Ticker} /> },
-    { key: 'profile_link', label: '',
-      render: (_: unknown, row: StockRow) => (
-        <Link
-          href={`/ngx/profile?ticker=${row.Ticker}`}
-          className="inline-flex items-center gap-1 text-[10px] font-semibold text-[var(--accent)] hover:underline whitespace-nowrap"
-        >
-          Profile
-          <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><polyline points="9 18 15 12 9 6"/></svg>
-        </Link>
-      ),
-    },
   ];
 
   return (

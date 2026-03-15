@@ -34,7 +34,7 @@ _cache: Dict = {
     "ts": 0.0,
 }
 
-NGX_LIST_URL = "https://stockanalysis.com/list/nigerian-stock-exchange/"
+NGX_LIST_URL = f"{settings.SOURCE_BASE_URL}/list/nigerian-stock-exchange/"
 
 USER_AGENT = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36"
 
@@ -66,7 +66,7 @@ def _safe_float(text: str, default=None) -> Optional[float]:
 def _get_volume_for_ticker(ticker: str) -> Optional[float]:
     """Fetch volume from individual ticker page."""
     try:
-        url = f"https://stockanalysis.com/quote/ngx/{ticker.lower()}/"
+        url = f"{settings.SOURCE_BASE_URL}/quote/ngx/{ticker.lower()}/"
         soup = _get_soup(url)
         if not soup:
             return None

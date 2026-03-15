@@ -14,6 +14,14 @@ const MOBILE_ITEMS = [
     ),
   },
   {
+    href: '/ngx/advanced', label: 'Adv',
+    icon: (
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
+      </svg>
+    ),
+  },
+  {
     href: '/us', label: 'US',
     icon: (
       <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -56,7 +64,6 @@ export default function Nav() {
     exact ? pathname === href : pathname.startsWith(href);
 
   return (
-    // Mobile-only floating island nav
     <nav className="sm:hidden fixed bottom-3 left-3 right-3 z-[100]">
       <div
         className="flex bg-white rounded-2xl border border-[var(--border)] px-1.5 py-1.5 gap-1"

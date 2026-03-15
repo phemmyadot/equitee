@@ -159,8 +159,8 @@ interface InviteCode {
 
 function fmtDate(iso: string | null | undefined): string {
   if (!iso) return '—';
-  // Normalise: replace space separator with T so all browsers parse correctly
-  const d = new Date(iso.replace(' ', 'T'));
+  // Normalise: replace space separator with T, truncate microseconds to ms
+  const d = new Date(iso.replace(' ', 'T').replace(/(\.\d{3})\d+/, '$1'));
   if (isNaN(d.getTime())) return '—';
   return d.toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' });
 }

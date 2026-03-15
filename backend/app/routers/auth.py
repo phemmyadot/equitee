@@ -148,12 +148,17 @@ def me(current_user: User = Depends(get_current_user)):
     )
 
 
-@router.post("/invite", response_model=InviteResponse)
+@router.post("/invite")
 def create_invite(admin: User = Depends(get_current_admin), db: Session = Depends(get_db)):
     code = str(uuid.uuid4())[:8].upper()
-    crud.create_invite_code(db, code, admin.id)
+    inv = crud.create_invite_code(db, code, admin.id)
     log.info("Admin %r created invite code %r", admin.username, code)
-    return InviteResponse(code=code)
+    return {
+        "code":       inv.code,
+        "used":       False,
+        "used_at":    None,
+        "created_at": inv.created_at.isoformat(),
+    }
 
 
 @router.get("/invites")
