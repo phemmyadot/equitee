@@ -2,10 +2,10 @@
 Financials Service
 ==================
   - Price history:    Yahoo Finance chart API  → OHLCV (NGX tickers use .LG suffix)
-  - Earnings history: stockanalysis.com /financials/?p=quarterly  → Revenue, EPS, Net Income
-  - Balance sheet:    stockanalysis.com /financials/balance-sheet/ → Assets, Liabilities, Equity
+  - Earnings history: SOURCE_BASE_URL /financials/?p=quarterly  → Revenue, EPS, Net Income
+  - Balance sheet:    SOURCE_BASE_URL /financials/balance-sheet/ → Assets, Liabilities, Equity
 
-stockanalysis.com is a Next.js app. The /financials/ sub-pages server-render a static
+SOURCE_BASE_URL is a Next.js app. The /financials/ sub-pages server-render a static
 HTML table that BeautifulSoup can parse. The main quote page is JS-only, so we use
 Yahoo Finance for price history instead of scraping it.
 """

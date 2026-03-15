@@ -1,7 +1,7 @@
 """
 Performance Service
 ===================
-Extracts historical performance and volatility metrics from stockanalysis.com
+Extracts historical performance and volatility metrics from SOURCE_BASE_URL
 
 Returns returns over various periods, volatility, sharpe ratio, max drawdown, etc.
 """

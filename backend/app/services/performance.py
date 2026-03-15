@@ -1,7 +1,7 @@
 """
 Overview Service
 ================
-Extracts fundamental data and overview metrics from stockanalysis.com
+Extracts fundamental data and overview metrics from SOURCE_BASE_URL
 
 Returns PE ratio, earnings, book value, ROE, dividend yield, market cap, etc.
 """

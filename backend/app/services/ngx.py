@@ -1,7 +1,7 @@
 """
 NGX Service - Main Scraper
 ===========================
-Scrapes comprehensive data from https://stockanalysis.com/list/nigerian-stock-exchange/
+Scrapes comprehensive data from {SOURCE_BASE_URL}/list/nigerian-stock-exchange/
 
 This service extracts:
 - Price data (current price, change, volume, market cap)
@@ -120,7 +120,7 @@ def _fetch_all_data():
             continue
 
         try:
-            # Actual table structure from stockanalysis.com:
+            # Actual table structure from SOURCE_BASE_URL:
             # [0] No. [1] Symbol(link) [2] Company Name [3] Market Cap [4] Stock Price [5] % Change [6] Revenue
             
             # Extract ticker from column 1 (contains link)
@@ -191,7 +191,7 @@ def _refresh_cache():
         log.info(f"[NGX] cache hit — {len(_cache['prices'])} tickers, {age}s old")
         return
 
-    log.info("[NGX] refreshing cache from stockanalysis.com...")
+    log.info("[NGX] refreshing cache from SOURCE_BASE_URL...")
     result = _fetch_all_data()
     if result:
         prices, dividends, profiles = result
