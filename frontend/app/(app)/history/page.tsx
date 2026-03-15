@@ -10,6 +10,7 @@ import PlotlyChart             from '@/components/charts/PlotlyChart';
 import { plotlyLayout, COLORS, sectorColor } from '@/lib/theme';
 import { fmtUSD, fmtNGN, fmtPct, isPositive } from '@/lib/formatters';
 import type { PortfolioPoint } from '@/lib/api';
+import { IconChartHistory } from '@/components/ui/icons';
 
 const DAY_OPTIONS = [
   { label: '7d',  value: 7   },
@@ -201,9 +202,7 @@ export default function HistoryPage() {
       {/* ── No data state ── */}
       {!loading && !hasData && (
         <div className="card px-6 py-12 flex flex-col items-center gap-3 text-center">
-          <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="var(--ink-4)" strokeWidth="1.5">
-            <path d="M3 3v18h18"/><path d="m19 9-5 5-4-4-3 3"/>
-          </svg>
+          <IconChartHistory width={32} height={32} style={{ stroke: 'var(--ink-4)', strokeWidth: 1.5 }} />
           <p className="text-[13px] font-medium text-[var(--ink-2)]">No snapshot data yet</p>
           <p className="text-[11px] text-[var(--ink-4)] max-w-[320px]">
             Snapshots are written each time <code className="font-mono bg-[var(--canvas)] px-1 rounded">/api/data</code> is

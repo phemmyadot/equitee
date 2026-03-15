@@ -1,6 +1,7 @@
 'use client';
 
 import { Component, type ReactNode, type ErrorInfo } from 'react';
+import { IconAlertCircle } from '@/components/ui/icons';
 
 interface Props   { children: ReactNode; title?: string; height?: number; }
 interface State   { hasError: boolean; message: string; }
@@ -30,9 +31,7 @@ export default class ChartErrorBoundary extends Component<Props, State> {
         className="flex flex-col items-center justify-center gap-3 rounded-lg bg-[var(--loss-light)] border border-[#F5C6C6]"
         style={{ height }}
       >
-        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--loss)" strokeWidth="2">
-          <circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/>
-        </svg>
+        <IconAlertCircle width={18} height={18} style={{ stroke: 'var(--loss)' }} />
         <span className="text-[11px] font-semibold text-[var(--loss)]">
           {title ? `${title} failed to render` : 'Chart error'}
         </span>

@@ -7,6 +7,10 @@ import clsx from 'clsx';
 import { fmtAge } from '@/lib/formatters';
 import { usePortfolio, REFRESH_INTERVALS, type RefreshInterval } from '@/lib/PortfolioContext';
 import { useAuth } from '@/lib/AuthContext';
+import {
+  IconChartLine, IconSearch, IconGlobe, IconClock, IconChartHistory,
+  IconSettings, IconLogOut,
+} from '@/components/ui/icons';
 
 interface HeaderProps {
   usdngn?:      number;
@@ -19,40 +23,29 @@ interface HeaderProps {
 const NAV_ITEMS = [
   {
     href: '/ngx', label: 'NGX', exact: true,
-    icon: <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>,
+    icon: <IconChartLine width={14} height={14} />,
   },
   {
     href: '/ngx/advanced', label: 'Advanced',
-    icon: <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>,
+    icon: <IconSearch width={14} height={14} />,
   },
   {
     href: '/us', label: 'US',
-    icon: <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>,
+    icon: <IconGlobe width={14} height={14} />,
   },
   {
     href: '/dividends', label: 'Dividends',
-    icon: <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>,
+    icon: <IconClock width={14} height={14} />,
   },
   {
     href: '/history', label: 'History',
-    icon: <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 3v18h18"/><path d="m19 9-5 5-4-4-3 3"/></svg>,
+    icon: <IconChartHistory width={14} height={14} />,
   },
 ] as const;
 
-const SETTINGS_ICON = (
-  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round">
-    <circle cx="12" cy="12" r="3"/>
-    <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/>
-  </svg>
-);
+const SETTINGS_ICON = <IconSettings width={15} height={15} />;
 
-const LOGOUT_ICON = (
-  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-    <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/>
-    <polyline points="16 17 21 12 16 7"/>
-    <line x1="21" y1="12" x2="9" y2="12"/>
-  </svg>
-);
+const LOGOUT_ICON = <IconLogOut width={12} height={12} />;
 
 export default function Header({ usdngn, fxSource, lastUpdated, loading, onRefresh }: HeaderProps) {
   const [now, setNow]  = useState<Date>(new Date());
@@ -134,9 +127,7 @@ export default function Header({ usdngn, fxSource, lastUpdated, loading, onRefre
 
         {/* Auto-refresh select */}
         <div className="hidden sm:flex items-center gap-1.5 h-8 px-2.5 rounded-lg border border-[var(--border)] bg-[var(--canvas)] shrink-0">
-          <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="var(--ink-4)" strokeWidth="2.5" className="shrink-0">
-            <circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/>
-          </svg>
+          <IconClock width={11} height={11} className="shrink-0" style={{ stroke: 'var(--ink-4)' }} />
           <select
             value={autoRefreshInterval}
             onChange={e => setAutoRefreshInterval(Number(e.target.value) as RefreshInterval)}

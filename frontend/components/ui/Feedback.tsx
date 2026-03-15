@@ -1,3 +1,5 @@
+import { IconAlertCircle } from '@/components/ui/icons';
+
 export function Spinner() {
   return (
     <div className="flex items-center justify-center h-full min-h-[120px]">
@@ -21,9 +23,7 @@ export function ErrorMessage({ message }: { message: string }) {
       bg-[var(--loss-light)] border border-[#F5C6C6]
       rounded-lg px-4 py-3 flex items-start gap-2.5
     ">
-      <svg className="shrink-0 mt-0.5" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
-        <circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/>
-      </svg>
+      <IconAlertCircle width={14} height={14} className="shrink-0 mt-0.5" />
       <span>{message}</span>
     </div>
   );
