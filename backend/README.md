@@ -1,146 +1,160 @@
 # Portfolio Analyzer — Backend
 
-FastAPI backend for the NGX + US equity portfolio dashboard.
-
-## Tech Stack
-
-| Layer       | Tool                        |
-|-------------|-----------------------------|
-| Framework   | FastAPI + Uvicorn            |
-| Validation  | Pydantic v2                  |
-| NGX Prices  | NGX doclib REST API          |
-| US Prices   | Yahoo Finance (public)       |
-| FX Rate     | er-api → Google → Wise       |
-| Holdings    | `portfolio.json` (local file)|
+FastAPI backend serving portfolio data for NGX (Nigerian Stock Exchange) and US equities.
+Deployed on **Render** with a persistent SQLite database.
 
 ---
 
-## Project Structure
+## Stack
+
+| Layer | Tech |
+|---|---|
+| Framework | FastAPI + Uvicorn |
+| Database | SQLite via SQLAlchemy 2.0 |
+| Migrations | Alembic |
+| Auth | JWT access tokens + UUID refresh tokens, httpOnly cookies |
+| Password hashing | passlib sha256_crypt |
+| NGX prices | Web scraper (stockanalysis.com) |
+| US prices | Yahoo Finance chart API |
+| FX rate | Live USD/NGN with fallback |
+
+---
+
+## Project layout
 
 ```
 backend/
 ├── app/
-│   ├── main.py          ← App factory, CORS, router registration
-│   ├── config.py        ← All settings (reads from .env)
-│   ├── models.py        ← Pydantic response models
+│   ├── main.py             # Entry point, lifespan, admin bootstrap
+│   ├── config.py           # All env vars in one place (never import os.getenv elsewhere)
+│   ├── models.py           # Pydantic response models
+│   ├── auth/
+│   │   ├── security.py     # JWT creation/decode, password hashing
+│   │   └── dependencies.py # get_current_user / get_current_admin FastAPI deps
+│   ├── db/
+│   │   ├── models.py       # SQLAlchemy ORM models (User, Holding, RefreshToken, …)
+│   │   ├── crud.py         # All DB query functions
+│   │   ├── database.py     # Session factory
+│   │   └── seed.py         # Admin portfolio seeder (reads portfolio.json)
 │   ├── routers/
-│   │   ├── data.py      ← GET /api/data
-│   │   ├── prices.py    ← GET /api/prices/ngx  &  /api/prices/us
-│   │   └── fx.py        ← GET /api/fx
+│   │   ├── auth.py         # /api/auth/*
+│   │   ├── data.py         # /api/data/portfolio
+│   │   ├── settings.py     # /api/settings/* — holdings CRUD
+│   │   ├── prices.py       # /api/prices/*
+│   │   ├── history.py      # /api/history/*
+│   │   ├── fx.py           # /api/fx
+│   │   └── profile.py      # /api/profile/*
 │   └── services/
-│       ├── ngx.py       ← NGX price fetch + cache
-│       ├── yahoo.py     ← Yahoo Finance fetch + cache
-│       ├── fx.py        ← FX rate waterfall
-│       └── portfolio.py ← P&L computation, sectors, KPIs
-├── portfolio.json        ← Your holdings (edit to update positions)
-├── .env                  ← Local secrets (not committed)
-├── .env.example          ← Template
+│       ├── portfolio.py    # Assembles the full portfolio response
+│       ├── ngx.py          # NGX scraper + in-memory cache
+│       ├── yahoo.py        # US price fetcher
+│       ├── dividends.py    # Dividend scraper
+│       ├── financials.py   # Earnings / balance sheet scraper
+│       ├── overview.py     # Fundamentals scraper
+│       ├── performance.py  # Performance metrics scraper
+│       ├── profile.py      # Company profile scraper
+│       ├── fx.py           # USD/NGN rate fetcher
+│       └── prices.py       # Price cache coordinator
+├── alembic/                # DB migration scripts
 ├── requirements.txt
-└── README.md
+└── render.yaml             # Render deployment config
 ```
 
 ---
 
-## Quick Start
+## Auth flow
+
+- **Invite-only** registration by default — admin generates codes, users register with them
+- Login sets two httpOnly cookies: a 30-min JWT **access token** + a 30-day **refresh token**
+- The refresh token is a UUID stored in the DB and rotated on every `/api/auth/refresh` call
+- All protected routes use `Depends(get_current_user)`; admin routes use `Depends(get_current_admin)`
+
+---
+
+## API reference
+
+### Auth — `/api/auth`
+
+| Method | Path | Auth | Description |
+|---|---|---|---|
+| POST | `/register` | — | Register with an invite code |
+| POST | `/login` | — | Login, sets auth cookies |
+| POST | `/logout` | User | Clears cookies, deletes refresh token |
+| POST | `/refresh` | Cookie | Rotate refresh token, reissue access token |
+| GET | `/me` | User | Returns current user info |
+| POST | `/invite` | Admin | Generate an invite code |
+| GET | `/invites` | Admin | List all invite codes |
+
+### Portfolio — `/api`
+
+| Method | Path | Description |
+|---|---|---|
+| GET | `/data/portfolio` | Full portfolio response (prices, KPIs, sectors, snapshots) |
+| GET | `/prices/ngx` | Latest NGX prices |
+| GET | `/fx` | Current USD/NGN rate |
+| GET | `/history/snapshots` | Portfolio value over time |
+| GET | `/profile/{ticker}` | Company profile + financials |
+
+### Settings — `/api/settings`
+
+| Method | Path | Description |
+|---|---|---|
+| GET | `/holdings` | List all holdings |
+| POST | `/holdings` | Add a holding |
+| PUT | `/holdings/{id}` | Edit a holding |
+| DELETE | `/holdings/{id}` | Delete a holding |
+| POST | `/holdings/{id}/buy` | Record a buy (recalculates avg cost) |
+| POST | `/holdings/{id}/sell` | Record a sell (creates a closed position) |
+| GET | `/closed` | List closed positions |
+
+---
+
+## Environment variables
+
+| Variable | Required | Default | Description |
+|---|---|---|---|
+| `SECRET_KEY` | ✅ | — | JWT signing secret — generate a random 32+ char string |
+| `FIRST_ADMIN_EMAIL` | ✅ | — | Admin account email, used once at first boot |
+| `FIRST_ADMIN_PASSWORD` | ✅ | — | Admin account password, used once at first boot |
+| `DATABASE_URL` | — | SQLite file | SQLite or Postgres URL |
+| `PORTFOLIO_FILE` | — | `portfolio.json` | Path to admin seed file (Render secret file) |
+| `NGX_SOURCE_BASE_URL` | — | `https://stockanalysis.com` | Base URL for the NGX scraper |
+| `NGX_PRICE_TTL` | — | `900` | NGX price cache TTL in seconds |
+| `REGISTRATION_MODE` | — | `invite` | `invite` or `open` |
+| `CORS_ORIGINS` | — | `http://localhost:3000` | Comma-separated list of allowed origins |
+
+---
+
+## Running locally
 
 ```bash
 cd backend
-
-# 1. Install dependencies
+python -m venv venv
+source venv/bin/activate        # Windows: venv\Scripts\activate
 pip install -r requirements.txt
 
-# 2. Create your .env
-cp .env.example .env
-# Edit .env if needed (defaults work out of the box)
+# Create a .env file (see variables above)
+# Run migrations
+alembic upgrade head
 
-# 3. Start the server
-uvicorn app.main:app --reload --port 8000
+# Start the dev server
+uvicorn app.main:app --reload
 ```
 
-API docs available at: **http://localhost:8000/docs**
+- API: `http://localhost:8000`
+- Swagger docs: `http://localhost:8000/docs`
 
 ---
 
-## API Endpoints
+## Deployment (Render)
 
-| Method | Path             | Description                              |
-|--------|------------------|------------------------------------------|
-| GET    | `/api/data`      | Full portfolio payload (main endpoint)   |
-| GET    | `/api/prices/ngx`| Raw NGX equity price table              |
-| GET    | `/api/prices/us` | US stock prices for portfolio holdings   |
-| GET    | `/api/fx`        | Live USD/NGN exchange rate               |
-| GET    | `/health`        | Health check                             |
+`render.yaml` sets up a web service with a 1 GB persistent disk at `/data`.
 
----
-
-## Configuration (`.env`)
-
-| Variable           | Default                                        | Description                        |
-|--------------------|------------------------------------------------|------------------------------------|
-| `PORTFOLIO_FILE`   | `./portfolio.json`                             | Path to holdings file              |
-| `NGX_PRICE_TTL`    | `900`                                          | NGX cache duration (seconds)       |
-| `US_PRICE_TTL`     | `120`                                          | Yahoo cache duration (seconds)     |
-| `FX_TTL`           | `600`                                          | FX rate cache duration (seconds)   |
-| `USDNGN_FALLBACK`  | `1580`                                         | FX fallback if all sources fail    |
-| `CORS_ORIGINS`     | `http://localhost:3000`                        | Comma-separated allowed origins    |
-| `HOST`             | `0.0.0.0`                                      | Uvicorn bind host                  |
-| `PORT`             | `8000`                                         | Uvicorn bind port                  |
-| `RELOAD`           | `true`                                         | Auto-reload on code change         |
-
----
-
-## Updating Your Portfolio
-
-Edit `portfolio.json` directly — no restart needed (file is read on each `/api/data` request).
-
-```json
-{
-  "ngx": [
-    {
-      "ticker": "GTCO",
-      "name": "Guaranty Trust Holding Co",
-      "shares": 8700,
-      "avg_cost": 88.19,
-      "sector": "Banking"
-    }
-  ],
-  "us": [
-    {
-      "ticker": "NVDA",
-      "name": "Nvidia",
-      "shares": 1.068779,
-      "avg_cost": 192.63,
-      "sector": "Technology"
-    }
-  ],
-  "sold": [
-    {
-      "ticker": "CAVERTON",
-      "name": "Caverton Offshore",
-      "market": "ngx",
-      "realized_pl": 13322.82
-    }
-  ]
-}
+**Start command:**
+```
+alembic upgrade head && uvicorn app.main:app --host 0.0.0.0 --port $PORT
 ```
 
-**Fields:**
-- `ticker` — exchange symbol (must match NGX API or Yahoo Finance exactly)
-- `shares` — number of units held (supports decimals for US fractional shares)
-- `avg_cost` — average cost per share in local currency (NGN for NGX, USD for US)
-- `sector` — used for sector allocation charts
-- `realized_pl` — (sold only) net profit/loss in local currency
+**First boot:** if `PORTFOLIO_FILE` exists (set as a Render secret file), holdings are seeded for the admin user. All other users start with an empty portfolio and add positions via Settings.
 
----
-
-## Caching
-
-All three data sources are cached in memory:
-
-| Source      | TTL      | Reason                                      |
-|-------------|----------|---------------------------------------------|
-| NGX prices  | 15 min   | Data is already 30-min delayed on the exchange |
-| US prices   | 2 min    | Real-time, refresh frequently               |
-| FX rate     | 10 min   | Stable enough, avoids hammering free APIs   |
-
-Stale cache is served as fallback if a source becomes unreachable.
+**Admin bootstrap:** if the `users` table is empty on startup, an admin account is created from `FIRST_ADMIN_EMAIL` / `FIRST_ADMIN_PASSWORD`. Runs once and is idempotent.
