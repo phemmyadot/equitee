@@ -1,7 +1,7 @@
 """
 Profile Service
 ===============
-Extracts company profile information from stockanalysis.com
+Extracts company profile information from SOURCE_BASE_URL
 
 Returns company name, sector, industry, headquarters, description, etc.
 """

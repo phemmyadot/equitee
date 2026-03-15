@@ -1,10 +1,10 @@
 """
 Stock Analysis Dividend Scraper Service
 ========================================
-Scrapes upcoming dividend information from stockanalysis.com
+Scrapes upcoming dividend information from SOURCE_BASE_URL
 
 Endpoint:
-    https://stockanalysis.com/quote/ngx/{TICKER}/dividend/
+    {SOURCE_BASE_URL}/quote/ngx/{TICKER}/dividend/
     
 Extracts: Ex-Dividend Date, Cash Amount, Record Date, Pay Date
 Cache TTL: 3600 seconds (1 hour) since dividend data changes infrequently
@@ -198,7 +198,7 @@ def _fetch_dividend_urllib(ticker: str) -> Optional[DividendInfo]:
 
 def _fetch_dividend(ticker: str) -> Optional[DividendInfo]:
     """
-    Scrape upcoming dividend information from stockanalysis.com
+    Scrape upcoming dividend information from SOURCE_BASE_URL
     Uses BeautifulSoup if available, falls back to urllib/regex.
     """
     if HAS_BEAUTIFULSOUP:
