@@ -15,11 +15,6 @@ PortfolioAnalyzer/
 
 The frontend proxies all `/api/*` requests to the backend at runtime, so there is no CORS complexity and auth cookies work transparently across both.
 
-| Layer | Service | URL |
-|---|---|---|
-| Backend API | Render (web service) | `https://your-app.onrender.com` |
-| Frontend | Netlify | `https://your-app.netlify.app` |
-
 ---
 
 ## Features
