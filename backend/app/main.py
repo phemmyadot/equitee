@@ -27,6 +27,11 @@ logging.basicConfig(
     datefmt = "%H:%M:%S",
 )
 
+if not settings.SECRET_KEY:
+    import os
+    if os.getenv("ENVIRONMENT", "development") == "production":
+        raise RuntimeError("SECRET_KEY must be set in production")
+
 log = logging.getLogger(__name__)
 
 

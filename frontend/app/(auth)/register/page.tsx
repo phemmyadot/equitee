@@ -4,6 +4,8 @@ import { useState, type FormEvent } from 'react';
 import Link from 'next/link';
 import { useAuth } from '@/lib/AuthContext';
 
+const REGISTRATION_MODE = process.env.NEXT_PUBLIC_REGISTRATION_MODE ?? 'invite';
+
 export default function RegisterPage() {
   const { register } = useAuth();
   const [email,       setEmail]       = useState('');
@@ -13,12 +15,14 @@ export default function RegisterPage() {
   const [error,       setError]       = useState('');
   const [loading,     setLoading]     = useState(false);
 
+  const needsInvite = REGISTRATION_MODE === 'invite';
+
   async function handleSubmit(e: FormEvent) {
     e.preventDefault();
     setError('');
     setLoading(true);
     try {
-      await register(email, username, password, inviteCode || undefined);
+      await register(email, username, password, needsInvite ? (inviteCode || undefined) : undefined);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Registration failed');
     } finally {
@@ -46,7 +50,11 @@ export default function RegisterPage() {
         {/* Card */}
         <div className="bg-white border border-[var(--border)] rounded-2xl p-8" style={{ boxShadow: '0 4px 24px rgba(0,0,0,0.06)' }}>
           <h1 className="text-[16px] font-bold text-[var(--ink)] mb-1">Create account</h1>
-          <p className="text-[12px] text-[var(--ink-4)] mb-6">You need an invite code from an admin to register.</p>
+          <p className="text-[12px] text-[var(--ink-4)] mb-6">
+            {needsInvite
+              ? 'You need an invite code from an admin to register.'
+              : 'Fill in your details to create an account.'}
+          </p>
 
           {error && (
             <div className="mb-4 px-3 py-2.5 bg-red-50 border border-red-200 rounded-lg text-[12px] text-red-600">
@@ -55,20 +63,22 @@ export default function RegisterPage() {
           )}
 
           <form onSubmit={handleSubmit} className="flex flex-col gap-4">
-            <div className="flex flex-col gap-1.5">
-              <label className="text-[11px] font-semibold text-[var(--ink-3)] uppercase tracking-wide">
-                Invite code
-              </label>
-              <input
-                type="text"
-                value={inviteCode}
-                onChange={e => setInviteCode(e.target.value.toUpperCase())}
-                required
-                autoFocus
-                placeholder="XXXXXXXX"
-                className="h-9 px-3 text-[13px] font-mono border border-[var(--border)] rounded-lg bg-[var(--canvas)] text-[var(--ink)] placeholder:text-[var(--ink-4)] outline-none focus:border-[var(--accent)] focus:ring-2 focus:ring-[var(--accent)]/10 transition tracking-widest"
-              />
-            </div>
+            {needsInvite && (
+              <div className="flex flex-col gap-1.5">
+                <label className="text-[11px] font-semibold text-[var(--ink-3)] uppercase tracking-wide">
+                  Invite code
+                </label>
+                <input
+                  type="text"
+                  value={inviteCode}
+                  onChange={e => setInviteCode(e.target.value.toUpperCase())}
+                  required
+                  autoFocus
+                  placeholder="XXXXXXXX"
+                  className="h-9 px-3 text-[13px] font-mono border border-[var(--border)] rounded-lg bg-[var(--canvas)] text-[var(--ink)] placeholder:text-[var(--ink-4)] outline-none focus:border-[var(--accent)] focus:ring-2 focus:ring-[var(--accent)]/10 transition tracking-widest"
+                />
+              </div>
+            )}
 
             <div className="flex flex-col gap-1.5">
               <label className="text-[11px] font-semibold text-[var(--ink-3)] uppercase tracking-wide">
