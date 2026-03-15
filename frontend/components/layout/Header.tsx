@@ -46,6 +46,14 @@ const SETTINGS_ICON = (
   </svg>
 );
 
+const LOGOUT_ICON = (
+  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/>
+    <polyline points="16 17 21 12 16 7"/>
+    <line x1="21" y1="12" x2="9" y2="12"/>
+  </svg>
+);
+
 export default function Header({ usdngn, fxSource, lastUpdated, loading, onRefresh }: HeaderProps) {
   const [now, setNow]  = useState<Date>(new Date());
   const pathname       = usePathname();
@@ -76,13 +84,15 @@ export default function Header({ usdngn, fxSource, lastUpdated, loading, onRefre
 
   const settingsActive = pathname.startsWith('/settings');
 
+  const userInitial = user?.username?.[0]?.toUpperCase() ?? '?';
+
   return (
     <header className="sticky top-0 z-50 bg-white border-b border-[var(--border)]" style={{ boxShadow: '0 1px 0 #E4E7EC' }}>
 
       {/* ── Top bar ─────────────────────────────────────────────────── */}
       <div
         style={{ height: 'var(--header-h)' }}
-        className="flex items-center gap-3 px-[var(--page-px)] md:px-[var(--page-px-md)] lg:px-[var(--page-px-lg)]"
+        className="flex items-center gap-2.5 px-[var(--page-px)] md:px-[var(--page-px-md)] lg:px-[var(--page-px-lg)]"
       >
         {/* Logo */}
         <Link href="/ngx" className="flex items-center gap-2.5 shrink-0 group">
@@ -164,45 +174,60 @@ export default function Header({ usdngn, fxSource, lastUpdated, loading, onRefre
 
         <div className="hidden sm:block w-px h-5 bg-[var(--border)] shrink-0" />
 
-        {/* User badge + logout */}
+        {/* ── User + logout ──────────────────────────────────────────────── */}
         {user && (
-          <div className="hidden sm:flex items-center gap-2 shrink-0">
-            <span className="text-[11px] font-semibold text-[var(--ink-3)] max-w-[100px] truncate">
-              {user.username}
-            </span>
-            <button
-              onClick={logout}
-              title="Sign out"
-              className="flex items-center justify-center w-7 h-7 rounded-lg border border-[var(--border)] bg-[var(--canvas)] text-[var(--ink-4)] hover:text-red-500 hover:border-red-200 transition-colors"
-            >
-              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-                <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/>
-                <polyline points="16 17 21 12 16 7"/>
-                <line x1="21" y1="12" x2="9" y2="12"/>
-              </svg>
-            </button>
-          </div>
+          <>
+            {/* Desktop (sm+): avatar, username, sign-out button */}
+            <div className="hidden sm:flex items-center gap-2 shrink-0">
+              <div className="w-6 h-6 rounded-full bg-[var(--accent-light)] flex items-center justify-center text-[10px] font-bold text-[var(--accent)] shrink-0 select-none">
+                {userInitial}
+              </div>
+              <span className="hidden md:block text-[11px] font-semibold text-[var(--ink-3)] max-w-[90px] truncate">
+                {user.username}
+              </span>
+              <button
+                onClick={logout}
+                className="flex items-center gap-1.5 h-8 px-2.5 rounded-lg border border-[#F5C6C6] bg-[var(--loss-light)] text-[var(--loss)] text-[11px] font-semibold hover:bg-red-100 hover:border-red-300 transition-colors shrink-0"
+              >
+                {LOGOUT_ICON}
+                <span className="hidden lg:inline">Sign out</span>
+              </button>
+            </div>
+
+            {/* Mobile: avatar + compact sign-out */}
+            <div className="flex sm:hidden items-center gap-1.5 shrink-0">
+              <div className="w-7 h-7 rounded-full bg-[var(--accent-light)] flex items-center justify-center text-[11px] font-bold text-[var(--accent)] select-none">
+                {userInitial}
+              </div>
+              <button
+                onClick={logout}
+                title="Sign out"
+                className="flex items-center justify-center w-7 h-7 rounded-lg border border-[#F5C6C6] bg-[var(--loss-light)] text-[var(--loss)] hover:bg-red-100 transition-colors"
+              >
+                {LOGOUT_ICON}
+              </button>
+            </div>
+          </>
         )}
 
-        <div className="hidden sm:block w-px h-5 bg-[var(--border)] shrink-0" />
+        <div className="w-px h-5 bg-[var(--border)] shrink-0" />
 
-        {/* Refresh button */}
+        {/* ── Subtle refresh icon button ─────────────────────────────── */}
         <button
           onClick={onRefresh}
           disabled={loading}
-          className="flex items-center gap-1.5 h-8 px-3 text-[11px] font-semibold bg-[var(--accent)] text-white rounded-lg hover:bg-[#1447C0] disabled:opacity-50 disabled:cursor-not-allowed transition-colors duration-150 shrink-0"
-          style={{ boxShadow: '0 1px 4px rgba(26,86,219,0.2)' }}
+          title={loading ? 'Refreshing…' : 'Refresh data'}
+          className="flex items-center justify-center w-8 h-8 rounded-lg border border-[var(--border)] bg-[var(--canvas)] text-[var(--ink-4)] hover:text-[var(--ink)] hover:border-[var(--border-strong)] disabled:opacity-40 disabled:cursor-not-allowed transition-colors duration-150 shrink-0"
         >
           <svg
             className={loading ? 'animate-spin' : ''}
-            width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"
+            width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"
           >
             {loading
               ? <path d="M21 12a9 9 0 1 1-6.219-8.56"/>
               : <><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/></>
             }
           </svg>
-          <span className="hidden sm:inline">{loading ? 'Refreshing…' : 'Refresh'}</span>
         </button>
       </div>
 
