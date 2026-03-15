@@ -4,7 +4,7 @@ import {
   createContext, useContext, useState, useCallback, useEffect, useRef,
   type ReactNode,
 } from 'react';
-import { fetchPortfolioData, type PortfolioData } from '@/lib/api';
+import { fetchPortfolioData, fetchDividends, type PortfolioData, type DividendsResponse } from '@/lib/api';
 import { useAuth } from '@/lib/AuthContext';
 
 // Interval options in seconds. 0 = manual only.
@@ -26,19 +26,23 @@ interface PortfolioContextValue {
   refresh:              () => Promise<void>;
   autoRefreshInterval:  RefreshInterval;
   setAutoRefreshInterval: (v: RefreshInterval) => void;
-  nextRefreshIn:        number | null;   // seconds until next auto-refresh, null if off
+  nextRefreshIn:        number | null;
+  dividendsData:        DividendsResponse | null;
+  dividendsLoading:     boolean;
 }
 
 const PortfolioContext = createContext<PortfolioContextValue | null>(null);
 
 export function PortfolioProvider({ children }: { children: ReactNode }) {
   const { user, loading: authLoading } = useAuth();
-  const [data,        setData]        = useState<PortfolioData | null>(null);
-  const [loading,     setLoading]     = useState(true);
-  const [error,       setError]       = useState<string | null>(null);
-  const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
+  const [data,             setData]             = useState<PortfolioData | null>(null);
+  const [loading,          setLoading]          = useState(true);
+  const [error,            setError]            = useState<string | null>(null);
+  const [lastUpdated,      setLastUpdated]      = useState<Date | null>(null);
+  const [dividendsData,    setDividendsData]    = useState<DividendsResponse | null>(null);
+  const [dividendsLoading, setDividendsLoading] = useState(true);
   const [autoRefreshInterval, setAutoRefreshInterval] = useState<RefreshInterval>(300);
-  const [nextRefreshIn, setNextRefreshIn] = useState<number | null>(null);
+  const [nextRefreshIn,    setNextRefreshIn]    = useState<number | null>(null);
 
   const fetchedRef    = useRef(false);
   const intervalRef   = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -47,15 +51,27 @@ export function PortfolioProvider({ children }: { children: ReactNode }) {
 
   const refresh = useCallback(async () => {
     setLoading(true);
+    setDividendsLoading(true);
     setError(null);
     try {
-      const d = await fetchPortfolioData();
-      setData(d);
-      setLastUpdated(new Date());
-    } catch (e) {
-      setError(e instanceof Error ? e.message : 'Unknown error');
+      const [portfolioResult, dividendsResult] = await Promise.allSettled([
+        fetchPortfolioData(),
+        fetchDividends(),
+      ]);
+
+      if (portfolioResult.status === 'fulfilled') {
+        setData(portfolioResult.value);
+        setLastUpdated(new Date());
+      } else {
+        setError(portfolioResult.reason instanceof Error ? portfolioResult.reason.message : 'Unknown error');
+      }
+
+      if (dividendsResult.status === 'fulfilled') {
+        setDividendsData(dividendsResult.value);
+      }
     } finally {
       setLoading(false);
+      setDividendsLoading(false);
     }
   }, []);
 
@@ -110,6 +126,7 @@ export function PortfolioProvider({ children }: { children: ReactNode }) {
       data, loading, error, lastUpdated, refresh,
       autoRefreshInterval, setAutoRefreshInterval,
       nextRefreshIn,
+      dividendsData, dividendsLoading,
     }}>
       {children}
     </PortfolioContext.Provider>

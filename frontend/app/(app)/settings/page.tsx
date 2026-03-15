@@ -9,6 +9,7 @@ import {
 } from '@/lib/settingsApi';
 import { fmtNGN, fmtUSD, fmtPct } from '@/lib/formatters';
 import { useAuth } from '@/lib/AuthContext';
+import { usePortfolio } from '@/lib/PortfolioContext';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Tiny reusable primitives
@@ -274,7 +275,8 @@ function AdminInvitePanel({ showToast }: { showToast: (msg: string, type?: 'succ
 }
 
 export default function SettingsPage() {
-  const { user }                = useAuth();
+  const { user }                    = useAuth();
+  const { refresh: refreshPortfolio } = usePortfolio();
   const [tab,      setTab]     = useState<Tab>('active');
   const [holdings, setHoldings] = useState<HoldingRecord[]>([]);
   const [closed,   setClosed]   = useState<ClosedRecord[]>([]);
@@ -484,7 +486,7 @@ export default function SettingsPage() {
       {modal?.type === 'add' && (
         <AddModal
           onClose={() => setModal(null)}
-          onDone={() => { reload(); setModal(null); showToast('Position added'); }}
+          onDone={() => { reload(); refreshPortfolio(); setModal(null); showToast('Position added'); }}
         />
       )}
 
@@ -493,7 +495,7 @@ export default function SettingsPage() {
         <EditModal
           holding={modal.holding}
           onClose={() => setModal(null)}
-          onDone={() => { reload(); setModal(null); showToast('Position updated'); }}
+          onDone={() => { reload(); refreshPortfolio(); setModal(null); showToast('Position updated'); }}
         />
       )}
 
@@ -502,7 +504,7 @@ export default function SettingsPage() {
         <BuyModal
           holding={modal.holding}
           onClose={() => setModal(null)}
-          onDone={() => { reload(); setModal(null); showToast(`Shares added to ${modal.holding.ticker}`); }}
+          onDone={() => { reload(); refreshPortfolio(); setModal(null); showToast(`Shares added to ${modal.holding.ticker}`); }}
         />
       )}
 
@@ -513,6 +515,7 @@ export default function SettingsPage() {
           onClose={() => setModal(null)}
           onDone={(res) => {
             reload();
+            refreshPortfolio();
             setModal(null);
             const pl = res.holding.market === 'ngx' ? fmtNGN(res.realized_pl) : fmtUSD(res.realized_pl);
             showToast(
@@ -544,7 +547,7 @@ export default function SettingsPage() {
                 setBusy(true);
                 try {
                   await deleteHolding(modal.holding.id);
-                  reload(); setModal(null); showToast(`${modal.holding.ticker} deleted`);
+                  reload(); refreshPortfolio(); setModal(null); showToast(`${modal.holding.ticker} deleted`);
                 } catch (e: any) {
                   showToast(e.message, 'error');
                 } finally { setBusy(false); }
