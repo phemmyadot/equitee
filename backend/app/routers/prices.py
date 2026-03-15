@@ -5,19 +5,22 @@ GET /api/prices/ngx   — full NGX equity price table
 GET /api/prices/us    — US stock prices for portfolio holdings
 """
 
-import time
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, Depends, HTTPException
+from sqlalchemy.orm import Session
 
+from app.db.engine import get_db
+from app.db.models import User
+from app.auth.dependencies import get_current_user
 from app.services import ngx as ngx_service
 from app.services import yahoo as yahoo_service
-from app.services.portfolio import load_holdings
+from app.services.portfolio import load_holdings_from_db
 from app.models import NGXPricesResponse, USPricesResponse
 
 router = APIRouter(prefix="/api/prices", tags=["prices"])
 
 
 @router.get("/ngx", response_model=NGXPricesResponse)
-async def get_ngx_prices():
+async def get_ngx_prices(current_user: User = Depends(get_current_user)):
     try:
         prices = ngx_service.get_prices()
         return NGXPricesResponse(
@@ -31,9 +34,12 @@ async def get_ngx_prices():
 
 
 @router.get("/us", response_model=USPricesResponse)
-async def get_us_prices():
+async def get_us_prices(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
     try:
-        holdings = load_holdings()
+        holdings = load_holdings_from_db(db, current_user.id)
         tickers  = [h["ticker"] for h in holdings["us"]]
         prices   = yahoo_service.get_prices(tickers)
         return USPricesResponse(

@@ -5,27 +5,34 @@ GET /api/data       — full portfolio payload (prices + P&L + sectors + KPIs)
 GET /api/dividends  — dividend data for all NGX holdings, enriched with position info
 """
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 from typing import Optional
+from sqlalchemy.orm import Session
 
+from app.db.engine import get_db
+from app.db.models import User
+from app.auth.dependencies import get_current_user
 from app.services import ngx as ngx_service
 from app.services import yahoo as yahoo_service
 from app.services import fx as fx_service
 from app.services import dividends as dividends_service
-from app.services.portfolio import build_portfolio_response, load_holdings
+from app.services.portfolio import build_portfolio_response, load_holdings_from_db
 from app.models import PortfolioDataResponse, DividendInfo
 
 router = APIRouter(prefix="/api", tags=["data"])
 
 
 @router.get("/data", response_model=PortfolioDataResponse)
-async def get_data():
+async def get_data(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
     try:
         fx         = fx_service.get_rate()
         ngx_prices = ngx_service.get_prices()
 
-        holdings   = load_holdings()
+        holdings   = load_holdings_from_db(db, current_user.id)
         us_tickers = [h["ticker"] for h in holdings["us"]]
         us_prices  = yahoo_service.get_prices(us_tickers)
 
@@ -35,6 +42,8 @@ async def get_data():
             fx            = fx,
             ngx_price_age = ngx_service.cache_age(),
             us_price_age  = yahoo_service.cache_age(),
+            db            = db,
+            user_id       = current_user.id,
         )
 
     except Exception as exc:
@@ -50,8 +59,8 @@ class DividendHolding(BaseModel):
     shares:           float
     avg_cost:         float
     dividend:         Optional[DividendInfo] = None
-    projected_payout: Optional[float] = None   # shares × cash_amount
-    yield_on_cost:    Optional[float] = None   # (cash_amount / avg_cost) × 100
+    projected_payout: Optional[float] = None
+    yield_on_cost:    Optional[float] = None
 
 
 class DividendsResponse(BaseModel):
@@ -61,14 +70,12 @@ class DividendsResponse(BaseModel):
 
 
 @router.get("/dividends", response_model=DividendsResponse)
-async def get_dividends():
-    """
-    Return dividend data for all NGX holdings enriched with position size,
-    projected personal payout, and yield-on-cost.
-    Sorted: upcoming dividends first (by pay_date), no-data at bottom.
-    """
+async def get_dividends(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
     try:
-        holdings = load_holdings()
+        holdings = load_holdings_from_db(db, current_user.id)
         ngx      = holdings["ngx"]
         tickers  = [h["ticker"] for h in ngx]
         div_map  = dividends_service.get_dividends(tickers)

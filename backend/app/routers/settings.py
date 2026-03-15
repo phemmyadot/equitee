@@ -19,6 +19,8 @@ from typing import Optional
 from datetime import datetime
 
 from app.db.engine import get_db
+from app.db.models import User
+from app.auth.dependencies import get_current_user
 from app.db.crud import (
     get_all_holdings,
     get_holding_by_id,
@@ -98,12 +100,19 @@ class SellResponse(BaseModel):
 # ── Endpoints ──────────────────────────────────────────────────────────────────
 
 @router.get("/holdings", response_model=list[HoldingOut])
-def list_holdings(db: Session = Depends(get_db)):
-    return get_all_holdings(db)
+def list_holdings(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    return get_all_holdings(db, current_user.id)
 
 
 @router.post("/holdings", response_model=HoldingOut, status_code=201)
-def add_holding(body: CreateHoldingBody, db: Session = Depends(get_db)):
+def add_holding(
+    body: CreateHoldingBody,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
     try:
         return create_holding(
             db,
@@ -113,15 +122,21 @@ def add_holding(body: CreateHoldingBody, db: Session = Depends(get_db)):
             shares   = body.shares,
             avg_cost = body.avg_cost,
             sector   = body.sector,
+            user_id  = current_user.id,
         )
     except Exception as exc:
         raise HTTPException(status_code=400, detail=str(exc))
 
 
 @router.put("/holdings/{holding_id}", response_model=HoldingOut)
-def edit_holding(holding_id: int, body: UpdateHoldingBody, db: Session = Depends(get_db)):
+def edit_holding(
+    holding_id: int,
+    body: UpdateHoldingBody,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
     obj = update_holding(
-        db, holding_id,
+        db, holding_id, current_user.id,
         name     = body.name,
         sector   = body.sector,
         avg_cost = body.avg_cost,
@@ -133,22 +148,36 @@ def edit_holding(holding_id: int, body: UpdateHoldingBody, db: Session = Depends
 
 
 @router.delete("/holdings/{holding_id}", status_code=204)
-def remove_holding(holding_id: int, db: Session = Depends(get_db)):
-    if not delete_holding(db, holding_id):
+def remove_holding(
+    holding_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    if not delete_holding(db, holding_id, current_user.id):
         raise HTTPException(status_code=404, detail="Holding not found")
 
 
 @router.post("/holdings/{holding_id}/buy", response_model=HoldingOut)
-def buy_more(holding_id: int, body: BuyBody, db: Session = Depends(get_db)):
-    obj = add_shares(db, holding_id, new_shares=body.shares, buy_price=body.buy_price)
+def buy_more(
+    holding_id: int,
+    body: BuyBody,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    obj = add_shares(db, holding_id, current_user.id, new_shares=body.shares, buy_price=body.buy_price)
     if obj is None:
         raise HTTPException(status_code=404, detail="Holding not found")
     return obj
 
 
 @router.post("/holdings/{holding_id}/sell", response_model=SellResponse)
-def sell_shares(holding_id: int, body: SellBody, db: Session = Depends(get_db)):
-    holding = get_holding_by_id(db, holding_id)
+def sell_shares(
+    holding_id: int,
+    body: SellBody,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    holding = get_holding_by_id(db, holding_id, current_user.id)
     if holding is None:
         raise HTTPException(status_code=404, detail="Holding not found")
     if body.shares_sold > holding.shares:
@@ -158,7 +187,7 @@ def sell_shares(holding_id: int, body: SellBody, db: Session = Depends(get_db)):
         )
 
     realized_pl  = (body.sale_price - holding.avg_cost) * body.shares_sold
-    obj, closed  = record_sale(db, holding_id, body.shares_sold, body.sale_price)
+    obj, closed  = record_sale(db, holding_id, current_user.id, body.shares_sold, body.sale_price)
 
     return SellResponse(
         holding          = obj,
@@ -169,5 +198,8 @@ def sell_shares(holding_id: int, body: SellBody, db: Session = Depends(get_db)):
 
 
 @router.get("/closed", response_model=list[ClosedOut])
-def list_closed(db: Session = Depends(get_db)):
-    return get_closed_positions(db)
+def list_closed(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    return get_closed_positions(db, current_user.id)

@@ -11,6 +11,8 @@ from pydantic import BaseModel
 from typing import Optional
 
 from app.db.engine import get_db
+from app.db.models import User
+from app.auth.dependencies import get_current_user
 from app.db.crud import get_portfolio_history, get_price_history
 
 router = APIRouter(prefix="/api/history", tags=["history"])
@@ -57,13 +59,14 @@ class PriceHistoryResponse(BaseModel):
 def portfolio_history(
     days: int = Query(default=90, ge=1, le=365, description="Lookback window in days"),
     db:   Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ):
     """
     Returns time-series of portfolio value snapshots.
     Used for the Portfolio Value Over Time line chart.
     """
     try:
-        snaps = get_portfolio_history(db, days=days)
+        snaps = get_portfolio_history(db, days=days, user_id=current_user.id)
         points = [
             PortfolioPoint(
                 ts             = s.ts.isoformat(),
@@ -90,13 +93,14 @@ def price_history(
     ticker: str,
     days:   int = Query(default=90, ge=1, le=365, description="Lookback window in days"),
     db:     Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ):
     """
     Returns price history for a single ticker.
     Used for per-stock sparklines in the holdings tables.
     """
     try:
-        rows = get_price_history(db, ticker=ticker.upper(), days=days)
+        rows = get_price_history(db, ticker=ticker.upper(), days=days, user_id=current_user.id)
         points = [
             PricePoint(
                 ts         = r["ts"],
