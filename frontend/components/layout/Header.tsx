@@ -6,6 +6,7 @@ import { usePathname } from 'next/navigation';
 import clsx from 'clsx';
 import { fmtAge } from '@/lib/formatters';
 import { usePortfolio, REFRESH_INTERVALS, type RefreshInterval } from '@/lib/PortfolioContext';
+import { useAuth } from '@/lib/AuthContext';
 
 interface HeaderProps {
   usdngn?:      number;
@@ -49,6 +50,7 @@ export default function Header({ usdngn, fxSource, lastUpdated, loading, onRefre
   const [now, setNow]  = useState<Date>(new Date());
   const pathname       = usePathname();
   const { autoRefreshInterval, setAutoRefreshInterval, nextRefreshIn } = usePortfolio();
+  const { user, logout } = useAuth();
 
   useEffect(() => {
     const id = setInterval(() => setNow(new Date()), 1000);
@@ -157,6 +159,28 @@ export default function Header({ usdngn, fxSource, lastUpdated, loading, onRefre
             <span className="font-mono text-[10px] font-medium text-[var(--ink-3)] w-7 tabular-nums">
               {fmtCountdown(nextRefreshIn)}
             </span>
+          </div>
+        )}
+
+        <div className="hidden sm:block w-px h-5 bg-[var(--border)] shrink-0" />
+
+        {/* User badge + logout */}
+        {user && (
+          <div className="hidden sm:flex items-center gap-2 shrink-0">
+            <span className="text-[11px] font-semibold text-[var(--ink-3)] max-w-[100px] truncate">
+              {user.username}
+            </span>
+            <button
+              onClick={logout}
+              title="Sign out"
+              className="flex items-center justify-center w-7 h-7 rounded-lg border border-[var(--border)] bg-[var(--canvas)] text-[var(--ink-4)] hover:text-red-500 hover:border-red-200 transition-colors"
+            >
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/>
+                <polyline points="16 17 21 12 16 7"/>
+                <line x1="21" y1="12" x2="9" y2="12"/>
+              </svg>
+            </button>
           </div>
         )}
 

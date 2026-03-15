@@ -5,6 +5,7 @@ import {
   type ReactNode,
 } from 'react';
 import { fetchPortfolioData, type PortfolioData } from '@/lib/api';
+import { useAuth } from '@/lib/AuthContext';
 
 // Interval options in seconds. 0 = manual only.
 export const REFRESH_INTERVALS = [
@@ -31,6 +32,7 @@ interface PortfolioContextValue {
 const PortfolioContext = createContext<PortfolioContextValue | null>(null);
 
 export function PortfolioProvider({ children }: { children: ReactNode }) {
+  const { user, loading: authLoading } = useAuth();
   const [data,        setData]        = useState<PortfolioData | null>(null);
   const [loading,     setLoading]     = useState(true);
   const [error,       setError]       = useState<string | null>(null);
@@ -95,13 +97,13 @@ export function PortfolioProvider({ children }: { children: ReactNode }) {
     };
   }, [autoRefreshInterval, refresh, startCountdown]);
 
-  // ── Initial fetch ──────────────────────────────────────────────────────────
+  // ── Initial fetch (only when authenticated) ────────────────────────────────
   useEffect(() => {
-    if (!fetchedRef.current) {
+    if (!authLoading && user && !fetchedRef.current) {
       fetchedRef.current = true;
       refresh();
     }
-  }, [refresh]);
+  }, [authLoading, user, refresh]);
 
   return (
     <PortfolioContext.Provider value={{

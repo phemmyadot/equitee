@@ -134,8 +134,23 @@ export interface PortfolioData {
 
 // ── Fetch helpers ─────────────────────────────────────────────────────────────
 
+async function tryRefresh(): Promise<boolean> {
+  const r = await fetch('/api/auth/refresh', { method: 'POST' });
+  return r.ok;
+}
+
 async function get<T>(path: string): Promise<T> {
-  const res = await fetch(`${BASE}${path}`, { cache: 'no-store' });
+  let res = await fetch(`${BASE}${path}`, { cache: 'no-store' });
+
+  if (res.status === 401) {
+    const refreshed = await tryRefresh();
+    if (!refreshed) {
+      window.location.href = '/login';
+      throw new Error('Session expired');
+    }
+    res = await fetch(`${BASE}${path}`, { cache: 'no-store' });
+  }
+
   if (!res.ok) {
     const err = await res.json().catch(() => ({}));
     throw new Error((err as { detail?: string }).detail ?? res.statusText);
