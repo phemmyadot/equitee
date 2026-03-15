@@ -23,8 +23,8 @@
   --ink-4:       #9CA3AF;
 
   /* Accent */
-  --accent:      #1A56DB;
-  --accent-light:#EBF0FD;
+  --accent:      #1DB87A;
+  --accent-light:#E6F7F0;
 
   /* Semantic */
   --gain:        #0A7B44;
@@ -204,7 +204,7 @@ body {
   font-size: 11px;
   color: var(--ink-3);
   background: var(--accent-light);
-  border: 1px solid #C3D5F8;
+  border: 1px solid #B7E5CE;
   border-radius: 6px;
   padding: 8px 14px;
   letter-spacing: 0.02em;

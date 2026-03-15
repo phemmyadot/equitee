@@ -96,14 +96,9 @@ export default function Header({ usdngn, fxSource, lastUpdated, loading, onRefre
       >
         {/* Logo */}
         <Link href="/ngx" className="flex items-center gap-2.5 shrink-0 group">
-          <div className="w-7 h-7 rounded-[8px] bg-[var(--accent)] flex items-center justify-center shrink-0"
-               style={{ boxShadow: '0 2px 8px rgba(26,86,219,0.3)' }}>
-            <svg width="13" height="13" viewBox="0 0 14 14" fill="none">
-              <path d="M2 10L5.5 6.5L8 9L12 4" stroke="white" strokeWidth="2.1" strokeLinecap="round" strokeLinejoin="round"/>
-            </svg>
-          </div>
-          <span className="font-bold text-[13px] text-[var(--ink)] tracking-tight">
-            Portfolio<span className="hidden sm:inline font-normal text-[var(--ink-4)]"> Analyzer</span>
+          <img src="/equitee-icon-navy.svg" alt="equitee" width={28} height={28} className="rounded-[8px] shrink-0" style={{ boxShadow: '0 2px 8px rgba(29,184,122,0.25)' }} />
+          <span className="font-bold text-[13px] tracking-tight text-[var(--ink)]">
+            equite<span style={{ color: '#1DB87A' }}>e</span>
           </span>
         </Link>
 
@@ -187,8 +182,7 @@ export default function Header({ usdngn, fxSource, lastUpdated, loading, onRefre
               </span>
               <button
                 onClick={logout}
-                className="flex items-center gap-1.5 h-8 px-3 rounded-lg bg-[var(--loss)] text-white text-[11px] font-semibold hover:bg-red-700 transition-colors shrink-0"
-                style={{ boxShadow: '0 1px 3px rgba(190,27,27,0.25)' }}
+                className="flex items-center gap-1.5 h-8 px-3 rounded-lg bg-[var(--loss-light)] text-[var(--loss)] text-[11px] font-semibold hover:bg-red-100 transition-colors shrink-0"
               >
                 {LOGOUT_ICON}
                 <span className="hidden lg:inline">Sign out</span>
@@ -203,7 +197,7 @@ export default function Header({ usdngn, fxSource, lastUpdated, loading, onRefre
               <button
                 onClick={logout}
                 title="Sign out"
-                className="flex items-center justify-center w-7 h-7 rounded-lg bg-[var(--loss)] text-white hover:bg-red-700 transition-colors"
+                className="flex items-center justify-center w-7 h-7 rounded-lg bg-[var(--loss-light)] text-[var(--loss)] hover:bg-red-100 transition-colors"
               >
                 {LOGOUT_ICON}
               </button>
