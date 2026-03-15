@@ -8,6 +8,7 @@ import {
   type HoldingRecord, type ClosedRecord, type SellResult,
 } from '@/lib/settingsApi';
 import { fmtNGN, fmtUSD, fmtPct } from '@/lib/formatters';
+import { useAuth } from '@/lib/AuthContext';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Tiny reusable primitives
@@ -144,7 +145,128 @@ type ModalState =
 
 type Tab = 'active' | 'closed';
 
+// ─────────────────────────────────────────────────────────────────────────────
+// Invite code types
+// ─────────────────────────────────────────────────────────────────────────────
+
+interface InviteCode {
+  code:       string;
+  created_at: string;
+  used_by:    number | null;
+  used_at:    string | null;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Admin invite panel
+// ─────────────────────────────────────────────────────────────────────────────
+
+function AdminInvitePanel({ showToast }: { showToast: (msg: string, type?: 'success' | 'error') => void }) {
+  const [invites, setInvites]   = useState<InviteCode[]>([]);
+  const [loading, setLoading]   = useState(false);
+  const [genBusy, setGenBusy]   = useState(false);
+  const [copied,  setCopied]    = useState<string | null>(null);
+
+  const loadInvites = useCallback(async () => {
+    setLoading(true);
+    try {
+      const res = await fetch('/api/auth/invites');
+      if (res.ok) setInvites(await res.json());
+    } finally { setLoading(false); }
+  }, []);
+
+  useEffect(() => { loadInvites(); }, [loadInvites]);
+
+  const generate = async () => {
+    setGenBusy(true);
+    try {
+      const res = await fetch('/api/auth/invite', { method: 'POST' });
+      if (!res.ok) throw new Error((await res.json()).detail ?? 'Failed');
+      const data = await res.json();
+      setInvites(prev => [data, ...prev]);
+      showToast(`Invite code created: ${data.code}`);
+    } catch (e: any) {
+      showToast(e.message, 'error');
+    } finally { setGenBusy(false); }
+  };
+
+  const copy = (code: string) => {
+    navigator.clipboard.writeText(code);
+    setCopied(code);
+    setTimeout(() => setCopied(null), 2000);
+  };
+
+  return (
+    <div className="card p-5 space-y-4">
+      <div className="flex items-center justify-between">
+        <div>
+          <h2 className="text-[13px] font-semibold text-[var(--ink)]">Invite Codes</h2>
+          <p className="text-[11px] text-[var(--ink-4)] mt-0.5">Generate codes for new users to register</p>
+        </div>
+        <Btn variant="primary" size="sm" loading={genBusy} onClick={generate}>
+          <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+            <line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>
+          </svg>
+          Generate
+        </Btn>
+      </div>
+
+      {loading ? (
+        <p className="text-[11px] text-[var(--ink-4)]">Loading…</p>
+      ) : invites.length === 0 ? (
+        <p className="text-[11px] text-[var(--ink-4)]">No invite codes yet.</p>
+      ) : (
+        <div className="overflow-x-auto">
+          <table className="data-table">
+            <thead>
+              <tr>
+                <th>Code</th>
+                <th>Created</th>
+                <th>Status</th>
+                <th className="right">Copy</th>
+              </tr>
+            </thead>
+            <tbody>
+              {invites.map(inv => (
+                <tr key={inv.code}>
+                  <td>
+                    <span className="font-mono font-semibold text-[11px] tracking-widest text-[var(--ink)]">
+                      {inv.code}
+                    </span>
+                  </td>
+                  <td className="text-[var(--ink-4)] font-mono text-[11px]">
+                    {new Date(inv.created_at).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })}
+                  </td>
+                  <td>
+                    {inv.used_by ? (
+                      <span className="badge badge-nodata">Used</span>
+                    ) : (
+                      <span className="badge badge-live">Available</span>
+                    )}
+                  </td>
+                  <td className="right">
+                    {!inv.used_by && (
+                      <Btn size="xs" variant="ghost" onClick={() => copy(inv.code)}>
+                        {copied === inv.code ? (
+                          <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><polyline points="20 6 9 17 4 12"/></svg>
+                        ) : (
+                          <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+                        )}
+                        {copied === inv.code ? 'Copied!' : 'Copy'}
+                      </Btn>
+                    )}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </div>
+  );
+}
+
 export default function SettingsPage() {
+  const { user }                = useAuth();
   const [tab,      setTab]     = useState<Tab>('active');
   const [holdings, setHoldings] = useState<HoldingRecord[]>([]);
   const [closed,   setClosed]   = useState<ClosedRecord[]>([]);
@@ -162,10 +284,10 @@ export default function SettingsPage() {
 
   useEffect(() => { reload(); }, [reload]);
 
-  const showToast = (message: string, type: 'success' | 'error' = 'success') => {
+  const showToast = useCallback((message: string, type: 'success' | 'error' = 'success') => {
     setToast({ message, type });
     setTimeout(() => setToast(null), 3000);
-  };
+  }, []);
 
   // ── Filtered active holdings ───────────────────────────────────────────────
   const active = holdings.filter(h =>
@@ -177,6 +299,9 @@ export default function SettingsPage() {
 
   return (
     <div className="space-y-5">
+
+      {/* ── Admin: invite codes ── */}
+      {user?.is_admin && <AdminInvitePanel showToast={showToast} />}
 
       {/* ── Page header ── */}
       <div className="flex items-center justify-between">
