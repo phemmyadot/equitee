@@ -14,7 +14,6 @@ from typing import Any, Optional
 
 from sqlalchemy.orm import Session
 
-from app.db.engine import SessionLocal
 from app.db.crud import (
     get_active_holdings,
     get_closed_positions,
@@ -54,13 +53,13 @@ def _sum(rows: list[StockRow], key: str) -> float:
 # Data loader — DB-backed
 # ══════════════════════════════════════════════════════════════════════════════
 
-def load_holdings_from_db(db: Session) -> dict:
+def load_holdings_from_db(db: Session, user_id: int) -> dict:
     """
-    Return holdings dict in the same shape the rest of the service expects:
+    Return holdings dict scoped to user in the shape the rest of the service expects:
       { "ngx": [...], "us": [...], "sold": [...] }
     """
-    ngx  = [h.to_dict() for h in get_active_holdings(db, "ngx")]
-    us   = [h.to_dict() for h in get_active_holdings(db, "us")]
+    ngx  = [h.to_dict() for h in get_active_holdings(db, "ngx", user_id)]
+    us   = [h.to_dict() for h in get_active_holdings(db, "us",  user_id)]
     sold = [
         {
             "ticker":      c.ticker,
@@ -68,19 +67,9 @@ def load_holdings_from_db(db: Session) -> dict:
             "market":      c.market,
             "realized_pl": c.realized_pl,
         }
-        for c in get_closed_positions(db)
+        for c in get_closed_positions(db, user_id)
     ]
     return {"ngx": ngx, "us": us, "sold": sold}
-
-
-# Legacy shim — still used by routers/data.py for the us_tickers extraction.
-# Reads from DB so it no longer touches portfolio.json.
-def load_holdings() -> dict:
-    db = SessionLocal()
-    try:
-        return load_holdings_from_db(db)
-    finally:
-        db.close()
 
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -174,70 +163,68 @@ def compute_hhi(stocks: list[StockRow]) -> float:
 # ══════════════════════════════════════════════════════════════════════════════
 
 def build_portfolio_response(
-    ngx_prices: dict,
-    us_prices:  dict,
-    fx:         dict,
+    ngx_prices:    dict,
+    us_prices:     dict,
+    fx:            dict,
     ngx_price_age: Optional[int],
     us_price_age:  Optional[int],
+    db:            Session,
+    user_id:       int,
 ) -> PortfolioDataResponse:
 
-    db       = SessionLocal()
     usdngn   = fx["rate"]
+    holdings = load_holdings_from_db(db, user_id)
 
-    try:
-        holdings   = load_holdings_from_db(db)
-        ngx_stocks = build_stock_rows(holdings["ngx"], ngx_prices, "ngx-api")
-        us_stocks  = build_stock_rows(holdings["us"],  us_prices,  "yahoo")
+    ngx_stocks = build_stock_rows(holdings["ngx"], ngx_prices, "ngx-api")
+    us_stocks  = build_stock_rows(holdings["us"],  us_prices,  "yahoo")
 
-        sold = [
-            SoldRow(
-                Stock      = s["name"],
-                Ticker     = s["ticker"],
-                Market     = s["market"].upper(),
-                RealizedPL = float(s["realized_pl"]),
-            )
-            for s in holdings.get("sold", [])
+    sold = [
+        SoldRow(
+            Stock      = s["name"],
+            Ticker     = s["ticker"],
+            Market     = s["market"].upper(),
+            RealizedPL = float(s["realized_pl"]),
+        )
+        for s in holdings.get("sold", [])
+    ]
+    ngx_realized = sum(s.RealizedPL for s in sold if s.Market == "NGX")
+
+    # ── KPIs ─────────────────────────────────────────────────────────────────
+    ngx_equity = _sum(ngx_stocks, "CurrentEquity")
+    ngx_cost   = _sum(ngx_stocks, "RemainingCost")
+    ngx_unreal = _sum(ngx_stocks, "UnrealizedPL")
+    ngx_ret    = (ngx_unreal / ngx_cost * 100) if ngx_cost else 0
+
+    us_equity  = _sum(us_stocks, "CurrentEquity")
+    us_cost    = _sum(us_stocks, "RemainingCost")
+    us_unreal  = _sum(us_stocks, "UnrealizedPL")
+    us_ret     = (us_unreal / us_cost * 100) if us_cost else 0
+
+    ngx_usd    = ngx_equity / usdngn if usdngn else 0
+    total_usd  = ngx_usd + us_equity
+
+    # ── Snapshot (write at most once per NGX_PRICE_TTL seconds per user) ─────
+    if should_write_snapshot(db, settings.NGX_PRICE_TTL, user_id):
+        price_rows = [
+            {"ticker": s.Ticker, "market": "ngx",
+             "price": s.LivePrice, "change_pct": s.LiveChangePct}
+            for s in ngx_stocks
+        ] + [
+            {"ticker": s.Ticker, "market": "us",
+             "price": s.LivePrice, "change_pct": s.LiveChangePct}
+            for s in us_stocks
         ]
-        ngx_realized = sum(s.RealizedPL for s in sold if s.Market == "NGX")
-
-        # ── KPIs ─────────────────────────────────────────────────────────────
-        ngx_equity = _sum(ngx_stocks, "CurrentEquity")
-        ngx_cost   = _sum(ngx_stocks, "RemainingCost")
-        ngx_unreal = _sum(ngx_stocks, "UnrealizedPL")
-        ngx_ret    = (ngx_unreal / ngx_cost * 100) if ngx_cost else 0
-
-        us_equity  = _sum(us_stocks, "CurrentEquity")
-        us_cost    = _sum(us_stocks, "RemainingCost")
-        us_unreal  = _sum(us_stocks, "UnrealizedPL")
-        us_ret     = (us_unreal / us_cost * 100) if us_cost else 0
-
-        ngx_usd    = ngx_equity / usdngn if usdngn else 0
-        total_usd  = ngx_usd + us_equity
-
-        # ── Snapshot (write at most once per NGX_PRICE_TTL seconds) ──────────
-        if should_write_snapshot(db, settings.NGX_PRICE_TTL):
-            price_rows = [
-                {"ticker": s.Ticker, "market": "ngx",
-                 "price": s.LivePrice, "change_pct": s.LiveChangePct}
-                for s in ngx_stocks
-            ] + [
-                {"ticker": s.Ticker, "market": "us",
-                 "price": s.LivePrice, "change_pct": s.LiveChangePct}
-                for s in us_stocks
-            ]
-            write_snapshot(
-                db,
-                ngx_equity = ngx_equity,
-                ngx_cost   = ngx_cost,
-                us_equity  = us_equity,
-                us_cost    = us_cost,
-                usdngn     = usdngn,
-                total_usd  = total_usd,
-                price_rows = price_rows,
-            )
-
-    finally:
-        db.close()
+        write_snapshot(
+            db,
+            user_id    = user_id,
+            ngx_equity = ngx_equity,
+            ngx_cost   = ngx_cost,
+            us_equity  = us_equity,
+            us_cost    = us_cost,
+            usdngn     = usdngn,
+            total_usd  = total_usd,
+            price_rows = price_rows,
+        )
 
     # ── HHI ──────────────────────────────────────────────────────────────────
     hhi       = compute_hhi(ngx_stocks)

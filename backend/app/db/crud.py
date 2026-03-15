@@ -20,27 +20,29 @@ log = logging.getLogger(__name__)
 
 # ── Holdings ──────────────────────────────────────────────────────────────────
 
-def get_active_holdings(db: Session, market: str) -> list[Holding]:
-    """Return all active holdings for a given market ('ngx' or 'us')."""
+def get_active_holdings(db: Session, market: str, user_id: int) -> list[Holding]:
+    """Return all active holdings for a given market ('ngx' or 'us') scoped to user."""
     stmt = (
         select(Holding)
-        .where(Holding.market == market, Holding.is_active == True)
+        .where(Holding.user_id == user_id, Holding.market == market, Holding.is_active == True)
         .order_by(Holding.ticker)
     )
     return list(db.scalars(stmt).all())
 
 
-def get_all_active_holdings(db: Session) -> list[Holding]:
-    stmt = select(Holding).where(Holding.is_active == True).order_by(Holding.market, Holding.ticker)
+def get_all_active_holdings(db: Session, user_id: int) -> list[Holding]:
+    stmt = (select(Holding)
+            .where(Holding.user_id == user_id, Holding.is_active == True)
+            .order_by(Holding.market, Holding.ticker))
     return list(db.scalars(stmt).all())
 
 
-def upsert_holding(db: Session, ticker: str, market: str, **kwargs) -> Holding:
-    """Update existing holding or insert a new one."""
-    stmt = select(Holding).where(Holding.ticker == ticker, Holding.market == market)
+def upsert_holding(db: Session, ticker: str, market: str, user_id: int, **kwargs) -> Holding:
+    """Update existing holding or insert a new one, scoped to user."""
+    stmt = select(Holding).where(Holding.ticker == ticker, Holding.market == market, Holding.user_id == user_id)
     obj  = db.scalars(stmt).first()
     if obj is None:
-        obj = Holding(ticker=ticker, market=market, **kwargs)
+        obj = Holding(ticker=ticker, market=market, user_id=user_id, **kwargs)
         db.add(obj)
     else:
         for k, v in kwargs.items():
@@ -52,15 +54,19 @@ def upsert_holding(db: Session, ticker: str, market: str, **kwargs) -> Holding:
 
 # ── Holdings — settings CRUD ──────────────────────────────────────────────────
 
-def get_holding_by_id(db: Session, holding_id: int) -> Optional[Holding]:
-    return db.get(Holding, holding_id)
+def get_holding_by_id(db: Session, holding_id: int, user_id: int) -> Optional[Holding]:
+    obj = db.get(Holding, holding_id)
+    if obj is None or obj.user_id != user_id:
+        return None
+    return obj
 
 
 def create_holding(
     db: Session, ticker: str, name: str, market: str,
-    shares: float, avg_cost: float, sector: str,
+    shares: float, avg_cost: float, sector: str, user_id: int,
 ) -> Holding:
     obj = Holding(
+        user_id   = user_id,
         ticker    = ticker.upper(),
         name      = name,
         market    = market.lower(),
@@ -72,18 +78,18 @@ def create_holding(
     db.add(obj)
     db.commit()
     db.refresh(obj)
-    log.info("Created holding %s (%s)", obj.ticker, obj.market)
+    log.info("Created holding %s (%s) for user_id=%d", obj.ticker, obj.market, user_id)
     return obj
 
 
 def update_holding(
-    db: Session, holding_id: int,
-    name: Optional[str]     = None,
-    sector: Optional[str]   = None,
+    db: Session, holding_id: int, user_id: int,
+    name: Optional[str]       = None,
+    sector: Optional[str]     = None,
     avg_cost: Optional[float] = None,
     shares: Optional[float]   = None,
 ) -> Optional[Holding]:
-    obj = db.get(Holding, holding_id)
+    obj = get_holding_by_id(db, holding_id, user_id)
     if obj is None:
         return None
     if name     is not None: obj.name     = name
@@ -95,9 +101,9 @@ def update_holding(
     return obj
 
 
-def delete_holding(db: Session, holding_id: int) -> bool:
-    """Hard delete — removes all DB rows for this holding."""
-    obj = db.get(Holding, holding_id)
+def delete_holding(db: Session, holding_id: int, user_id: int) -> bool:
+    """Hard delete — removes all DB rows for this holding, scoped to user."""
+    obj = get_holding_by_id(db, holding_id, user_id)
     if obj is None:
         return False
     db.delete(obj)
@@ -107,14 +113,11 @@ def delete_holding(db: Session, holding_id: int) -> bool:
 
 
 def add_shares(
-    db: Session, holding_id: int,
+    db: Session, holding_id: int, user_id: int,
     new_shares: float, buy_price: float,
 ) -> Optional[Holding]:
-    """
-    Buy more of an existing position.
-    Recalculates weighted avg_cost and adds to share count.
-    """
-    obj = db.get(Holding, holding_id)
+    """Buy more of an existing position, scoped to user."""
+    obj = get_holding_by_id(db, holding_id, user_id)
     if obj is None:
         return None
     old_cost_basis  = obj.shares * obj.avg_cost
@@ -131,22 +134,18 @@ def add_shares(
 
 
 def record_sale(
-    db: Session, holding_id: int,
+    db: Session, holding_id: int, user_id: int,
     shares_sold: float, sale_price: float,
 ) -> tuple[Optional[Holding], Optional[ClosedPosition]]:
     """
-    Sell shares_sold units at sale_price.
-    - Computes realized P&L = (sale_price - avg_cost) * shares_sold
-    - Reduces holding.shares by shares_sold
-    - If shares reach 0, marks holding is_active=False and creates ClosedPosition
-    - If partial sale, holding stays active with reduced share count
+    Sell shares_sold units at sale_price, scoped to user.
     Returns (updated_holding, closed_position_or_None)
     """
-    obj = db.get(Holding, holding_id)
+    obj = get_holding_by_id(db, holding_id, user_id)
     if obj is None:
         return None, None
 
-    shares_sold  = min(shares_sold, obj.shares)   # can't sell more than held
+    shares_sold  = min(shares_sold, obj.shares)
     realized_pl  = (sale_price - obj.avg_cost) * shares_sold
     obj.shares   = round(obj.shares - shares_sold, 8)
 
@@ -155,6 +154,7 @@ def record_sale(
         obj.shares    = 0.0
         obj.is_active = False
         closed = ClosedPosition(
+            user_id     = user_id,
             ticker      = obj.ticker,
             name        = obj.name,
             market      = obj.market,
@@ -175,20 +175,24 @@ def record_sale(
 
 # ── Closed positions — settings read ─────────────────────────────────────────
 
-def get_all_holdings(db: Session) -> list[Holding]:
-    """Return ALL holdings (active + inactive) for the settings page."""
-    stmt = select(Holding).order_by(Holding.market, Holding.ticker)
+def get_all_holdings(db: Session, user_id: int) -> list[Holding]:
+    """Return ALL holdings (active + inactive) for the settings page, scoped to user."""
+    stmt = (select(Holding)
+            .where(Holding.user_id == user_id)
+            .order_by(Holding.market, Holding.ticker))
     return list(db.scalars(stmt).all())
 
 
-def get_closed_positions(db: Session) -> list[ClosedPosition]:
-    stmt = select(ClosedPosition).order_by(desc(ClosedPosition.closed_at))
+def get_closed_positions(db: Session, user_id: int) -> list[ClosedPosition]:
+    stmt = (select(ClosedPosition)
+            .where(ClosedPosition.user_id == user_id)
+            .order_by(desc(ClosedPosition.closed_at)))
     return list(db.scalars(stmt).all())
 
 
 def insert_closed_position(db: Session, ticker: str, name: str,
-                            market: str, realized_pl: float) -> ClosedPosition:
-    obj = ClosedPosition(ticker=ticker, name=name, market=market, realized_pl=realized_pl)
+                            market: str, realized_pl: float, user_id: int) -> ClosedPosition:
+    obj = ClosedPosition(user_id=user_id, ticker=ticker, name=name, market=market, realized_pl=realized_pl)
     db.add(obj)
     db.commit()
     db.refresh(obj)
@@ -197,21 +201,19 @@ def insert_closed_position(db: Session, ticker: str, name: str,
 
 # ── Snapshots ─────────────────────────────────────────────────────────────────
 
-def get_latest_snapshot_ts(db: Session) -> Optional[datetime]:
-    """Return timestamp of the most recent snapshot, or None."""
-    stmt = select(PortfolioSnapshot.ts).order_by(desc(PortfolioSnapshot.ts)).limit(1)
+def get_latest_snapshot_ts(db: Session, user_id: int) -> Optional[datetime]:
+    """Return timestamp of the most recent snapshot for a user, or None."""
+    stmt = (select(PortfolioSnapshot.ts)
+            .where(PortfolioSnapshot.user_id == user_id)
+            .order_by(desc(PortfolioSnapshot.ts)).limit(1))
     return db.scalars(stmt).first()
 
 
-def should_write_snapshot(db: Session, ttl_seconds: int) -> bool:
-    """
-    Return True if no snapshot exists, or the most recent one is older than ttl_seconds.
-    Prevents writing a new snapshot on every single API call.
-    """
-    latest = get_latest_snapshot_ts(db)
+def should_write_snapshot(db: Session, ttl_seconds: int, user_id: int) -> bool:
+    """Return True if no snapshot exists for this user, or the most recent is older than ttl_seconds."""
+    latest = get_latest_snapshot_ts(db, user_id)
     if latest is None:
         return True
-    # Make latest tz-aware if needed
     if latest.tzinfo is None:
         latest = latest.replace(tzinfo=timezone.utc)
     age = (datetime.now(timezone.utc) - latest).total_seconds()
@@ -220,18 +222,18 @@ def should_write_snapshot(db: Session, ttl_seconds: int) -> bool:
 
 def write_snapshot(
     db:            Session,
+    user_id:       int,
     ngx_equity:    float,
     ngx_cost:      float,
     us_equity:     float,
     us_cost:       float,
     usdngn:        float,
     total_usd:     float,
-    price_rows:    list[dict],          # [{"ticker", "market", "price", "change_pct"}]
+    price_rows:    list[dict],
 ) -> PortfolioSnapshot:
-    """
-    Insert a new portfolio snapshot and all per-ticker price rows atomically.
-    """
+    """Insert a new portfolio snapshot and all per-ticker price rows atomically."""
     snap = PortfolioSnapshot(
+        user_id        = user_id,
         ts             = datetime.now(timezone.utc),
         ngx_equity_ngn = round(ngx_equity, 2),
         ngx_cost_ngn   = round(ngx_cost,   2),
@@ -241,7 +243,7 @@ def write_snapshot(
         total_usd      = round(total_usd,  4),
     )
     db.add(snap)
-    db.flush()   # get snap.id before committing
+    db.flush()
 
     for row in price_rows:
         db.add(PriceHistory(
@@ -253,30 +255,31 @@ def write_snapshot(
         ))
 
     db.commit()
-    log.info("Snapshot #%d written (%d prices)", snap.id, len(price_rows))
+    log.info("Snapshot #%d written for user_id=%d (%d prices)", snap.id, user_id, len(price_rows))
     return snap
 
 
 # ── History queries ───────────────────────────────────────────────────────────
 
-def get_portfolio_history(db: Session, days: int = 90) -> list[PortfolioSnapshot]:
-    """Return snapshots for the last N days, oldest first."""
+def get_portfolio_history(db: Session, days: int, user_id: int) -> list[PortfolioSnapshot]:
+    """Return snapshots for the last N days for a user, oldest first."""
     since = datetime.now(timezone.utc) - timedelta(days=days)
     stmt  = (
         select(PortfolioSnapshot)
-        .where(PortfolioSnapshot.ts >= since)
+        .where(PortfolioSnapshot.user_id == user_id, PortfolioSnapshot.ts >= since)
         .order_by(PortfolioSnapshot.ts)
     )
     return list(db.scalars(stmt).all())
 
 
-def get_price_history(db: Session, ticker: str, days: int = 90) -> list[dict]:
-    """Return price history for a single ticker, oldest first."""
+def get_price_history(db: Session, ticker: str, days: int, user_id: int) -> list[dict]:
+    """Return price history for a single ticker for a user, oldest first."""
     since = datetime.now(timezone.utc) - timedelta(days=days)
     stmt  = (
         select(PriceHistory, PortfolioSnapshot.ts)
         .join(PortfolioSnapshot, PriceHistory.snapshot_id == PortfolioSnapshot.id)
         .where(
+            PortfolioSnapshot.user_id == user_id,
             PriceHistory.ticker == ticker.upper(),
             PortfolioSnapshot.ts >= since,
         )
