@@ -5,6 +5,7 @@ in app/models.py which are the API response contracts.
 """
 
 from datetime import datetime, timezone
+from typing import Optional
 from sqlalchemy import (
     Integer, String, Float, Boolean,
     DateTime, ForeignKey, Index,
@@ -63,8 +64,8 @@ class InviteCode(Base):
     id:         Mapped[int]            = mapped_column(Integer, primary_key=True, autoincrement=True)
     code:       Mapped[str]            = mapped_column(String, nullable=False, unique=True)
     created_by: Mapped[int]            = mapped_column(Integer, ForeignKey("users.id"), nullable=False)
-    used_by:    Mapped[int | None]     = mapped_column(Integer, ForeignKey("users.id"), nullable=True)
-    used_at:    Mapped[datetime | None]= mapped_column(DateTime(timezone=True), nullable=True)
+    used_by    = mapped_column(Integer, ForeignKey("users.id"), nullable=True)
+    used_at    = mapped_column(DateTime(timezone=True), nullable=True)
     created_at: Mapped[datetime]       = mapped_column(DateTime(timezone=True), default=_now)
 
     __table_args__ = (
