@@ -1,7 +1,7 @@
 """
 Profile Service
 ===============
-Extracts company profile information from SOURCE_BASE_URL
+Extracts company profile information from NGX_SOURCE_BASE_URL
 
 Returns company name, sector, industry, headquarters, description, etc.
 """
@@ -36,7 +36,7 @@ def _get_soup(url: str) -> Optional[BeautifulSoup]:
 
 def _scrape_profile(ticker: str) -> Optional[Dict]:
     """Scrape profile data from the company page"""
-    url = f"{settings.SOURCE_BASE_URL}/quote/ngx/{ticker.lower()}/company/"
+    url = f"{settings.NGX_SOURCE_BASE_URL}/quote/ngx/{ticker.lower()}/company/"
     
     soup = _get_soup(url)
     if not soup:

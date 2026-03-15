@@ -1,7 +1,7 @@
-type Source = 'stockanalysis' | 'yahoo' | 'no-data' | string;
+type Source = 'ngx' | 'yahoo' | 'no-data' | string;
 
 export default function SourceBadge({ source }: { source: Source }) {
-  if (source === 'stockanalysis') {
+  if (source === 'ngx') {
     return (
       <span className="badge badge-live">
         <span className="w-1.5 h-1.5 rounded-full bg-[var(--gain)] inline-block" />

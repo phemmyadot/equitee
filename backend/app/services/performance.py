@@ -1,7 +1,7 @@
 """
 Overview Service
 ================
-Extracts fundamental data and overview metrics from SOURCE_BASE_URL
+Extracts fundamental data and overview metrics from NGX_SOURCE_BASE_URL
 
 Returns PE ratio, earnings, book value, ROE, dividend yield, market cap, etc.
 """
@@ -36,7 +36,7 @@ def _get_soup(url: str) -> Optional[BeautifulSoup]:
 
 def _scrape_overview(ticker: str) -> Optional[Dict]:
     """Scrape fundamental data from the statistics page."""
-    url = f"{settings.SOURCE_BASE_URL}/quote/ngx/{ticker.lower()}/statistics/"
+    url = f"{settings.NGX_SOURCE_BASE_URL}/quote/ngx/{ticker.lower()}/statistics/"
     
     soup = _get_soup(url)
     if not soup:
