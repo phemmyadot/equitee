@@ -10,6 +10,7 @@ Run:
 import logging
 from contextlib import asynccontextmanager
 
+from typing import cast, Callable, Any
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from slowapi import _rate_limit_exceeded_handler
@@ -80,7 +81,7 @@ app = FastAPI(
 )
 
 app.state.limiter = limiter
-app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
+app.add_exception_handler(RateLimitExceeded, cast(Callable[[Any, Any], Any], _rate_limit_exceeded_handler))
 
 # ── CORS ─────────────────────────────────────────────────────────────────────
 app.add_middleware(
