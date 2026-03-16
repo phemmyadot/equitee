@@ -200,7 +200,7 @@ def sell_shares(
         holding          = HoldingOut.model_validate(obj),
         realized_pl      = round(realized_pl, 4),
         fully_closed     = not obj.is_active,
-        closed_position  = closed,
+        closed_position  = ClosedOut.model_validate(closed) if closed is not None else None,
     )
 
 

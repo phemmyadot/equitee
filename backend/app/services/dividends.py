@@ -23,6 +23,7 @@ try:
 except ImportError:
     HAS_BEAUTIFULSOUP = False
     import urllib.request
+    import urllib.error
 
 from app.config import settings
 from app.models import DividendInfo
@@ -79,7 +80,7 @@ def _fetch_dividend_beautifulsoup(ticker: str) -> Optional[DividendInfo]:
         response = requests.get(url, headers=headers, timeout=10)
         response.raise_for_status()
         
-        soup = BeautifulSoup(response.content, 'html.parser')
+        soup = BeautifulSoup(response.text, 'html.parser')
         tables = soup.find_all('table')
         
         for table in tables:
