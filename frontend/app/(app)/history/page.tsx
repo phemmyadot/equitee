@@ -1,15 +1,15 @@
 'use client';
 
 import { useState } from 'react';
-import { usePortfolioHistory } from '@/lib/useHistory';
-import { usePortfolio }        from '@/lib/PortfolioContext';
+import { usePortfolioHistory } from '@/hooks/useHistory';
+import { usePortfolio }        from '@/context/PortfolioContext';
 import KPICard                 from '@/components/ui/KPICard';
 import ChartCard               from '@/components/ui/ChartCard';
 import { ChartSkeleton }       from '@/components/ui/Feedback';
 import PlotlyChart             from '@/components/charts/PlotlyChart';
 import { plotlyLayout, COLORS, sectorColor } from '@/lib/theme';
 import { fmtUSD, fmtNGN, fmtPct, isPositive } from '@/lib/formatters';
-import type { PortfolioPoint } from '@/lib/api';
+import type { PortfolioPoint } from '@/services/api';
 import { IconChartHistory } from '@/components/ui/icons';
 
 const DAY_OPTIONS = [

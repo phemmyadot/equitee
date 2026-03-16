@@ -1,7 +1,7 @@
 'use client';
 
 import Link               from 'next/link';
-import { usePortfolio } from '@/lib/PortfolioContext';
+import { usePortfolio } from '@/context/PortfolioContext';
 import KPICard          from '@/components/ui/KPICard';
 import ChartCard        from '@/components/ui/ChartCard';
 import StockTable, { type ColDef } from '@/components/ui/StockTable';
@@ -11,7 +11,7 @@ import { ChartSkeleton, PriceBanner } from '@/components/ui/Feedback';
 import PlotlyChart      from '@/components/charts/PlotlyChart';
 import { plotlyLayout, COLORS, sectorColor } from '@/lib/theme';
 import { fmtNGN, fmtNGNFull, fmtPct, fmtPct2, fmtVol, isPositive } from '@/lib/formatters';
-import type { StockRow } from '@/lib/api';
+import type { StockRow } from '@/services/api';
 
 export default function NGXOverviewPage() {
   const { data, loading } = usePortfolio();

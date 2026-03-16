@@ -6,10 +6,10 @@ import {
   createHolding, updateHolding, deleteHolding,
   buyShares, sellShares,
   type HoldingRecord, type ClosedRecord, type SellResult,
-} from '@/lib/settingsApi';
+} from '@/services/settingsApi';
 import { fmtNGN, fmtUSD, fmtPct } from '@/lib/formatters';
-import { useAuth } from '@/lib/AuthContext';
-import { usePortfolio } from '@/lib/PortfolioContext';
+import { useAuth } from '@/context/AuthContext';
+import { usePortfolio } from '@/context/PortfolioContext';
 import {
   IconX, IconCheck, IconAlertCircle, IconCopy, IconPlus, IconMinus, IconEdit, IconTrash,
 } from '@/components/ui/icons';

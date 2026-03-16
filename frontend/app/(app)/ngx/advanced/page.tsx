@@ -1,6 +1,6 @@
 'use client';
 
-import { usePortfolio } from '@/lib/PortfolioContext';
+import { usePortfolio } from '@/context/PortfolioContext';
 import KPICard           from '@/components/ui/KPICard';
 import ChartCard         from '@/components/ui/ChartCard';
 import { ChartSkeleton } from '@/components/ui/Feedback';

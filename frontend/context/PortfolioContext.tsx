@@ -4,8 +4,8 @@ import {
   createContext, useContext, useState, useCallback, useEffect, useRef,
   type ReactNode,
 } from 'react';
-import { fetchPortfolioData, fetchDividends, type PortfolioData, type DividendsResponse } from '@/lib/api';
-import { useAuth } from '@/lib/AuthContext';
+import { fetchPortfolioData, fetchDividends, type PortfolioData, type DividendsResponse } from '@/services/api';
+import { useAuth } from '@/context/AuthContext';
 
 // Interval options in seconds. 0 = manual only.
 export const REFRESH_INTERVALS = [
