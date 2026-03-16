@@ -193,8 +193,11 @@ def sell_shares(
     realized_pl  = (body.sale_price - holding.avg_cost) * body.shares_sold
     obj, closed  = record_sale(db, holding_id, current_user.id, body.shares_sold, body.sale_price)
 
+    if obj is None:
+        raise HTTPException(status_code=500, detail="Failed to process sale")
+
     return SellResponse(
-        holding          = obj,
+        holding          = HoldingOut.model_validate(obj),
         realized_pl      = round(realized_pl, 4),
         fully_closed     = not obj.is_active,
         closed_position  = closed,
