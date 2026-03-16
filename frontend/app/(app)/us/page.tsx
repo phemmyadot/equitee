@@ -1,6 +1,6 @@
 'use client';
 
-import { usePortfolio } from '@/lib/PortfolioContext';
+import { usePortfolio } from '@/context/PortfolioContext';
 import KPICard          from '@/components/ui/KPICard';
 import ChartCard        from '@/components/ui/ChartCard';
 import StockTable, { type ColDef } from '@/components/ui/StockTable';
@@ -10,7 +10,7 @@ import { ChartSkeleton, PriceBanner } from '@/components/ui/Feedback';
 import PlotlyChart      from '@/components/charts/PlotlyChart';
 import { plotlyLayout, COLORS, sectorColor } from '@/lib/theme';
 import { fmtUSD, fmtPct, fmtPct2, isPositive } from '@/lib/formatters';
-import type { StockRow } from '@/lib/api';
+import type { StockRow } from '@/services/api';
 
 export default function USPortfolioPage() {
   const { data, loading } = usePortfolio();

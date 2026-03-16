@@ -1,6 +1,6 @@
 'use client';
 
-import { usePortfolio } from '@/lib/PortfolioContext';
+import { usePortfolio } from '@/context/PortfolioContext';
 import Header from './Header';
 import Nav    from './Nav';
 import { ErrorMessage } from '@/components/ui/Feedback';

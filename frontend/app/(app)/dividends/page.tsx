@@ -4,8 +4,8 @@ import { useState, useMemo } from 'react';
 import Link                  from 'next/link';
 import { fmtNGN, fmtNGNFull } from '@/lib/formatters';
 import { sectorColor }        from '@/lib/theme';
-import { usePortfolio }       from '@/lib/PortfolioContext';
-import type { DividendHolding } from '@/lib/api';
+import { usePortfolio }       from '@/context/PortfolioContext';
+import type { DividendHolding } from '@/services/api';
 import { IconTrendingUp, IconCheck } from '@/components/ui/icons';
 
 // ─────────────────────────────────────────────────────────────────────────────

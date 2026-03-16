@@ -2,7 +2,7 @@
 
 import { useState, type FormEvent } from 'react';
 import Link from 'next/link';
-import { useAuth } from '@/lib/AuthContext';
+import { useAuth } from '@/context/AuthContext';
 
 const REGISTRATION_MODE = process.env.NEXT_PUBLIC_REGISTRATION_MODE ?? 'invite';
 

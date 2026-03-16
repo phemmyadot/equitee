@@ -6,8 +6,8 @@ import Link from 'next/link';
 import {
   fetchNGXTickerData, fetchNGXDividend,
   fetchNGXEarnings, fetchNGXBalanceSheet, fetchNGXPriceHistory,
-} from '@/lib/api';
-import { usePortfolio } from '@/lib/PortfolioContext';
+} from '@/services/api';
+import { usePortfolio } from '@/context/PortfolioContext';
 import ChartCard from '@/components/ui/ChartCard';
 import { ErrorMessage } from '@/components/ui/Feedback';
 import SignalScore from '@/components/ui/Signalscore';
@@ -16,7 +16,7 @@ import { plotlyLayout, COLORS, sectorColor } from '@/lib/theme';
 import { fmtNGNFull, fmtNGN, fmtPct, fmtPct2, fmtVol, isPositive } from '@/lib/formatters';
 import type {
   TickerData, DividendInfo, EarningsHistory, BalanceSheet, DBPriceHistory, StockRow,
-} from '@/lib/api';
+} from '@/services/api';
 import {
   IconChevronRight, IconChartLine, IconExternalLink, IconShield, IconChartHistory,
 } from '@/components/ui/icons';

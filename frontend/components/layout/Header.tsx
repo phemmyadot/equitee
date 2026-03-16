@@ -5,8 +5,8 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import clsx from 'clsx';
 import { fmtAge } from '@/lib/formatters';
-import { usePortfolio, REFRESH_INTERVALS, type RefreshInterval } from '@/lib/PortfolioContext';
-import { useAuth } from '@/lib/AuthContext';
+import { usePortfolio, REFRESH_INTERVALS, type RefreshInterval } from '@/context/PortfolioContext';
+import { useAuth } from '@/context/AuthContext';
 import {
   IconChartLine, IconSearch, IconGlobe, IconClock, IconChartHistory,
   IconSettings, IconLogOut,

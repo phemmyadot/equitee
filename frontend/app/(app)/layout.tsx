@@ -1,4 +1,4 @@
-import { PortfolioProvider } from '@/lib/PortfolioContext';
+import { PortfolioProvider } from '@/context/PortfolioContext';
 import AppShell from '@/components/layout/AppShell';
 
 export default function AppLayout({ children }: { children: React.ReactNode }) {

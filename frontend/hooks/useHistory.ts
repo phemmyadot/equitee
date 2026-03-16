@@ -1,8 +1,8 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { fetchPortfolioHistory, fetchPriceHistory } from '@/lib/api';
-import type { PortfolioHistory, PriceHistory } from '@/lib/api';
+import { fetchPortfolioHistory, fetchPriceHistory } from '@/services/api';
+import type { PortfolioHistory, PriceHistory } from '@/services/api';
 
 // ── Portfolio history ─────────────────────────────────────────────────────────
 

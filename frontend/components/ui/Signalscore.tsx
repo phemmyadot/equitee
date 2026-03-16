@@ -20,7 +20,7 @@
  * A score < -3 = Sell, -3…-1 = Reduce, -1…+1 = Hold, +1…+4 = Accumulate, > +4 = Buy.
  */
 
-import type { TickerOverview, TickerPerformance, StockRow, DividendInfo } from '@/lib/api';
+import type { TickerOverview, TickerPerformance, StockRow, DividendInfo } from '@/services/api';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Helpers

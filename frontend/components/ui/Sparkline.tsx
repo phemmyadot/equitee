@@ -1,7 +1,7 @@
 'use client';
 
-import { usePriceHistory } from '@/lib/useHistory';
-import type { PricePoint } from '@/lib/api';
+import { usePriceHistory } from '@/hooks/useHistory';
+import type { PricePoint } from '@/services/api';
 
 interface SparklineProps {
   ticker: string;
