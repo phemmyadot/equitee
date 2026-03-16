@@ -9,17 +9,18 @@ GET /api/profile/ngx/{ticker}/balance-sheet    — annual balance sheet trend (4
 GET /api/profile/ngx/{ticker}/full             — all data combined
 """
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 from typing import Optional
+from sqlalchemy.orm import Session
 
 from app.services.profile    import get_profile
 from app.services.dividends  import get_dividend
 from app.services.financials import get_earnings_history, get_balance_sheet
 from app.db.engine  import get_db
 from app.db.crud    import get_price_history as db_get_price_history
-from sqlalchemy.orm import Session
-from fastapi        import Depends
+from app.db.models  import User
+from app.auth.dependencies import get_current_user
 from app.models import DividendInfo
 
 router = APIRouter(prefix="/api/profile", tags=["profile"])
@@ -38,7 +39,7 @@ class ProfileResponse(BaseModel):
 
 
 @router.get("/ngx/{ticker}", response_model=ProfileResponse)
-def ngx_profile(ticker: str):
+def ngx_profile(ticker: str, _: User = Depends(get_current_user)):
     data = get_profile(ticker.upper())
     if data is None:
         raise HTTPException(status_code=404, detail=f"Profile not found for {ticker.upper()}")
@@ -46,7 +47,7 @@ def ngx_profile(ticker: str):
 
 
 @router.get("/ngx/{ticker}/dividend", response_model=DividendInfo)
-def ngx_dividend(ticker: str):
+def ngx_dividend(ticker: str, _: User = Depends(get_current_user)):
     """Latest dividend record for an NGX-listed stock."""
     data = get_dividend(ticker.upper())
     if data is None:
@@ -71,6 +72,7 @@ def ngx_price_history(
     ticker: str,
     days:   int = 90,
     db:     Session = Depends(get_db),
+    _:      User = Depends(get_current_user),
 ):
     """
     Price history for a single NGX ticker from our local DB snapshots.
@@ -109,7 +111,7 @@ class BalanceSheetResponse(BaseModel):
 
 
 @router.get("/ngx/{ticker}/earnings", response_model=EarningsHistoryResponse)
-def ngx_earnings(ticker: str):
+def ngx_earnings(ticker: str, _: User = Depends(get_current_user)):
     """Quarterly earnings history — up to 8 quarters, oldest first."""
     data = get_earnings_history(ticker.upper())
     if not data or not data.get("periods"):
@@ -118,7 +120,7 @@ def ngx_earnings(ticker: str):
 
 
 @router.get("/ngx/{ticker}/balance-sheet", response_model=BalanceSheetResponse)
-def ngx_balance_sheet(ticker: str):
+def ngx_balance_sheet(ticker: str, _: User = Depends(get_current_user)):
     """Annual balance sheet trend — up to 4 years, oldest first."""
     data = get_balance_sheet(ticker.upper())
     if not data or not data.get("periods"):
@@ -166,7 +168,7 @@ def _safe(fn, *args, **kwargs):
 
 
 @router.get("/ngx/{ticker}/full", response_model=TickerFullResponse)
-def ngx_full(ticker: str):
+def ngx_full(ticker: str, _: User = Depends(get_current_user)):
     """
     Comprehensive single-ticker endpoint combining price, profile,
     overview (fundamentals), and performance (returns, risk, quality).
