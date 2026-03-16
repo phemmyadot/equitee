@@ -69,16 +69,16 @@ class PriceHistoryResponse(BaseModel):
 
 @router.get("/ngx/{ticker}/price-history", response_model=PriceHistoryResponse)
 def ngx_price_history(
-    ticker: str,
-    days:   int = 90,
-    db:     Session = Depends(get_db),
-    _:      User = Depends(get_current_user),
+    ticker:       str,
+    days:         int = 90,
+    db:           Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ):
     """
     Price history for a single NGX ticker from our local DB snapshots.
     Written every NGX_PRICE_TTL seconds by /api/data calls.
     """
-    rows = db_get_price_history(db, ticker=ticker.upper(), days=days)
+    rows = db_get_price_history(db, ticker=ticker.upper(), days=days, user_id=current_user.id)
     if not rows:
         raise HTTPException(
             status_code=404,
