@@ -45,7 +45,7 @@ def _get_soup(url: str) -> Optional[BeautifulSoup]:
     try:
         r = requests.get(url, headers=_HEADERS, timeout=15)
         r.raise_for_status()
-        return BeautifulSoup(r.content, "html.parser")
+        return BeautifulSoup(r.text, "html.parser")
     except Exception as exc:
         log.warning("[Financials] fetch failed %s: %s", url, exc)
         return None

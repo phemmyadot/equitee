@@ -45,7 +45,7 @@ def _get_soup(url: str) -> Optional[BeautifulSoup]:
         headers = {"User-Agent": USER_AGENT}
         response = requests.get(url, headers=headers, timeout=15)
         response.raise_for_status()
-        return BeautifulSoup(response.content, "html.parser")
+        return BeautifulSoup(response.text, "html.parser")
     except Exception as exc:
         log.error(f"[NGX] Failed to fetch {url}: {exc}")
         return None
