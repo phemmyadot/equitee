@@ -57,6 +57,9 @@ class Settings:
     PORT: int = int(os.getenv("PORT", "8000"))
     RELOAD: bool = os.getenv("RELOAD", "true").lower() == "true"
 
+    # ── Environment ──────────────────────────────────────────────────────────
+    ENVIRONMENT: str = os.getenv("ENVIRONMENT", "development")
+
     # ── Auth ─────────────────────────────────────────────────────────────────
     SECRET_KEY: str = os.getenv("SECRET_KEY", "")
     ACCESS_TOKEN_EXPIRE_MINUTES: int = int(os.getenv("ACCESS_TOKEN_EXPIRE_MINUTES", "30"))

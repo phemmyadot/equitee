@@ -12,6 +12,10 @@ from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from slowapi import _rate_limit_exceeded_handler
+from slowapi.errors import RateLimitExceeded
+
+from app.limiter import limiter
 
 from app.config import settings
 from app.routers import data, prices, fx, history, profile, settings as settings_router
@@ -27,10 +31,8 @@ logging.basicConfig(
     datefmt = "%H:%M:%S",
 )
 
-if not settings.SECRET_KEY:
-    import os
-    if os.getenv("ENVIRONMENT", "development") == "production":
-        raise RuntimeError("SECRET_KEY must be set in production")
+if not settings.SECRET_KEY and settings.ENVIRONMENT == "production":
+    raise RuntimeError("SECRET_KEY must be set in production")
 
 log = logging.getLogger(__name__)
 
@@ -76,6 +78,9 @@ app = FastAPI(
     version     = "2.0.0",
     lifespan    = lifespan,
 )
+
+app.state.limiter = limiter
+app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
 # ── CORS ─────────────────────────────────────────────────────────────────────
 app.add_middleware(

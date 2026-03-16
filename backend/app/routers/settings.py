@@ -12,6 +12,8 @@ POST   /api/settings/holdings/{id}/sell    — record a sale (partial or full)
 GET    /api/settings/closed                — all closed positions
 """
 
+import logging
+
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 from pydantic import BaseModel, Field
@@ -32,6 +34,7 @@ from app.db.crud import (
     get_closed_positions,
 )
 
+log = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/settings", tags=["settings"])
 
 
@@ -124,8 +127,9 @@ def add_holding(
             sector   = body.sector,
             user_id  = current_user.id,
         )
-    except Exception as exc:
-        raise HTTPException(status_code=400, detail=str(exc))
+    except Exception:
+        log.exception("Error creating holding")
+        raise HTTPException(status_code=400, detail="Failed to create holding")
 
 
 @router.put("/holdings/{holding_id}", response_model=HoldingOut)

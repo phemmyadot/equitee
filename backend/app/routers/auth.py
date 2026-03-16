@@ -8,6 +8,7 @@ import logging
 from datetime import datetime, timezone, timedelta
 
 from fastapi import APIRouter, Depends, HTTPException, Response, Request, status
+from app.limiter import limiter
 from pydantic import BaseModel, EmailStr, field_validator
 from sqlalchemy.orm import Session
 
@@ -28,7 +29,7 @@ def _set_auth_cookies(response: Response, user: User, db: Session) -> None:
     response.set_cookie(
         "access_token", access_token,
         max_age=settings.ACCESS_TOKEN_EXPIRE_MINUTES * 60,
-        httponly=True, samesite="lax", secure=False,
+        httponly=True, samesite="lax", secure=settings.ENVIRONMENT == "production",
     )
 
     refresh_token = str(uuid.uuid4())
@@ -37,7 +38,7 @@ def _set_auth_cookies(response: Response, user: User, db: Session) -> None:
     response.set_cookie(
         "refresh_token", refresh_token,
         max_age=settings.REFRESH_TOKEN_EXPIRE_DAYS * 86400,
-        httponly=True, samesite="lax", secure=False,
+        httponly=True, samesite="lax", secure=settings.ENVIRONMENT == "production",
     )
 
 
@@ -87,7 +88,8 @@ class InviteResponse(BaseModel):
 # ── Endpoints ─────────────────────────────────────────────────────────────────
 
 @router.post("/register", response_model=UserResponse, status_code=201)
-def register(body: RegisterRequest, response: Response, db: Session = Depends(get_db)):
+@limiter.limit("5/minute")
+def register(request: Request, body: RegisterRequest, response: Response, db: Session = Depends(get_db)):
     if settings.REGISTRATION_MODE == "invite":
         if not body.invite_code:
             raise HTTPException(status_code=400, detail="Invite code required")
@@ -110,7 +112,8 @@ def register(body: RegisterRequest, response: Response, db: Session = Depends(ge
 
 
 @router.post("/login", response_model=UserResponse)
-def login(body: LoginRequest, response: Response, db: Session = Depends(get_db)):
+@limiter.limit("10/minute")
+def login(request: Request, body: LoginRequest, response: Response, db: Session = Depends(get_db)):
     user = crud.get_user_by_email(db, body.username_or_email) \
         or crud.get_user_by_username(db, body.username_or_email)
 
@@ -134,6 +137,7 @@ def logout(request: Request, response: Response, db: Session = Depends(get_db)):
 
 
 @router.post("/refresh")
+@limiter.limit("20/minute")
 def refresh(request: Request, response: Response, db: Session = Depends(get_db)):
     token = request.cookies.get("refresh_token")
     if not token:
@@ -158,7 +162,7 @@ def refresh(request: Request, response: Response, db: Session = Depends(get_db))
     response.set_cookie(
         "access_token", access_token,
         max_age=settings.ACCESS_TOKEN_EXPIRE_MINUTES * 60,
-        httponly=True, samesite="lax", secure=False,
+        httponly=True, samesite="lax", secure=settings.ENVIRONMENT == "production",
     )
     return {"ok": True}
 

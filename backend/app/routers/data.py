@@ -5,6 +5,8 @@ GET /api/data       — full portfolio payload (prices + P&L + sectors + KPIs)
 GET /api/dividends  — dividend data for all NGX holdings, enriched with position info
 """
 
+import logging
+
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 from typing import Optional
@@ -19,6 +21,8 @@ from app.services import fx as fx_service
 from app.services import dividends as dividends_service
 from app.services.portfolio import build_portfolio_response, load_holdings_from_db
 from app.models import PortfolioDataResponse, DividendInfo
+
+log = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api", tags=["data"])
 
@@ -46,8 +50,9 @@ async def get_data(
             user_id       = current_user.id,
         )
 
-    except Exception as exc:
-        raise HTTPException(status_code=500, detail=str(exc))
+    except Exception:
+        log.exception("Error building portfolio response")
+        raise HTTPException(status_code=500, detail="Failed to load portfolio data")
 
 
 # ── Dividend response models ──────────────────────────────────────────────────
@@ -117,5 +122,6 @@ async def get_dividends(
             total_projected_payout = round(total_payout, 2) if total_payout else None,
         )
 
-    except Exception as exc:
-        raise HTTPException(status_code=500, detail=str(exc))
+    except Exception:
+        log.exception("Error building dividends response")
+        raise HTTPException(status_code=500, detail="Failed to load dividend data")
