@@ -5,6 +5,8 @@ GET /api/history/portfolio          — portfolio value time series
 GET /api/history/prices/{ticker}    — single-ticker price history
 """
 
+import logging
+
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 from pydantic import BaseModel
@@ -15,6 +17,7 @@ from app.db.models import User
 from app.auth.dependencies import get_current_user
 from app.db.crud import get_portfolio_history, get_price_history
 
+log = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/history", tags=["history"])
 
 
@@ -84,8 +87,9 @@ def portfolio_history(
             for s in snaps
         ]
         return PortfolioHistoryResponse(days=days, count=len(points), points=points)
-    except Exception as exc:
-        raise HTTPException(status_code=500, detail=str(exc))
+    except Exception:
+        log.exception("Error fetching portfolio history")
+        raise HTTPException(status_code=500, detail="Failed to fetch portfolio history")
 
 
 @router.get("/prices/{ticker}", response_model=PriceHistoryResponse)
@@ -115,5 +119,6 @@ def price_history(
             count  = len(points),
             points = points,
         )
-    except Exception as exc:
-        raise HTTPException(status_code=500, detail=str(exc))
+    except Exception:
+        log.exception("Error fetching price history for %s", ticker)
+        raise HTTPException(status_code=500, detail="Failed to fetch price history")

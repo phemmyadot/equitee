@@ -5,6 +5,8 @@ GET /api/prices/ngx   — full NGX equity price table
 GET /api/prices/us    — US stock prices for portfolio holdings
 """
 
+import logging
+
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 
@@ -16,6 +18,7 @@ from app.services import yahoo as yahoo_service
 from app.services.portfolio import load_holdings_from_db
 from app.models import NGXPricesResponse, USPricesResponse
 
+log = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/prices", tags=["prices"])
 
 
@@ -29,8 +32,9 @@ async def get_ngx_prices(current_user: User = Depends(get_current_user)):
             source  = "doclib.ngxgroup.com",
             prices  = prices,
         )
-    except Exception as exc:
-        raise HTTPException(status_code=500, detail=str(exc))
+    except Exception:
+        log.exception("Error fetching NGX prices")
+        raise HTTPException(status_code=500, detail="Failed to fetch NGX prices")
 
 
 @router.get("/us", response_model=USPricesResponse)
@@ -48,5 +52,6 @@ async def get_us_prices(
             source  = "Yahoo Finance",
             prices  = prices,
         )
-    except Exception as exc:
-        raise HTTPException(status_code=500, detail=str(exc))
+    except Exception:
+        log.exception("Error fetching US prices")
+        raise HTTPException(status_code=500, detail="Failed to fetch US prices")
