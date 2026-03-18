@@ -186,11 +186,11 @@ def ngx_full(
     try:
         pd = _prices_service.get_price(t)
         if pd:
-            # Optionally enrich volume from the individual page scrape
             try:
-                vol = _ngx_service._get_volume_for_ticker(t)
-                if vol:
-                    pd.volume = vol
+                intraday = _ngx_service._get_quote_intraday(t)
+                pd.high   = intraday["high"]   or pd.high
+                pd.low    = intraday["low"]    or pd.low
+                pd.volume = intraday["volume"] or pd.volume
             except Exception:
                 pass
             price_out = TickerPriceOut(
