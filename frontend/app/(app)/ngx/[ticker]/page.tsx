@@ -140,8 +140,6 @@ function RangeBar({ low, high, current }: { low: string | number | null; high: s
 
 function MomentumLadder({ perf }: { perf: NonNullable<TickerData['performance']> }) {
   const PERIODS = [
-    { label: '1D', val: perf.return_1d as string | number | null },
-    { label: '1W', val: perf.return_1w },
     { label: '1M', val: perf.return_1m },
     { label: '3M', val: perf.return_3m },
     { label: '6M', val: perf.return_6m },

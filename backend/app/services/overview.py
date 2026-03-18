@@ -7,6 +7,7 @@ Returns returns over various periods, volatility, sharpe ratio, max drawdown, et
 """
 
 import logging
+import re
 import time
 import requests
 from typing import Optional, Dict
@@ -34,10 +35,96 @@ def _get_soup(url: str) -> Optional[BeautifulSoup]:
         return None
 
 
+def _fetch_period_returns(ticker: str) -> Dict[str, Optional[float]]:
+    """
+    Extract period returns from the SvelteKit JSON payload on the quote page.
+    The `changes` object contains historical prices (price1m, price3m, price6m,
+    priceYTD, price1y) and the `quote` object contains the current price (p).
+    Returns are computed as (current - past) / past * 100.
+    """
+    url = f"{settings.NGX_SOURCE_BASE_URL}/quote/ngx/{ticker.lower()}/"
+    out: Dict[str, Optional[float]] = {
+        "return_1m": None, "return_3m": None, "return_6m": None,
+        "return_ytd": None, "return_1y": None,
+    }
+    try:
+        headers = {"User-Agent": USER_AGENT}
+        resp = requests.get(url, headers=headers, timeout=15)
+        resp.raise_for_status()
+        text = resp.text
+
+        # Extract current price from quote:{...,p:<price>,...}
+        price_m = re.search(r'quote:\{[^}]*\bp:([\d.]+)', text)
+        if not price_m:
+            return out
+        current = float(price_m.group(1))
+
+        # Extract changes block: changes:{price1m:...,price3m:..., ...}
+        changes_m = re.search(r'changes:\{([^}]+)\}', text)
+        if not changes_m:
+            return out
+        pairs = dict(re.findall(r'(\w+):([\d.]+)', changes_m.group(1)))
+
+        for field, key in (
+            ("return_1m",  "price1m"),
+            ("return_3m",  "price3m"),
+            ("return_6m",  "price6m"),
+            ("return_ytd", "priceYTD"),
+            ("return_1y",  "price1y"),
+        ):
+            if key in pairs:
+                past = float(pairs[key])
+                if past:
+                    out[field] = round((current - past) / past * 100, 2)
+    except Exception as exc:
+        log.error("[Performance] Failed to fetch period returns for %s: %s", ticker, exc)
+    return out
+
+
+def fetch_chart_history(ticker: str, days: int = 90) -> list[dict]:
+    """
+    Extract daily close prices from the SvelteKit chart.data payload on the quote page.
+    Returns list of {ts, price, change_pct} dicts filtered to the last `days` days.
+    """
+    from datetime import datetime, timezone, timedelta
+    url = f"{settings.NGX_SOURCE_BASE_URL}/quote/ngx/{ticker.lower()}/"
+    try:
+        headers = {"User-Agent": USER_AGENT}
+        resp = requests.get(url, headers=headers, timeout=15)
+        resp.raise_for_status()
+        text = resp.text
+
+        # Locate chart block and extract all {c:<price>,t:<unix>} entries
+        chart_pos = text.find("chart:")
+        if chart_pos == -1:
+            return []
+        chunk = text[chart_pos: chart_pos + 800_000]
+        entries = re.findall(r'\{c:([\d.]+)(?:,o:[\d.]+)?,t:(\d+)\}', chunk)
+        if not entries:
+            return []
+
+        cutoff = datetime.now(timezone.utc) - timedelta(days=days)
+        rows, prev = [], None
+        for c_str, t_str in entries:
+            price = float(c_str)
+            ts    = datetime.fromtimestamp(int(t_str), tz=timezone.utc)
+            change_pct = round((price - prev) / prev * 100, 4) if prev is not None else None
+            prev = price
+            if ts < cutoff:
+                continue
+            rows.append({"ts": ts.date().isoformat(), "price": price, "change_pct": change_pct})
+
+        log.info("[Performance] Scraped %d chart points for %s", len(rows), ticker)
+        return rows
+    except Exception as exc:
+        log.error("[Performance] fetch_chart_history failed for %s: %s", ticker, exc)
+        return []
+
+
 def _scrape_performance(ticker: str) -> Optional[Dict]:
     """Scrape performance and valuation metrics from the statistics page."""
     url = f"{settings.NGX_SOURCE_BASE_URL}/quote/ngx/{ticker.lower()}/statistics/"
-    
+
     soup = _get_soup(url)
     if not soup:
         return None
@@ -45,8 +132,6 @@ def _scrape_performance(ticker: str) -> Optional[Dict]:
     performance = {
         "symbol": ticker.upper(),
         # Price Returns (Phase 1-2)
-        "return_1d": None,
-        "return_1w": None,
         "return_1m": None,
         "return_3m": None,
         "return_6m": None,
@@ -105,28 +190,22 @@ def _scrape_performance(ticker: str) -> Optional[Dict]:
             if len(cols) >= 2:
                 label = cols[0].get_text(strip=True).lower()
                 value_text = cols[1].get_text(strip=True)
-                
+
                 # Try to parse numeric value
                 try:
                     value = value_text.replace("%", "").replace(",", "").strip()
                     value = float(value) if value and value not in ['n/a', '-', 'none', 'nan'] else None
                 except (ValueError, AttributeError):
                     value = None
-                
+
                 if value is None:
                     continue
-                
+
                 # Clean label for matching
                 label_clean = label.replace("-", " ").replace("/", " ").replace("(", " ").replace(")", " ")
-                
+
                 # Map labels to performance fields - Made more flexible
-                if "1 day" in label_clean or "1day" in label_clean or "1d" in label_clean:
-                    if "return" in label_clean or "%" in label_clean or "change" in label_clean:
-                        performance["return_1d"] = value
-                elif "1 week" in label_clean or "1week" in label_clean or "1w" in label_clean:
-                    if "return" in label_clean or "%" in label_clean:
-                        performance["return_1w"] = value
-                elif "1 month" in label_clean or "1month" in label_clean or "1m" in label_clean:
+                if "1 month" in label_clean or "1month" in label_clean or "1m" in label_clean:
                     if "return" in label_clean or "%" in label_clean and "12m" not in label_clean:
                         performance["return_1m"] = value
                 elif "3 month" in label_clean or "3month" in label_clean or "3m" in label_clean:
@@ -213,12 +292,22 @@ def _scrape_performance(ticker: str) -> Optional[Dict]:
                 elif "dividend growth" in label_clean:
                     performance["dividend_growth_yoy"] = value
 
+    # Enrich period returns from the quote page (accurate 1m/3m/6m/ytd/1y)
+    period_returns = _fetch_period_returns(ticker)
+    for field, value in period_returns.items():
+        if value is not None and performance.get(field) is None:
+            performance[field] = value
+
+    # Fallback: 52-week price change == 1-year return
+    if performance.get("week_52_change") is not None and performance.get("return_1y") is None:
+        performance["return_1y"] = performance["week_52_change"]
+
     # Calculate Piotroski F-Score if we have financial data (Phase 5)
     # Make it work with partial data instead of requiring all metrics
     piotroski = _calculate_piotroski_score(performance)
     if piotroski:
         performance["piotroski_score"] = piotroski
-    
+
     # Calculate Altman Z-Score if we have balance sheet data (Phase 5)
     altman = _calculate_altman_zscore(performance)
     if altman:
@@ -232,13 +321,13 @@ def _calculate_piotroski_score(perf: Dict) -> Optional[float]:
     """
     Calculate Piotroski F-Score (ranges 0-9).
     Signals financial strength based on 9 fundamental metrics.
-    
+
     Works with partial data - calculates based on available metrics.
     """
     try:
         score = 0
         count = 0
-        
+
         # Profitability metrics
         if perf.get("roic") and perf["roic"] > 0:
             score += 1
@@ -249,7 +338,7 @@ def _calculate_piotroski_score(perf: Dict) -> Optional[float]:
         if perf.get("net_margin") and perf["net_margin"] > 0:
             score += 1
             count += 1
-        
+
         # Cash flow metrics
         if perf.get("operating_cash_flow") and perf["operating_cash_flow"] > 0:
             score += 1
@@ -260,7 +349,7 @@ def _calculate_piotroski_score(perf: Dict) -> Optional[float]:
         if perf.get("fcf_yield") and perf["fcf_yield"] > 0:
             score += 1
             count += 1
-        
+
         # Efficiency metrics
         if perf.get("asset_turnover") and perf["asset_turnover"] > 0.5:
             score += 1
@@ -268,18 +357,18 @@ def _calculate_piotroski_score(perf: Dict) -> Optional[float]:
         if perf.get("roa") and perf["roa"] > 5:
             score += 1
             count += 1
-        
+
         # Financial health
         if perf.get("quick_ratio") and perf["quick_ratio"] >= 1.0:
             score += 1
             count += 1
-        
+
         # Return normalized score (0-9)
         if count > 0:
             # Scale to 0-9 based on available metrics
             normalized_score = (score / count) * 9
             return normalized_score
-        
+
         return None
     except Exception as e:
         log.error(f"[Performance] Failed to calculate Piotroski: {e}")
@@ -290,42 +379,42 @@ def _calculate_altman_zscore(perf: Dict) -> Optional[float]:
     """
     Calculate Altman Z-Score (simplified).
     Score < 1.8 = likely bankruptcy, 1.8-3.0 = gray zone, > 3.0 = safe
-    
+
     Works with available data - not all factors required.
     """
     try:
         z_score = 0.0
-        
+
         # X1: Working Capital / Total Assets (estimated via Quick Ratio)
         if perf.get("quick_ratio"):
             z_score += perf["quick_ratio"] * 1.2
-        
+
         # X2: Retained Earnings / Total Assets (estimated via profitability)
         if perf.get("roe") and perf["roe"] > 10:
             z_score += 0.8
         elif perf.get("net_margin") and perf["net_margin"] > 10:
             z_score += 0.6
-        
+
         # X3: EBIT / Total Assets (using margins as proxy)
         if perf.get("ebitda_margin") and perf["ebitda_margin"] > 0:
             z_score += (perf["ebitda_margin"] / 100) * 3.2
         elif perf.get("operating_margin") and perf["operating_margin"] > 0:
             z_score += (perf["operating_margin"] / 100) * 2.8
-        
+
         # X4: Market Value / Book Value (using ROE as proxy for profitability)
         if perf.get("roa") and perf["roa"] > 0:
             z_score += 1.0
         elif perf.get("roic") and perf["roic"] > 0:
             z_score += 0.9
-        
+
         # X5: Sales / Total Assets (using Asset Turnover)
         if perf.get("asset_turnover") and perf["asset_turnover"] > 0.5:
             z_score += perf["asset_turnover"] * 0.9
-        
+
         # Debt adjustment - penalize high debt
         if perf.get("debt_ebitda") and perf["debt_ebitda"] > 4:
             z_score -= 0.5
-        
+
         return max(0.5, z_score) if z_score > 0 else None
     except Exception as e:
         log.error(f"[Performance] Failed to calculate Altman: {e}")
@@ -335,30 +424,30 @@ def _calculate_altman_zscore(perf: Dict) -> Optional[float]:
 def get_performance(ticker: str, force_refresh: bool = False) -> Optional[Dict]:
     """
     Get cached performance data for a ticker, or fetch if cache is expired.
-    
+
     Args:
         ticker: Stock ticker symbol
         force_refresh: Skip cache and fetch fresh data
-    
+
     Returns:
         Dict with performance data or None if fetch fails
     """
     ticker = ticker.upper()
     now = time.time()
-    
+
     # Check cache
     if not force_refresh and ticker in _performance_cache:
         cache_time = _performance_ts.get(ticker, 0)
         if (now - cache_time) < settings.NGX_PRICE_TTL:
             log.info(f"[Performance] cache hit for {ticker}")
             return _performance_cache[ticker]
-    
+
     # Fetch fresh data
     performance = _scrape_performance(ticker)
     if performance:
         _performance_cache[ticker] = performance
         _performance_ts[ticker] = now
-    
+
     return performance
 
 
