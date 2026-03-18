@@ -17,6 +17,7 @@ from sqlalchemy.orm import Session
 from app.services.profile    import get_profile
 from app.services.dividends  import get_dividend
 from app.services.financials import get_earnings_history, get_balance_sheet
+from app.services.overview   import fetch_chart_history
 from app.db.engine  import get_db
 from app.db.crud    import get_price_history as db_get_price_history
 from app.db.models  import User
@@ -80,15 +81,14 @@ def ngx_price_history(
     """
     rows = db_get_price_history(db, ticker=ticker.upper(), days=days, user_id=current_user.id)
     if not rows:
-        raise HTTPException(
-            status_code=404,
-            detail=f"No price history in DB for {ticker.upper()} — call /api/data a few times first to build history.",
-        )
+        rows = fetch_chart_history(ticker.upper(), days=days)
+    if not rows:
+        raise HTTPException(status_code=404, detail="No price history available.")
     return PriceHistoryResponse(
         ticker     = ticker.upper(),
         days       = days,
         count      = len(rows),
-        dates      = [r["ts"][:10] for r in rows],   # YYYY-MM-DD
+        dates      = [r["ts"][:10] for r in rows],
         close      = [r["price"]      for r in rows],
         change_pct = [r["change_pct"] for r in rows],
     )
@@ -168,7 +168,11 @@ def _safe(fn, *args, **kwargs):
 
 
 @router.get("/ngx/{ticker}/full", response_model=TickerFullResponse)
-def ngx_full(ticker: str, _: User = Depends(get_current_user)):
+def ngx_full(
+    ticker:       str,
+    db:           Session = Depends(get_db),
+    current_user: User    = Depends(get_current_user),
+):
     """
     Comprehensive single-ticker endpoint combining price, profile,
     overview (fundamentals), and performance (returns, risk, quality).
@@ -226,7 +230,7 @@ def ngx_full(ticker: str, _: User = Depends(get_current_user)):
     perf_out = None
     if perf_raw:
         perf_out = {k: perf_raw.get(k) for k in [
-            "beta", "return_1y", "return_ytd", "return_1d", "return_1w",
+            "beta", "return_1y", "return_ytd",
             "return_1m", "return_3m", "return_6m",
             "week_52_high", "week_52_low", "week_52_change",
             "operating_margin", "ebitda_margin", "fcf_margin", "pretax_margin",
@@ -238,6 +242,35 @@ def ngx_full(ticker: str, _: User = Depends(get_current_user)):
             "piotroski_score", "altman_zscore",
             "volatility", "sharpe_ratio", "max_drawdown",
         ]}
+
+    # ── Enrich period returns from DB price history ───────────────────────
+    # Scraper only provides return_1y; compute 1m/3m/6m from stored snapshots.
+    try:
+        from datetime import datetime, timezone, timedelta
+        history = db_get_price_history(db, ticker=t, days=190, user_id=current_user.id)
+        if history and len(history) >= 2:
+            current_price = history[-1]["price"]
+            if current_price:
+                if perf_out is None:
+                    perf_out = {}
+                now = datetime.now(timezone.utc)
+                for field, days_ago in (("return_1m", 30), ("return_3m", 90), ("return_6m", 180)):
+                    if perf_out.get(field) is not None:
+                        continue
+                    target = now - timedelta(days=days_ago)
+                    best_price, best_diff = None, None
+                    for row in history:
+                        ts = datetime.fromisoformat(row["ts"])
+                        if ts.tzinfo is None:
+                            ts = ts.replace(tzinfo=timezone.utc)
+                        diff = abs((ts - target).total_seconds())
+                        if best_diff is None or diff < best_diff:
+                            best_diff = diff
+                            best_price = row["price"]
+                    if best_price:
+                        perf_out[field] = round((current_price - best_price) / best_price * 100, 2)
+    except Exception:
+        pass
 
     return TickerFullResponse(
         ticker      = t,

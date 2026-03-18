@@ -282,8 +282,6 @@ export interface TickerPerformance {
   beta:               string | number | null;
   return_1y:          string | number | null;
   return_ytd:         string | number | null;
-  return_1d:          string | number | null;
-  return_1w:          string | number | null;
   return_1m:          string | number | null;
   return_3m:          string | number | null;
   return_6m:          string | number | null;

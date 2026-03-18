@@ -53,7 +53,7 @@ function scoreMomentum(perf: TickerPerformance, livePrice?: number | null): {
         n(perf.return_1m), n(perf.return_3m), n(perf.return_6m), n(perf.return_1y),
     ];
     const valid = returns.filter((r): r is number => r !== null);
-    if (valid.length >= 2) {
+    if (valid.length >= 1) {
         const positives = valid.filter(r => r > 0).length;
         const ladderPct = positives / valid.length;
         pts += clamp((ladderPct - 0.5) * 4);   // 0.5 = neutral, 1.0 = +2 → clamped +1
