@@ -10,11 +10,11 @@ from alembic import context
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from app.config import settings
-from app.db.engine import Base
+from app.db.engine import Base, _normalise_url
 import app.db.models  # noqa: F401 — registers all ORM models with Base
 
 config = context.config
-config.set_main_option("sqlalchemy.url", settings.DATABASE_URL)
+config.set_main_option("sqlalchemy.url", _normalise_url(settings.DATABASE_URL))
 
 if config.config_file_name is not None:
     fileConfig(config.config_file_name)
@@ -37,8 +37,9 @@ def run_migrations_online() -> None:
         poolclass=pool.NullPool,
     )
     with connectable.connect() as connection:
+        is_sqlite = connection.engine.url.drivername.startswith("sqlite")
         context.configure(connection=connection, target_metadata=target_metadata,
-                          render_as_batch=True)  # render_as_batch required for SQLite ALTER TABLE
+                          render_as_batch=is_sqlite)
         with context.begin_transaction():
             context.run_migrations()
 

@@ -46,9 +46,25 @@ def _ensure_db_dir(url: str) -> None:
 
 _ensure_db_dir(settings.DATABASE_URL)
 
+
+def _normalise_url(url: str) -> str:
+    """
+    Render (and most PaaS) provide DATABASE_URL as postgres:// or postgresql://.
+    SQLAlchemy + psycopg3 requires postgresql+psycopg://.
+    SQLite URLs are passed through unchanged.
+    """
+    if url.startswith("postgres://"):
+        url = url.replace("postgres://", "postgresql+psycopg://", 1)
+    elif url.startswith("postgresql://"):
+        url = url.replace("postgresql://", "postgresql+psycopg://", 1)
+    return url
+
+
+_db_url   = _normalise_url(settings.DATABASE_URL)
+_is_sqlite = _db_url.startswith("sqlite")
 engine = create_engine(
-    settings.DATABASE_URL,
-    connect_args={"check_same_thread": False},
+    _db_url,
+    connect_args={"check_same_thread": False} if _is_sqlite else {},
     echo=False,
 )
 
