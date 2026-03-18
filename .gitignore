@@ -46,6 +46,7 @@ Thumbs.db
 
 # ── Migration scripts ─────────────────────────────────────────────────────────
 backend/migrate_to_postgres.py
+backend/migrate_pg_to_pg.py
 
 # ── Miscellaneous ─────────────────────────────────────────────────────────────
 context.md
