@@ -36,9 +36,13 @@ async def get_data(
         fx         = fx_service.get_rate()
         ngx_prices = ngx_service.get_prices()
 
-        holdings   = load_holdings_from_db(db, current_user.id)
-        us_tickers = [h["ticker"] for h in holdings["us"]]
-        us_prices  = yahoo_service.get_prices(us_tickers)
+        holdings    = load_holdings_from_db(db, current_user.id)
+        ngx_tickers = [h["ticker"] for h in holdings["ngx"]]
+        us_tickers  = [h["ticker"] for h in holdings["us"]]
+        us_prices   = yahoo_service.get_prices(us_tickers)
+
+        # Enrich NGX holdings with intraday high/low/volume from per-ticker pages
+        ngx_prices.update(ngx_service.enrich_with_volumes(ngx_tickers))
 
         return build_portfolio_response(
             ngx_prices    = ngx_prices,

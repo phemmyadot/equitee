@@ -46,6 +46,7 @@ def _fetch_period_returns(ticker: str) -> Dict[str, Optional[float]]:
     out: Dict[str, Optional[float]] = {
         "return_1m": None, "return_3m": None, "return_6m": None,
         "return_ytd": None, "return_1y": None,
+        "week_52_high": None, "week_52_low": None,
     }
     try:
         headers = {"User-Agent": USER_AGENT}
@@ -53,11 +54,23 @@ def _fetch_period_returns(ticker: str) -> Dict[str, Optional[float]]:
         resp.raise_for_status()
         text = resp.text
 
-        # Extract current price from quote:{...,p:<price>,...}
-        price_m = re.search(r'quote:\{[^}]*\bp:([\d.]+)', text)
+        # Extract quote block for current price and 52-week high/low
+        quote_m = re.search(r'quote:\{([^}]+)\}', text)
+        if not quote_m:
+            return out
+        quote_block = quote_m.group(1)
+
+        price_m = re.search(r'\bp:([\d.]+)', quote_block)
         if not price_m:
             return out
         current = float(price_m.group(1))
+
+        h52_m = re.search(r'\bh52:([\d.]+)', quote_block)
+        l52_m = re.search(r'\bl52:([\d.]+)', quote_block)
+        if h52_m:
+            out["week_52_high"] = float(h52_m.group(1))
+        if l52_m:
+            out["week_52_low"] = float(l52_m.group(1))
 
         # Extract changes block: changes:{price1m:...,price3m:..., ...}
         changes_m = re.search(r'changes:\{([^}]+)\}', text)

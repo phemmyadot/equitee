@@ -14,6 +14,7 @@ All data is cached with TTL to reduce external API load.
 """
 
 import logging
+import re
 import time
 import requests
 from typing import Optional, Dict, List
@@ -33,6 +34,8 @@ _cache: Dict = {
     "performance": {},
     "ts": 0.0,
 }
+_intraday_cache: Dict[str, Dict] = {}
+_intraday_ts:    Dict[str, float] = {}
 
 NGX_LIST_URL = f"{settings.NGX_SOURCE_BASE_URL}/list/nigerian-stock-exchange/"
 
@@ -63,35 +66,41 @@ def _safe_float(text: str, default=None) -> Optional[float]:
         return default
 
 
-def _get_volume_for_ticker(ticker: str) -> Optional[float]:
-    """Fetch volume from individual ticker page."""
+def _get_quote_intraday(ticker: str) -> Dict[str, Optional[float]]:
+    """
+    Parse the SvelteKit JSON payload on the quote page to extract
+    intraday high, low, and volume from the `quote` object.
+    Returns dict with keys: high, low, volume (all may be None).
+    """
+    out: Dict[str, Optional[float]] = {"high": None, "low": None, "volume": None}
+    now = time.time()
+    if ticker in _intraday_cache and (now - _intraday_ts.get(ticker, 0)) < settings.NGX_PRICE_TTL:
+        return _intraday_cache[ticker]
     try:
-        url = f"{settings.NGX_SOURCE_BASE_URL}/quote/ngx/{ticker.lower()}/"
-        soup = _get_soup(url)
-        if not soup:
-            return None
-        
-        # Find the table with Volume data
-        tables = soup.find_all("table")
-        for table in tables:
-            rows = table.find_all("tr")
-            if not rows:
-                continue
-            
-            # Check if this is the volume table (first cell contains "Volume")
-            for row in rows:
-                cells = row.find_all(["td", "th"])
-                if len(cells) >= 2:
-                    label = cells[0].get_text(strip=True)
-                    if label == "Volume":
-                        # Found it - extract the volume value
-                        value = cells[1].get_text(strip=True)
-                        return _safe_float(value)
-        
-        return None
+        url  = f"{settings.NGX_SOURCE_BASE_URL}/quote/ngx/{ticker.lower()}/"
+        headers = {"User-Agent": USER_AGENT}
+        resp = requests.get(url, headers=headers, timeout=15)
+        resp.raise_for_status()
+        text = resp.text
+
+        m = re.search(r'quote:\{([^}]+)\}', text)
+        if not m:
+            return out
+        block = m.group(1)
+
+        for key, dest in (("h", "high"), ("l", "low")):
+            vm = re.search(rf'\b{key}:([\d.]+)', block)
+            if vm:
+                out[dest] = float(vm.group(1))
+
+        vm = re.search(r'\bv:(\d+)', block)
+        if vm:
+            out["volume"] = float(vm.group(1))
+        _intraday_cache[ticker] = out
+        _intraday_ts[ticker]    = now
     except Exception as exc:
-        log.debug(f"[NGX] Could not fetch volume for {ticker}: {exc}")
-        return None
+        log.debug("[NGX] Could not fetch intraday data for %s: %s", ticker, exc)
+    return out
 
 
 def _fetch_all_data():
@@ -283,19 +292,16 @@ def enrich_with_volumes(tickers: List[str]) -> Dict[str, NGXPrice]:
         price_obj = _cache["prices"].get(ticker)
         
         if price_obj:
-            # Fetch volume from individual ticker page
-            volume = _get_volume_for_ticker(ticker)
-            
-            # Create new NGXPrice with volume
+            intraday = _get_quote_intraday(ticker)
             enriched = NGXPrice(
                 symbol=price_obj.symbol,
                 price=price_obj.price,
                 close=price_obj.close,
                 change=price_obj.change,
                 change_pct=price_obj.change_pct,
-                high=price_obj.high,
-                low=price_obj.low,
-                volume=volume,  # ← Fetched from individual page
+                high=intraday["high"]   or price_obj.high,
+                low=intraday["low"]    or price_obj.low,
+                volume=intraday["volume"] or price_obj.volume,
                 value=price_obj.value,
             )
             prices[ticker] = enriched
