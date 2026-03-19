@@ -223,6 +223,7 @@ class FinancialsCache(Base):
     col_a      = mapped_column(JSON, nullable=False, default=list)   # revenue | assets
     col_b      = mapped_column(JSON, nullable=False, default=list)   # eps     | liabilities
     col_c      = mapped_column(JSON, nullable=False, default=list)   # net_income | equity
+    col_d      = mapped_column(JSON, nullable=True,  default=list)   # (unused for earnings) | net_cash
 
     __table_args__ = (
         UniqueConstraint("ticker", "cache_type", name="uq_financials_cache_ticker_type"),
