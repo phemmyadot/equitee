@@ -320,6 +320,7 @@ def _scrape_performance(ticker: str) -> Optional[Dict]:
             performance["asset_turnover"] = round(rev / total_assets, 4)
 
     # ROIC = Net Income / Invested Capital;  IC = Equity + Net Debt
+    # When net cash > equity (IC negative), fall back to equity alone (= ROE).
     if performance.get("roic") is None:
         roe    = raw.get("roe")
         netinc = raw.get("netinc")
@@ -329,6 +330,9 @@ def _scrape_performance(ticker: str) -> Optional[Dict]:
                 ic = equity + (net_debt_val or 0)
                 if ic > 0:
                     performance["roic"] = round(netinc / ic * 100, 2)
+                else:
+                    # Net-cash position: IC is negative; use equity only
+                    performance["roic"] = round(roe, 2)
 
     # ROCE = EBIT / Capital Employed;  CE ≈ Equity for financials
     if performance.get("roce") is None:
