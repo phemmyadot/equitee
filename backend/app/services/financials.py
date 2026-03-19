@@ -233,3 +233,81 @@ def get_balance_sheet(ticker: str) -> Optional[dict]:
 
     finally:
         db.close()
+
+
+# ── Cash flows ────────────────────────────────────────────────────────────────
+
+def get_cash_flows(ticker: str) -> Optional[dict]:
+    """
+    Returns dict (oldest → newest, up to 8 quarters):
+      {
+        "periods":  ["Q1 2022", ...],
+        "capex":    [-1.2e9, ...],   # negative = outflow
+        "fcf":      [3.0e9, ...],
+        "net_debt": [5.0e9, ...],    # positive = net debt, negative = net cash
+      }
+    Sources:
+      capex + fcf  → cash-flow-statement page
+      net_debt     → quarterly balance-sheet page (netcash sign-inverted)
+    """
+    cache_key = f"cashflow:{ticker.upper()}"
+    now = time.time()
+
+    # L1 — in-memory
+    if cache_key in _cache and (now - _cache_ts.get(cache_key, 0)) < settings.FINANCIALS_TTL:
+        return _cache[cache_key]
+
+    # L2 — database
+    db = SessionLocal()
+    try:
+        row = crud.get_financials_cache(db, ticker.upper(), "cashflow")
+        if row is not None:
+            age = (datetime.now(timezone.utc) - row.fetched_at).total_seconds()
+            result = crud.financials_row_to_dict(row)
+            if age < settings.FINANCIALS_TTL and _has_data(result):
+                _cache[cache_key]    = result
+                _cache_ts[cache_key] = now
+                log.debug("[Financials] cash flows %s from DB (age %.0fs)", ticker, age)
+                return result
+
+        # Scrape cash flow statement
+        cf_url = (f"{settings.NGX_SOURCE_BASE_URL}/quote/ngx/{ticker.lower()}"
+                  f"/financials/cash-flow-statement/?p=quarterly")
+        cf_text = _fetch_text(cf_url)
+        if not cf_text:
+            return None
+
+        fiscal_year    = _extract_js_array(cf_text, "fiscalYear")
+        fiscal_quarter = _extract_js_array(cf_text, "fiscalQuarter")
+        capex          = _extract_js_array(cf_text, "capex")
+        fcf            = _extract_js_array(cf_text, "fcf")
+
+        if not fiscal_year:
+            log.warning("[Financials] cash flows %s: financialData not found", ticker)
+            return None
+
+        # Scrape quarterly balance sheet for net debt (netcash sign-inverted)
+        bs_url  = (f"{settings.NGX_SOURCE_BASE_URL}/quote/ngx/{ticker.lower()}"
+                   f"/financials/balance-sheet/?p=quarterly")
+        bs_text = _fetch_text(bs_url)
+        netcash  = _extract_js_array(bs_text, "netcash") if bs_text else []
+        net_debt = [-v if v is not None else None for v in netcash]
+
+        periods = [f"{q} {y}" for q, y in zip(fiscal_quarter, fiscal_year)]
+        n = min(8, len(periods))
+
+        result = {
+            "periods":  _oldest_first(periods,  n),
+            "capex":    _oldest_first(capex,    n),
+            "fcf":      _oldest_first(fcf,      n),
+            "net_debt": _oldest_first(net_debt, n),
+        }
+
+        crud.upsert_financials_cache(db, ticker.upper(), "cashflow", result)
+        _cache[cache_key]    = result
+        _cache_ts[cache_key] = now
+        log.info("[Financials] cash flows %s → %d quarters", ticker, n)
+        return result
+
+    finally:
+        db.close()
