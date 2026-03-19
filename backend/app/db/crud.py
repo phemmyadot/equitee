@@ -439,20 +439,45 @@ def get_financials_cache(db: Session, ticker: str, cache_type: str) -> Optional[
 
 
 def upsert_financials_cache(db: Session, ticker: str, cache_type: str, data: dict) -> FinancialsCache:
+    """
+    Insert or update a financials cache row.
+    Data columns are only overwritten when the content has actually changed.
+    fetched_at is always updated so the TTL is refreshed after every scrape.
+    """
     obj = get_financials_cache(db, ticker, cache_type)
     if obj is None:
         obj = FinancialsCache(ticker=ticker.upper(), cache_type=cache_type)
         db.add(obj)
+
     obj.fetched_at = datetime.now(timezone.utc)
-    obj.periods    = data.get("periods", [])
+
     if cache_type == "earnings":
-        obj.col_a = data.get("revenue",     [])
-        obj.col_b = data.get("eps",         [])
-        obj.col_c = data.get("net_income",  [])
+        new_a = data.get("revenue",    [])
+        new_b = data.get("eps",        [])
+        new_c = data.get("net_income", [])
     else:
-        obj.col_a = data.get("assets",      [])
-        obj.col_b = data.get("liabilities", [])
-        obj.col_c = data.get("equity",      [])
+        new_a = data.get("assets",      [])
+        new_b = data.get("liabilities", [])
+        new_c = data.get("equity",      [])
+
+    new_periods = data.get("periods", [])
+    changed = (
+        obj.periods != new_periods
+        or obj.col_a != new_a
+        or obj.col_b != new_b
+        or obj.col_c != new_c
+    )
+    if changed:
+        obj.periods = new_periods
+        obj.col_a   = new_a
+        obj.col_b   = new_b
+        obj.col_c   = new_c
+        log.info("[FinancialsCache] %s %s updated (%d periods)",
+                 ticker.upper(), cache_type, len(new_periods))
+    else:
+        log.debug("[FinancialsCache] %s %s unchanged, refreshed fetched_at",
+                  ticker.upper(), cache_type)
+
     db.commit()
     db.refresh(obj)
     return obj
