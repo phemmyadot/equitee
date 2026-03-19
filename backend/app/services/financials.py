@@ -13,11 +13,14 @@ Yahoo Finance for price history instead of scraping it.
 import logging
 import re
 import time
+from datetime import datetime, timezone
 from typing import Optional
 import requests
 from bs4 import BeautifulSoup
 
 from app.config import settings
+from app.db.engine import SessionLocal
+from app.db import crud
 
 log = logging.getLogger(__name__)
 
@@ -122,29 +125,47 @@ def get_earnings_history(ticker: str) -> Optional[dict]:
     """
     cache_key = f"earnings:{ticker.upper()}"
     now = time.time()
+
+    # L1 — in-memory
     if cache_key in _cache and (now - _cache_ts.get(cache_key, 0)) < settings.FINANCIALS_TTL:
         return _cache[cache_key]
 
-    url  = f"{settings.NGX_SOURCE_BASE_URL}/quote/ngx/{ticker.lower()}/financials/?p=quarterly"
-    soup = _get_soup(url)
-    if not soup:
-        return None
+    # L2 — database
+    db = SessionLocal()
+    try:
+        row = crud.get_financials_cache(db, ticker.upper(), "earnings")
+        if row is not None:
+            age = (datetime.now(timezone.utc) - row.fetched_at).total_seconds()
+            if age < settings.FINANCIALS_TTL:
+                result = crud.financials_row_to_dict(row)
+                _cache[cache_key]    = result
+                _cache_ts[cache_key] = now
+                log.debug("[Financials] earnings %s from DB (age %.0fs)", ticker, age)
+                return result
 
-    data = _parse_table(soup, ["Revenue", "EPS", "Net Income"])
+        # Scrape
+        url  = f"{settings.NGX_SOURCE_BASE_URL}/quote/ngx/{ticker.lower()}/financials/?p=quarterly"
+        soup = _get_soup(url)
+        if not soup:
+            return None
 
-    # Trim to 8 most-recent quarters
-    n = min(8, len(data.get("periods", [])))
-    result = {
-        "periods":    data["periods"][-n:],
-        "revenue":    data.get("Revenue",    [])[-n:],
-        "eps":        data.get("EPS",        [])[-n:],
-        "net_income": data.get("Net Income", [])[-n:],
-    }
+        data = _parse_table(soup, ["Revenue", "EPS", "Net Income"])
+        n = min(8, len(data.get("periods", [])))
+        result = {
+            "periods":    data["periods"][-n:],
+            "revenue":    data.get("Revenue",    [])[-n:],
+            "eps":        data.get("EPS",        [])[-n:],
+            "net_income": data.get("Net Income", [])[-n:],
+        }
 
-    _cache[cache_key]    = result
-    _cache_ts[cache_key] = now
-    log.info("[Financials] earnings %s → %d quarters", ticker, n)
-    return result
+        crud.upsert_financials_cache(db, ticker.upper(), "earnings", result)
+        _cache[cache_key]    = result
+        _cache_ts[cache_key] = now
+        log.info("[Financials] earnings %s → %d quarters", ticker, n)
+        return result
+
+    finally:
+        db.close()
 
 
 # ── Balance sheet trend ───────────────────────────────────────────────────────
@@ -161,26 +182,44 @@ def get_balance_sheet(ticker: str) -> Optional[dict]:
     """
     cache_key = f"balance:{ticker.upper()}"
     now = time.time()
+
+    # L1 — in-memory
     if cache_key in _cache and (now - _cache_ts.get(cache_key, 0)) < settings.FINANCIALS_TTL:
         return _cache[cache_key]
 
-    url  = f"{settings.NGX_SOURCE_BASE_URL}/quote/ngx/{ticker.lower()}/financials/balance-sheet/"
-    soup = _get_soup(url)
-    if not soup:
-        return None
+    # L2 — database
+    db = SessionLocal()
+    try:
+        row = crud.get_financials_cache(db, ticker.upper(), "balance")
+        if row is not None:
+            age = (datetime.now(timezone.utc) - row.fetched_at).total_seconds()
+            if age < settings.FINANCIALS_TTL:
+                result = crud.financials_row_to_dict(row)
+                _cache[cache_key]    = result
+                _cache_ts[cache_key] = now
+                log.debug("[Financials] balance sheet %s from DB (age %.0fs)", ticker, age)
+                return result
 
-    data = _parse_table(soup, ["Total Assets", "Total Liabilities", "Shareholders' Equity"])
+        # Scrape
+        url  = f"{settings.NGX_SOURCE_BASE_URL}/quote/ngx/{ticker.lower()}/financials/balance-sheet/"
+        soup = _get_soup(url)
+        if not soup:
+            return None
 
-    # 4 most-recent annual periods
-    n = min(4, len(data.get("periods", [])))
-    result = {
-        "periods":     data["periods"][-n:],
-        "assets":      data.get("Total Assets",          [])[-n:],
-        "liabilities": data.get("Total Liabilities",     [])[-n:],
-        "equity":      data.get("Shareholders' Equity",  [])[-n:],
-    }
+        data = _parse_table(soup, ["Total Assets", "Total Liabilities", "Shareholders' Equity"])
+        n = min(4, len(data.get("periods", [])))
+        result = {
+            "periods":     data["periods"][-n:],
+            "assets":      data.get("Total Assets",         [])[-n:],
+            "liabilities": data.get("Total Liabilities",    [])[-n:],
+            "equity":      data.get("Shareholders' Equity", [])[-n:],
+        }
 
-    _cache[cache_key]    = result
-    _cache_ts[cache_key] = now
-    log.info("[Financials] balance sheet %s → %d periods", ticker, n)
-    return result
+        crud.upsert_financials_cache(db, ticker.upper(), "balance", result)
+        _cache[cache_key]    = result
+        _cache_ts[cache_key] = now
+        log.info("[Financials] balance sheet %s → %d periods", ticker, n)
+        return result
+
+    finally:
+        db.close()

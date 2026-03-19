@@ -14,7 +14,7 @@ import logging
 import time
 import re
 from typing import Optional
-from datetime import datetime
+from datetime import datetime, timezone
 
 try:
     import requests
@@ -27,6 +27,8 @@ except ImportError:
 
 from app.config import settings
 from app.models import DividendInfo
+from app.db.engine import SessionLocal
+from app.db import crud
 
 log = logging.getLogger(__name__)
 
@@ -210,31 +212,57 @@ def _fetch_dividend(ticker: str) -> Optional[DividendInfo]:
 
 def get_dividend(ticker: str) -> Optional[DividendInfo]:
     """
-    Get upcoming dividend information for a ticker.
-    Uses cache with configurable TTL.
+    Two-level cache: L1 = in-memory, L2 = DB (survives restarts).
+    Falls back to scraping only when both levels are stale.
     """
     global _cache
     now = time.time()
-    
-    # Check if we have cached data and it's not stale
-    if (ticker in _cache["data"] and 
-        (now - _cache["ts"]) < settings.DIVIDEND_TTL):
-        return _cache["data"].get(ticker)
-    
-    # Fetch fresh data
-    log.info(f"[Dividends] fetching {ticker}")
-    result = _fetch_dividend(ticker)
-    
-    if result:
-        _cache["data"][ticker] = result
+    ticker_up = ticker.upper()
+
+    # L1 — in-memory
+    if (ticker_up in _cache["data"] and
+            (now - _cache["ts"]) < settings.DIVIDEND_TTL):
+        return _cache["data"][ticker_up]
+
+    # L2 — database
+    db = SessionLocal()
+    try:
+        row = crud.get_dividend_cache(db, ticker_up)
+        if row is not None:
+            age = (datetime.now(timezone.utc) - row.fetched_at).total_seconds()
+            if age < settings.DIVIDEND_TTL:
+                result = (
+                    DividendInfo(
+                        symbol           = row.symbol,
+                        ex_dividend_date = row.ex_dividend_date,
+                        record_date      = row.record_date,
+                        pay_date         = row.pay_date,
+                        cash_amount      = row.cash_amount,
+                        currency         = row.currency,
+                        timestamp        = row.dividend_ts,
+                    )
+                    if row.cash_amount is not None else None
+                )
+                _cache["data"][ticker_up] = result
+                _cache["ts"] = now
+                log.debug("[Dividends] %s from DB cache (age %.0fs)", ticker_up, age)
+                return result
+
+        # Scrape
+        log.info("[Dividends] fetching %s", ticker_up)
+        result = _fetch_dividend(ticker_up)
+
+        crud.upsert_dividend_cache(db, ticker_up, result)
+        _cache["data"][ticker_up] = result
         _cache["ts"] = now
-        log.info(f"[Dividends] {ticker} → {result.cash_amount} {result.currency} (ex: {result.ex_dividend_date})")
-    else:
-        # Cache the absence to avoid hammering the site
-        _cache["data"][ticker] = None
-        _cache["ts"] = now
-    
-    return result
+
+        if result:
+            log.info("[Dividends] %s → %s %s (ex: %s)",
+                     ticker_up, result.cash_amount, result.currency, result.ex_dividend_date)
+        return result
+
+    finally:
+        db.close()
 
 
 def get_dividends(tickers: list[str]) -> dict[str, Optional[DividendInfo]]:
