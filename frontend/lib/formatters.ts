@@ -5,9 +5,12 @@
 export function fmtNGN(v?: number | null): string {
   if (v == null) return '—';
   const abs = Math.abs(v);
-  if (abs >= 1_000_000) return `₦${(v / 1_000_000).toFixed(2)}M`;
-  if (abs >= 1_000)     return `₦${(v / 1_000).toFixed(1)}K`;
-  return `₦${v.toFixed(2)}`;
+  const sign = v < 0 ? '-' : '';
+  if (abs >= 1_000_000_000_000) return `${sign}₦${(abs / 1_000_000_000_000).toFixed(2)}T`;
+  if (abs >= 1_000_000_000)     return `${sign}₦${(abs / 1_000_000_000).toFixed(2)}B`;
+  if (abs >= 1_000_000)         return `${sign}₦${(abs / 1_000_000).toFixed(2)}M`;
+  if (abs >= 1_000)             return `${sign}₦${(abs / 1_000).toFixed(1)}K`;
+  return `${sign}₦${abs.toFixed(2)}`;
 }
 
 export function fmtNGNFull(v?: number | null): string {
