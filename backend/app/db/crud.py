@@ -387,23 +387,41 @@ def get_dividend_cache(db: Session, ticker: str) -> Optional[DividendCache]:
 
 
 def upsert_dividend_cache(db: Session, ticker: str, info) -> DividendCache:
-    """Insert or update the dividend cache row. Pass info=None to record absence."""
+    """
+    Insert or update the dividend cache row. Pass info=None to record absence.
+    Dividend fields are only overwritten when the data has actually changed.
+    fetched_at is always updated so the TTL is refreshed after every scrape.
+    """
     obj = get_dividend_cache(db, ticker)
     now = datetime.now(timezone.utc)
     if obj is None:
         obj = DividendCache(ticker=ticker.upper(), symbol=ticker.upper(), currency="NGN")
         db.add(obj)
-    obj.fetched_at = now
+
+    obj.fetched_at = now   # always refresh so we don't re-scrape next cycle
+
     if info is not None:
-        obj.symbol           = info.symbol
-        obj.ex_dividend_date = info.ex_dividend_date
-        obj.record_date      = info.record_date
-        obj.pay_date         = info.pay_date
-        obj.cash_amount      = info.cash_amount
-        obj.currency         = info.currency
-        obj.dividend_ts      = info.timestamp
+        changed = (
+            obj.ex_dividend_date != info.ex_dividend_date
+            or obj.cash_amount   != info.cash_amount
+            or obj.pay_date      != info.pay_date
+            or obj.record_date   != info.record_date
+        )
+        if changed:
+            obj.symbol           = info.symbol
+            obj.ex_dividend_date = info.ex_dividend_date
+            obj.record_date      = info.record_date
+            obj.pay_date         = info.pay_date
+            obj.cash_amount      = info.cash_amount
+            obj.currency         = info.currency
+            obj.dividend_ts      = info.timestamp
+            log.info("[DividendCache] %s updated: %.4f %s ex=%s",
+                     ticker.upper(), info.cash_amount, info.currency, info.ex_dividend_date)
+        else:
+            log.debug("[DividendCache] %s unchanged, refreshed fetched_at", ticker.upper())
     else:
         obj.cash_amount = None   # sentinel: scraped but not found
+
     db.commit()
     db.refresh(obj)
     return obj
