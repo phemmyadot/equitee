@@ -63,7 +63,8 @@ def _scrape_overview(ticker: str) -> Optional[Dict]:
     raw = _scrape_stats_blob(ticker)
     if not raw:
         return None
-    return {
+
+    result = {
         "symbol":        ticker.upper(),
         "market_cap":    raw.get("marketcap"),
         "pe_ratio":      raw.get("pe"),
@@ -78,6 +79,16 @@ def _scrape_overview(ticker: str) -> Optional[Dict]:
         "revenue":       raw.get("revenue"),
         "net_income":    raw.get("netinc"),
     }
+
+    # D/E fallback: equity multiplier = ROE / ROA;  D/E = multiplier - 1
+    # (Total Liabilities / Equity, derived without balance-sheet scrape)
+    if result["debt_to_equity"] is None:
+        roe = raw.get("roe")
+        roa = raw.get("roa")
+        if roe and roa and roa > 0:
+            result["debt_to_equity"] = round(roe / roa - 1, 2)
+
+    return result
 
 
 def get_overview(ticker: str, force_refresh: bool = False) -> Optional[Dict]:
