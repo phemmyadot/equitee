@@ -122,7 +122,7 @@ def get_earnings_history(ticker: str) -> Optional[dict]:
     """
     cache_key = f"earnings:{ticker.upper()}"
     now = time.time()
-    if cache_key in _cache and (now - _cache_ts.get(cache_key, 0)) < settings.NGX_PRICE_TTL * 4:
+    if cache_key in _cache and (now - _cache_ts.get(cache_key, 0)) < settings.FINANCIALS_TTL:
         return _cache[cache_key]
 
     url  = f"{settings.NGX_SOURCE_BASE_URL}/quote/ngx/{ticker.lower()}/financials/?p=quarterly"
@@ -161,7 +161,7 @@ def get_balance_sheet(ticker: str) -> Optional[dict]:
     """
     cache_key = f"balance:{ticker.upper()}"
     now = time.time()
-    if cache_key in _cache and (now - _cache_ts.get(cache_key, 0)) < settings.NGX_PRICE_TTL * 4:
+    if cache_key in _cache and (now - _cache_ts.get(cache_key, 0)) < settings.FINANCIALS_TTL:
         return _cache[cache_key]
 
     url  = f"{settings.NGX_SOURCE_BASE_URL}/quote/ngx/{ticker.lower()}/financials/balance-sheet/"
