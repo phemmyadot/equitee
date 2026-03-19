@@ -13,7 +13,11 @@ from typing import Optional
 from sqlalchemy import select, desc
 from sqlalchemy.orm import Session
 
-from app.db.models import Holding, ClosedPosition, PortfolioSnapshot, PriceHistory, User, RefreshToken, InviteCode
+from app.db.models import (
+    Holding, ClosedPosition, PortfolioSnapshot, PriceHistory,
+    User, RefreshToken, InviteCode,
+    DividendCache, FinancialsCache,
+)
 
 log = logging.getLogger(__name__)
 
@@ -372,3 +376,81 @@ def use_invite_code(db: Session, code: str, user_id: int) -> Optional[InviteCode
 def list_invite_codes(db: Session, created_by: int) -> list[InviteCode]:
     stmt = select(InviteCode).where(InviteCode.created_by == created_by).order_by(desc(InviteCode.created_at))
     return list(db.scalars(stmt).all())
+
+
+# ── Dividend cache ─────────────────────────────────────────────────────────────
+
+def get_dividend_cache(db: Session, ticker: str) -> Optional[DividendCache]:
+    return db.scalars(
+        select(DividendCache).where(DividendCache.ticker == ticker.upper())
+    ).first()
+
+
+def upsert_dividend_cache(db: Session, ticker: str, info) -> DividendCache:
+    """Insert or update the dividend cache row. Pass info=None to record absence."""
+    obj = get_dividend_cache(db, ticker)
+    now = datetime.now(timezone.utc)
+    if obj is None:
+        obj = DividendCache(ticker=ticker.upper(), symbol=ticker.upper(), currency="NGN")
+        db.add(obj)
+    obj.fetched_at = now
+    if info is not None:
+        obj.symbol           = info.symbol
+        obj.ex_dividend_date = info.ex_dividend_date
+        obj.record_date      = info.record_date
+        obj.pay_date         = info.pay_date
+        obj.cash_amount      = info.cash_amount
+        obj.currency         = info.currency
+        obj.dividend_ts      = info.timestamp
+    else:
+        obj.cash_amount = None   # sentinel: scraped but not found
+    db.commit()
+    db.refresh(obj)
+    return obj
+
+
+# ── Financials cache ───────────────────────────────────────────────────────────
+
+def get_financials_cache(db: Session, ticker: str, cache_type: str) -> Optional[FinancialsCache]:
+    return db.scalars(
+        select(FinancialsCache).where(
+            FinancialsCache.ticker     == ticker.upper(),
+            FinancialsCache.cache_type == cache_type,
+        )
+    ).first()
+
+
+def upsert_financials_cache(db: Session, ticker: str, cache_type: str, data: dict) -> FinancialsCache:
+    obj = get_financials_cache(db, ticker, cache_type)
+    if obj is None:
+        obj = FinancialsCache(ticker=ticker.upper(), cache_type=cache_type)
+        db.add(obj)
+    obj.fetched_at = datetime.now(timezone.utc)
+    obj.periods    = data.get("periods", [])
+    if cache_type == "earnings":
+        obj.col_a = data.get("revenue",     [])
+        obj.col_b = data.get("eps",         [])
+        obj.col_c = data.get("net_income",  [])
+    else:
+        obj.col_a = data.get("assets",      [])
+        obj.col_b = data.get("liabilities", [])
+        obj.col_c = data.get("equity",      [])
+    db.commit()
+    db.refresh(obj)
+    return obj
+
+
+def financials_row_to_dict(obj: FinancialsCache) -> dict:
+    if obj.cache_type == "earnings":
+        return {
+            "periods":    obj.periods,
+            "revenue":    obj.col_a,
+            "eps":        obj.col_b,
+            "net_income": obj.col_c,
+        }
+    return {
+        "periods":     obj.periods,
+        "assets":      obj.col_a,
+        "liabilities": obj.col_b,
+        "equity":      obj.col_c,
+    }

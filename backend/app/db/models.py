@@ -8,7 +8,8 @@ from datetime import datetime, timezone
 from typing import Optional
 from sqlalchemy import (
     Integer, String, Float, Boolean,
-    DateTime, ForeignKey, Index,
+    DateTime, ForeignKey, Index, JSON,
+    UniqueConstraint,
 )
 from sqlalchemy.orm import Mapped, mapped_column, relationship, backref
 
@@ -180,4 +181,50 @@ class PriceHistory(Base):
 
     __table_args__ = (
         Index("ix_price_history_ticker_snapshot", "ticker", "snapshot_id"),
+    )
+
+
+# ── dividend_cache ─────────────────────────────────────────────────────────────
+
+class DividendCache(Base):
+    """Persistent L2 cache for dividend scrape results — one row per ticker."""
+    __tablename__ = "dividend_cache"
+
+    id:         Mapped[int]      = mapped_column(Integer, primary_key=True, autoincrement=True)
+    ticker:     Mapped[str]      = mapped_column(String, nullable=False, unique=True)
+    fetched_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    symbol:     Mapped[str]      = mapped_column(String, nullable=False)
+    currency:   Mapped[str]      = mapped_column(String, nullable=False, default="NGN")
+    ex_dividend_date = mapped_column(String, nullable=True)
+    record_date      = mapped_column(String, nullable=True)
+    pay_date         = mapped_column(String, nullable=True)
+    cash_amount      = mapped_column(Float,  nullable=True)   # None = "scraped but not found"
+    dividend_ts      = mapped_column(String, nullable=True)
+
+    __table_args__ = (
+        Index("ix_dividend_cache_ticker", "ticker"),
+    )
+
+
+# ── financials_cache ───────────────────────────────────────────────────────────
+
+class FinancialsCache(Base):
+    """
+    Persistent L2 cache for earnings history and balance sheet.
+    cache_type is 'earnings' or 'balance'. List fields stored as JSON.
+    """
+    __tablename__ = "financials_cache"
+
+    id:         Mapped[int]      = mapped_column(Integer, primary_key=True, autoincrement=True)
+    ticker:     Mapped[str]      = mapped_column(String, nullable=False)
+    cache_type: Mapped[str]      = mapped_column(String, nullable=False)   # 'earnings' | 'balance'
+    fetched_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    periods    = mapped_column(JSON, nullable=False, default=list)   # list[str]
+    col_a      = mapped_column(JSON, nullable=False, default=list)   # revenue | assets
+    col_b      = mapped_column(JSON, nullable=False, default=list)   # eps     | liabilities
+    col_c      = mapped_column(JSON, nullable=False, default=list)   # net_income | equity
+
+    __table_args__ = (
+        UniqueConstraint("ticker", "cache_type", name="uq_financials_cache_ticker_type"),
+        Index("ix_financials_cache_ticker_type", "ticker", "cache_type"),
     )
