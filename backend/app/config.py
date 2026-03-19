@@ -31,7 +31,8 @@ class Settings:
     US_PRICE_TTL: int = int(os.getenv("US_PRICE_TTL", "120"))     # seconds
 
     # ── Dividends ────────────────────────────────────────────────────────────
-    DIVIDEND_TTL: int = int(os.getenv("DIVIDEND_TTL", "3600"))    # seconds
+    DIVIDEND_TTL: int   = int(os.getenv("DIVIDEND_TTL",   "86400"))  # seconds (1 day)
+    FINANCIALS_TTL: int = int(os.getenv("FINANCIALS_TTL", "86400"))  # seconds (1 day)
 
     # ── FX ───────────────────────────────────────────────────────────────────
     FX_TTL: int          = int(os.getenv("FX_TTL", "600"))        # seconds
