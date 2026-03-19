@@ -197,6 +197,7 @@ def get_balance_sheet(ticker: str) -> Optional[dict]:
         assets        = _extract_js_array(text, "assets")
         liabilities   = _extract_js_array(text, "liabilitiesBank")
         equity        = _extract_js_array(text, "equity")
+        net_cash      = _extract_js_array(text, "netcash")
 
         if not fiscal_year:
             log.warning("[Financials] balance sheet %s: financialData not found in page", ticker)
@@ -213,11 +214,15 @@ def get_balance_sheet(ticker: str) -> Optional[dict]:
         n = min(4, len(idx))
         idx = idx[:n]   # newest first, then reverse
 
+        def _pick(arr: list) -> list:
+            return list(reversed([arr[i] for i in idx if i < len(arr)]))
+
         result = {
-            "periods":     list(reversed([fiscal_year[i]   for i in idx])),
-            "assets":      list(reversed([assets[i]        for i in idx if i < len(assets)])),
-            "liabilities": list(reversed([liabilities[i]   for i in idx if i < len(liabilities)])),
-            "equity":      list(reversed([equity[i]        for i in idx if i < len(equity)])),
+            "periods":     list(reversed([fiscal_year[i] for i in idx])),
+            "assets":      _pick(assets),
+            "liabilities": _pick(liabilities),
+            "equity":      _pick(equity),
+            "net_cash":    _pick(net_cash),
         }
 
         crud.upsert_financials_cache(db, ticker.upper(), "balance", result)

@@ -455,10 +455,12 @@ def upsert_financials_cache(db: Session, ticker: str, cache_type: str, data: dic
         new_a = data.get("revenue",    [])
         new_b = data.get("eps",        [])
         new_c = data.get("net_income", [])
+        new_d = []
     else:
         new_a = data.get("assets",      [])
         new_b = data.get("liabilities", [])
         new_c = data.get("equity",      [])
+        new_d = data.get("net_cash",    [])
 
     new_periods = data.get("periods", [])
     changed = (
@@ -466,12 +468,14 @@ def upsert_financials_cache(db: Session, ticker: str, cache_type: str, data: dic
         or obj.col_a != new_a
         or obj.col_b != new_b
         or obj.col_c != new_c
+        or obj.col_d != new_d
     )
     if changed:
         obj.periods = new_periods
         obj.col_a   = new_a
         obj.col_b   = new_b
         obj.col_c   = new_c
+        obj.col_d   = new_d
         log.info("[FinancialsCache] %s %s updated (%d periods)",
                  ticker.upper(), cache_type, len(new_periods))
     else:
@@ -496,4 +500,5 @@ def financials_row_to_dict(obj: FinancialsCache) -> dict:
         "assets":      obj.col_a,
         "liabilities": obj.col_b,
         "equity":      obj.col_c,
+        "net_cash":    obj.col_d or [],
     }
