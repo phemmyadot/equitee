@@ -205,13 +205,7 @@ function scoreDividend(
         if (yoc > 8) signals.push(`Yield on cost ${yoc.toFixed(1)}% — strong income`);
     }
 
-    // Dividend growth
-    const dg = n(ov.dividend_yield);   // proxy — use growth field if available
-    const dgRaw = null as number | null;  // placeholder — field not in overview
-    if (dgRaw !== null && dgRaw > 0) {
-        pts += 0.5; count++;
-        signals.push(`Dividend growing ${dgRaw.toFixed(0)}% YoY`);
-    }
+    // Dividend growth — field not yet in overview; placeholder for future use
 
     return { score: count > 0 ? clamp(pts / count) : 0, signals };
 }
@@ -393,29 +387,38 @@ export default function SignalScore({ ov, perf, livePrice, posRow, dividend, loa
 
     const { total, label, color, bg, dimensions } = result;
 
-    // Gauge arc path (SVG semi-circle, 0=left=-10, 1=right=+10)
-    const gaugeAngle = ((total + 10) / 20) * 180;   // 0° … 180°
-    const rad = (gaugeAngle - 90) * (Math.PI / 180);
+    // Gauge arc — top semicircle: 0° gauge = left (−10), 180° = right (+10)
+    // Standard math angle θ = 180° − gaugeDeg, SVG y is inverted so y = cy − R·sin(θ)
     const R = 52;
-    const cx = 64, cy = 60;
-    const nx = cx + R * Math.cos(rad);
-    const ny = cy + R * Math.sin(rad);
+    const cx = 64, cy = 64;
+    const gaugeAngle = ((total + 10) / 20) * 180;   // 0° … 180°
 
-    // Zone colours on the gauge track
+    function gaugeXY(gaugeDeg: number) {
+        const theta = (180 - gaugeDeg) * (Math.PI / 180);
+        return { x: cx + R * Math.cos(theta), y: cy - R * Math.sin(theta) };
+    }
+
+    const needle = gaugeXY(gaugeAngle);
+    const nx = needle.x, ny = needle.y;
+
+    // Zone colours — boundaries mapped from score thresholds to gauge degrees
+    // score -10→-6: 0°–36°  -6→-3: 36°–63°  -3→-1: 63°–81°
+    // -1→+1: 81°–99°  +1→+3: 99°–117°  +3→+6: 117°–144°  +6→+10: 144°–180°
     const ZONES = [
-        { from: 0, to: 36, col: 'var(--loss)' },   // Sell   -10 → -3
-        { from: 36, to: 63, col: 'var(--warn)' },   // Reduce  -3 → -1
-        { from: 63, to: 99, col: '#CBD2DC' },   // Hold    -1 → +1
-        { from: 99, to: 126, col: '#0E7490' },   // Accum   +1 → +3
-        { from: 126, to: 180, col: 'var(--gain)' },   // Buy     +3 → +10
+        { from: 0,   to: 36,  col: 'var(--loss)' },
+        { from: 36,  to: 63,  col: '#EF4444' },
+        { from: 63,  to: 81,  col: 'var(--warn)' },
+        { from: 81,  to: 99,  col: '#CBD2DC' },
+        { from: 99,  to: 117, col: '#0E7490' },
+        { from: 117, to: 144, col: 'var(--gain)' },
+        { from: 144, to: 180, col: 'var(--gain)' },
     ];
 
-    function arcPath(startDeg: number, endDeg: number) {
-        const s = (startDeg - 90) * (Math.PI / 180);
-        const e = (endDeg - 90) * (Math.PI / 180);
-        const x1 = cx + R * Math.cos(s), y1 = cy + R * Math.sin(s);
-        const x2 = cx + R * Math.cos(e), y2 = cy + R * Math.sin(e);
-        return `M ${x1} ${y1} A ${R} ${R} 0 0 1 ${x2} ${y2}`;
+    function arcPath(startGaugeDeg: number, endGaugeDeg: number) {
+        const s = gaugeXY(startGaugeDeg);
+        const e = gaugeXY(endGaugeDeg);
+        // sweep=1 (CW on screen) from left goes UP through top → right (upper semicircle)
+        return `M ${s.x} ${s.y} A ${R} ${R} 0 0 1 ${e.x} ${e.y}`;
     }
 
     return (
@@ -432,7 +435,7 @@ export default function SignalScore({ ov, perf, livePrice, posRow, dividend, loa
 
                 {/* ── Gauge + label ── */}
                 <div className="flex flex-col items-center shrink-0 w-[128px]">
-                    <svg viewBox="0 0 128 68" width="128" height="68">
+                    <svg viewBox="0 0 128 72" width="128" height="72">
                         {/* Zone arcs */}
                         {ZONES.map((z, i) => (
                             <path
@@ -463,7 +466,7 @@ export default function SignalScore({ ov, perf, livePrice, posRow, dividend, loa
                         />
                         <circle cx={cx} cy={cy} r="3" fill={color} />
                         {/* Score text */}
-                        <text x={cx} y={cy - 12} textAnchor="middle"
+                        <text x={cx} y={cy - 14} textAnchor="middle"
                             fontSize="14" fontWeight="700" fontFamily="'JetBrains Mono', monospace"
                             fill={color}>
                             {total > 0 ? '+' : ''}{total.toFixed(1)}
