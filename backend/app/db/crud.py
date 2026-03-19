@@ -456,6 +456,11 @@ def upsert_financials_cache(db: Session, ticker: str, cache_type: str, data: dic
         new_b = data.get("eps",        [])
         new_c = data.get("net_income", [])
         new_d = []
+    elif cache_type == "cashflow":
+        new_a = data.get("capex",     [])
+        new_b = data.get("fcf",       [])
+        new_c = data.get("net_debt",  [])
+        new_d = []
     else:
         new_a = data.get("assets",      [])
         new_b = data.get("liabilities", [])
@@ -494,6 +499,13 @@ def financials_row_to_dict(obj: FinancialsCache) -> dict:
             "revenue":    obj.col_a,
             "eps":        obj.col_b,
             "net_income": obj.col_c,
+        }
+    if obj.cache_type == "cashflow":
+        return {
+            "periods":  obj.periods,
+            "capex":    obj.col_a,
+            "fcf":      obj.col_b,
+            "net_debt": obj.col_c,
         }
     return {
         "periods":     obj.periods,
