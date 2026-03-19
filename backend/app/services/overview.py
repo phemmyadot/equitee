@@ -11,8 +11,8 @@ import re
 import time
 import requests
 from typing import Optional, Dict
-from bs4 import BeautifulSoup
 from app.config import settings
+from app.services.performance import _scrape_stats_blob
 
 log = logging.getLogger(__name__)
 
@@ -22,17 +22,6 @@ _performance_ts: Dict = {}
 
 USER_AGENT = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36"
 
-
-def _get_soup(url: str) -> Optional[BeautifulSoup]:
-    """Fetch and parse HTML from URL."""
-    try:
-        headers = {"User-Agent": USER_AGENT}
-        response = requests.get(url, headers=headers, timeout=15)
-        response.raise_for_status()
-        return BeautifulSoup(response.text, "html.parser")
-    except Exception as exc:
-        log.error(f"[Performance] Failed to fetch {url}: {exc}")
-        return None
 
 
 def _fetch_period_returns(ticker: str) -> Dict[str, Optional[float]]:
@@ -134,199 +123,236 @@ def fetch_chart_history(ticker: str, days: int = 90) -> list[dict]:
         return []
 
 
-def _scrape_performance(ticker: str) -> Optional[Dict]:
-    """Scrape performance and valuation metrics from the statistics page."""
-    url = f"{settings.NGX_SOURCE_BASE_URL}/quote/ngx/{ticker.lower()}/statistics/"
+def _calculate_from_history(ticker: str) -> dict:
+    """Derive volatility, Sharpe ratio, and max drawdown from price history."""
+    import math
+    history = fetch_chart_history(ticker, days=365)
+    prices  = [r["price"]      for r in history if r.get("price")]
+    changes = [r["change_pct"] for r in history if r.get("change_pct") is not None]
+    if len(changes) < 20:
+        return {}
 
-    soup = _get_soup(url)
-    if not soup:
+    daily_returns = [c / 100 for c in changes]
+    n       = len(daily_returns)
+    mean_r  = sum(daily_returns) / n
+    var     = sum((r - mean_r) ** 2 for r in daily_returns) / max(n - 1, 1)
+    std_day = math.sqrt(var) if var > 0 else 0
+    result: dict = {}
+
+    if std_day > 0:
+        result["volatility"]   = round(std_day * math.sqrt(252) * 100, 2)
+        # Nigerian T-bill risk-free rate ≈ 18 % (2024-2025)
+        rf_daily               = 0.18 / 252
+        result["sharpe_ratio"] = round((mean_r - rf_daily) / std_day * math.sqrt(252), 3)
+
+    if prices:
+        peak, max_dd = prices[0], 0.0
+        for p in prices:
+            if p > peak:
+                peak = p
+            dd = (peak - p) / peak * 100 if peak > 0 else 0
+            if dd > max_dd:
+                max_dd = dd
+        result["max_drawdown"] = round(-max_dd, 2)   # negative = drawdown
+
+    return result
+
+
+def _calculate_growth_metrics(ticker: str) -> dict:
+    """Calculate YoY revenue, earnings and FCF growth from stored quarterly history."""
+    from app.services.financials import get_earnings_history, get_cash_flows
+    result: dict = {}
+    try:
+        earn = get_earnings_history(ticker)
+        if earn and earn.get("periods"):
+            rev = earn.get("revenue", [])
+            ni  = earn.get("net_income", [])
+
+            def _yoy(arr):
+                if len(arr) >= 8:
+                    ttm   = [v for v in arr[-4:] if v is not None]
+                    prior = [v for v in arr[-8:-4] if v is not None]
+                    if len(ttm) == 4 and len(prior) == 4:
+                        t, p = sum(ttm), sum(prior)
+                        if p != 0:
+                            return round((t - p) / abs(p) * 100, 2)
+                if len(arr) >= 5 and arr[-1] is not None and arr[-5] is not None and arr[-5] != 0:
+                    return round((arr[-1] - arr[-5]) / abs(arr[-5]) * 100, 2)
+                return None
+
+            result["revenue_growth_yoy"]   = _yoy(rev)
+            result["earnings_growth_yoy"]  = _yoy(ni)
+
+    except Exception as exc:
+        log.warning("[Performance] growth calc failed for %s: %s", ticker, exc)
+
+    # FCF growth
+    try:
+        from app.services.financials import get_cash_flows
+        cf = get_cash_flows(ticker)
+        if cf and cf.get("periods"):
+            fcf = cf.get("fcf", [])
+            if len(fcf) >= 8:
+                ttm   = [v for v in fcf[-4:] if v is not None]
+                prior = [v for v in fcf[-8:-4] if v is not None]
+                if len(ttm) == 4 and len(prior) == 4:
+                    t, p = sum(ttm), sum(prior)
+                    if p != 0:
+                        result["fcf_growth_yoy"] = round((t - p) / abs(p) * 100, 2)
+            elif len(fcf) >= 5 and fcf[-1] is not None and fcf[-5] is not None and fcf[-5] != 0:
+                result["fcf_growth_yoy"] = round((fcf[-1] - fcf[-5]) / abs(fcf[-5]) * 100, 2)
+    except Exception as exc:
+        log.warning("[Performance] FCF growth calc failed for %s: %s", ticker, exc)
+
+    return {k: v for k, v in result.items() if v is not None}
+
+
+def _scrape_performance(ticker: str) -> Optional[Dict]:
+    """Extract performance and valuation metrics from the statistics page JS blob."""
+    raw = _scrape_stats_blob(ticker)
+    if not raw:
         return None
 
-    performance = {
-        "symbol": ticker.upper(),
-        # Price Returns (Phase 1-2)
-        "return_1m": None,
-        "return_3m": None,
-        "return_6m": None,
-        "return_1y": None,
-        "return_ytd": None,
-        "volatility": None,
-        "sharpe_ratio": None,
-        "max_drawdown": None,
-        "beta": None,
-        "correlation_market": None,
-        # 52-Week Price Data (Phase 4)
-        "week_52_high": None,
-        "week_52_low": None,
-        "week_52_change": None,
-        # Profitability & Returns (Phase 1-2)
-        "operating_margin": None,
-        "ebitda_margin": None,
-        "fcf_margin": None,
-        "pretax_margin": None,
-        "roa": None,
-        "roic": None,
-        "roce": None,
-        # Cash Flow (Phase 1-2)
-        "free_cash_flow": None,
-        "fcf_per_share": None,
-        "operating_cash_flow": None,
-        "capex": None,
-        "fcf_yield": None,
-        # Valuation (Phase 1-2)
-        "ev_ebitda": None,
-        "ev_fcf": None,
-        "price_to_book": None,
-        "price_to_sales": None,
-        # Financial Health (Phase 1-2)
-        "interest_coverage": None,
-        "debt_ebitda": None,
-        "quick_ratio": None,
-        "net_debt": None,
-        "asset_turnover": None,
-        # Growth Metrics (Phase 4)
-        "revenue_growth_yoy": None,
-        "earnings_growth_yoy": None,
-        "fcf_growth_yoy": None,
-        "dividend_growth_yoy": None,
-        # Quality Scores (Phase 5)
-        "piotroski_score": None,
-        "altman_zscore": None,
+    # netcash positive = net cash surplus; invert for net_debt convention
+    netcash = raw.get("netcash")
+    net_debt = -netcash if netcash is not None else None
+
+    performance: Dict = {
+        "symbol":             ticker.upper(),
+        # Risk
+        "beta":               raw.get("beta"),
+        "volatility":         None,   # not on statistics page
+        "sharpe_ratio":       None,   # not on statistics page
+        "max_drawdown":       None,   # not on statistics page
+        # 52-week (high/low come from quote page via _fetch_period_returns)
+        "week_52_high":       None,
+        "week_52_low":        None,
+        "week_52_change":     raw.get("ch1y"),
+        # Margins
+        "operating_margin":   raw.get("operatingMargin"),
+        "ebitda_margin":      raw.get("ebitdaMargin"),
+        "fcf_margin":         raw.get("fcfMargin"),
+        "pretax_margin":      raw.get("pretaxMargin"),
+        # Returns on capital
+        "roa":                raw.get("roa"),
+        "roic":               raw.get("roic"),
+        "roce":               raw.get("roce"),
+        # Cash flow
+        "free_cash_flow":     raw.get("fcf"),
+        "fcf_per_share":      raw.get("fcfps"),
+        "operating_cash_flow":raw.get("ncfo"),
+        "capex":              raw.get("capex"),
+        "fcf_yield":          raw.get("fcfYield"),
+        # Valuation
+        "ev_ebitda":          raw.get("evEbitda"),
+        "ev_fcf":             raw.get("evFcf"),
+        "price_to_book":      raw.get("pb"),
+        "price_to_sales":     raw.get("ps"),
+        # Financial health
+        "interest_coverage":  raw.get("interestCoverage"),
+        "debt_ebitda":        raw.get("debtEbitda"),
+        "quick_ratio":        raw.get("quickRatio"),
+        "net_debt":           net_debt,
+        "asset_turnover":     raw.get("assetturnover"),
+        # Growth
+        "revenue_growth_yoy":   raw.get("revenueGrowth"),
+        "earnings_growth_yoy":  raw.get("epsGrowth"),
+        "fcf_growth_yoy":       raw.get("fcfGrowth"),
+        "dividend_growth_yoy":  raw.get("dividendGrowth"),
+        # Quality scores — use site values; fall back to calculated below
+        "piotroski_score":    raw.get("fScore"),
+        "altman_zscore":      raw.get("zScore"),
+        # Period returns filled in by _fetch_period_returns
+        "return_1m": None, "return_3m": None, "return_6m": None,
+        "return_ytd": None, "return_1y": None,
     }
 
-    # Extract data from all tables on statistics page
-    tables = soup.find_all("table")
-    for table in tables:
-        rows = table.find_all("tr")
-        for row in rows:
-            cols = row.find_all(["td", "th"])
-            if len(cols) >= 2:
-                label = cols[0].get_text(strip=True).lower()
-                value_text = cols[1].get_text(strip=True)
-
-                # Try to parse numeric value
-                try:
-                    value = value_text.replace("%", "").replace(",", "").strip()
-                    value = float(value) if value and value not in ['n/a', '-', 'none', 'nan'] else None
-                except (ValueError, AttributeError):
-                    value = None
-
-                if value is None:
-                    continue
-
-                # Clean label for matching
-                label_clean = label.replace("-", " ").replace("/", " ").replace("(", " ").replace(")", " ")
-
-                # Map labels to performance fields - Made more flexible
-                if "1 month" in label_clean or "1month" in label_clean or "1m" in label_clean:
-                    if "return" in label_clean or "%" in label_clean and "12m" not in label_clean:
-                        performance["return_1m"] = value
-                elif "3 month" in label_clean or "3month" in label_clean or "3m" in label_clean:
-                    performance["return_3m"] = value
-                elif "6 month" in label_clean or "6month" in label_clean or "6m" in label_clean:
-                    performance["return_6m"] = value
-                elif ("1 year" in label_clean or "1year" in label_clean or "52 week" in label_clean or "52week" in label_clean) and "return" in label_clean:
-                    performance["return_1y"] = value
-                elif "year to date" in label_clean or "ytd" in label_clean:
-                    performance["return_ytd"] = value
-                elif "volatility" in label and not "correlation" in label:
-                    performance["volatility"] = value
-                elif "sharpe" in label:
-                    performance["sharpe_ratio"] = value
-                elif ("max drawdown" in label or "maximum drawdown" in label or "maxdrawdown" in label):
-                    performance["max_drawdown"] = value
-                elif "beta" in label and "correlation" not in label:
-                    performance["beta"] = value
-                elif "correlation" in label and "market" in label:
-                    performance["correlation_market"] = value
-                # Margin metrics
-                elif "operating margin" in label_clean:
-                    performance["operating_margin"] = value
-                elif "ebitda margin" in label_clean or "ebit margin" in label_clean:
-                    performance["ebitda_margin"] = value
-                elif "fcf margin" in label_clean or "free cash flow margin" in label_clean:
-                    performance["fcf_margin"] = value
-                elif "pretax margin" in label_clean or "profit before tax" in label_clean:
-                    performance["pretax_margin"] = value
-                # Efficiency metrics
-                elif "return on assets" in label_clean or "roa" in label_clean:
-                    performance["roa"] = value
-                elif "return on invested capital" in label_clean or "roic" in label_clean:
-                    performance["roic"] = value
-                elif "return on capital employed" in label_clean or "roce" in label_clean:
-                    performance["roce"] = value
-                elif "asset turnover" in label_clean or "asseturnover" in label_clean:
-                    performance["asset_turnover"] = value
-                # Cash flow metrics
-                elif "free cash flow" in label_clean and "margin" not in label_clean and "yield" not in label_clean and "per share" not in label_clean:
-                    performance["free_cash_flow"] = value
-                elif ("fcf per share" in label_clean or "free cash flow per share" in label_clean) and "yield" not in label_clean:
-                    performance["fcf_per_share"] = value
-                elif "operating cash flow" in label_clean or "operating cf" in label_clean or "ocf" in label_clean:
-                    performance["operating_cash_flow"] = value
-                elif "capital expenditure" in label_clean or "capex" in label_clean or "cap ex" in label_clean:
-                    performance["capex"] = value
-                elif "fcf yield" in label_clean or "free cash flow yield" in label_clean:
-                    performance["fcf_yield"] = value
-                # Enterprise value ratios
-                elif "ev" in label_clean and "ebitda" in label_clean:
-                    performance["ev_ebitda"] = value
-                elif "ev" in label_clean and "fcf" in label_clean:
-                    performance["ev_fcf"] = value
-                # Valuation ratios
-                elif ("price to book" in label_clean or "price book" in label_clean or "pb" in label_clean) and "ratio" in label_clean:
-                    performance["price_to_book"] = value
-                elif ("price to sales" in label_clean or "price sales" in label_clean or "ps" in label_clean) and "ratio" in label_clean:
-                    performance["price_to_sales"] = value
-                # Financial health
-                elif "interest coverage" in label_clean:
-                    performance["interest_coverage"] = value
-                elif ("debt" in label_clean and "ebitda" in label_clean):
-                    performance["debt_ebitda"] = value
-                elif "quick ratio" in label_clean:
-                    performance["quick_ratio"] = value
-                elif "net debt" in label_clean and "per share" not in label_clean:
-                    performance["net_debt"] = value
-                # 52-Week metrics
-                elif "52" in label_clean and "high" in label_clean:
-                    performance["week_52_high"] = value
-                elif "52" in label_clean and "low" in label_clean:
-                    performance["week_52_low"] = value
-                elif ("52" in label_clean or "52 week" in label_clean) and ("change" in label_clean or "%" in label or "return" in label_clean):
-                    if "high" not in label_clean and "low" not in label_clean:
-                        performance["week_52_change"] = value
-                # Growth metrics
-                elif "revenue" in label_clean and "growth" in label_clean:
-                    performance["revenue_growth_yoy"] = value
-                elif ("earnings growth" in label_clean or "eps growth" in label_clean or "net income growth" in label_clean):
-                    performance["earnings_growth_yoy"] = value
-                elif "fcf growth" in label_clean or "free cash flow growth" in label_clean:
-                    performance["fcf_growth_yoy"] = value
-                elif "dividend growth" in label_clean:
-                    performance["dividend_growth_yoy"] = value
-
-    # Enrich period returns from the quote page (accurate 1m/3m/6m/ytd/1y)
+    # Enrich period returns + 52w high/low from the quote page
     period_returns = _fetch_period_returns(ticker)
     for field, value in period_returns.items():
-        if value is not None and performance.get(field) is None:
+        if value is not None:
             performance[field] = value
 
-    # Fallback: 52-week price change == 1-year return
+    # Fallback: 52-week price change as 1y return
     if performance.get("week_52_change") is not None and performance.get("return_1y") is None:
         performance["return_1y"] = performance["week_52_change"]
 
-    # Calculate Piotroski F-Score if we have financial data (Phase 5)
-    # Make it work with partial data instead of requiring all metrics
-    piotroski = _calculate_piotroski_score(performance)
-    if piotroski:
-        performance["piotroski_score"] = piotroski
+    # Calculated fallbacks when site doesn't provide scores
+    if performance["piotroski_score"] is None:
+        performance["piotroski_score"] = _calculate_piotroski_score(performance)
+    if performance["altman_zscore"] is None:
+        performance["altman_zscore"] = _calculate_altman_zscore(performance)
 
-    # Calculate Altman Z-Score if we have balance sheet data (Phase 5)
-    altman = _calculate_altman_zscore(performance)
-    if altman:
-        performance["altman_zscore"] = altman
+    # ── Derived metrics — fill blanks using available figures ─────────────────
 
-    log.info(f"[Performance] Scraped performance for {ticker}")
+    # EBITDA Margin: for financial companies the site returns n/a; operating
+    # income ≈ EBITDA (minimal D&A), so use operating_margin as proxy.
+    if performance.get("ebitda_margin") is None and performance.get("operating_margin"):
+        performance["ebitda_margin"] = performance["operating_margin"]
+
+    # Enterprise Value components
+    market_cap   = raw.get("marketcap")
+    net_debt_val = performance.get("net_debt")   # negative = net cash
+    ev = (market_cap + net_debt_val) if (market_cap is not None and net_debt_val is not None) else None
+
+    # EV / FCF
+    if performance.get("ev_fcf") is None and ev is not None:
+        fcf = raw.get("fcf")
+        if fcf and fcf != 0:
+            performance["ev_fcf"] = round(ev / fcf, 2)
+
+    # EV / EBITDA — use ebitda_margin (now filled if op_margin was available)
+    if performance.get("ev_ebitda") is None and ev is not None:
+        revenue      = raw.get("revenue")
+        ebitda_margin = performance.get("ebitda_margin")
+        if revenue and ebitda_margin:
+            ebitda = ebitda_margin / 100 * revenue
+            if ebitda > 0:
+                performance["ev_ebitda"] = round(ev / ebitda, 2)
+
+    # Asset Turnover = Revenue / Total Assets;  Total Assets = Net Income / ROA
+    if performance.get("asset_turnover") is None:
+        roa    = performance.get("roa")
+        rev    = raw.get("revenue")
+        netinc = raw.get("netinc")
+        if roa and roa > 0 and rev and netinc and netinc > 0:
+            total_assets = netinc / (roa / 100)
+            performance["asset_turnover"] = round(rev / total_assets, 4)
+
+    # ROIC = Net Income / Invested Capital;  IC = Equity + Net Debt
+    if performance.get("roic") is None:
+        roe    = raw.get("roe")
+        netinc = raw.get("netinc")
+        if roe and roe > 0 and netinc:
+            equity = netinc / (roe / 100)
+            if equity > 0:
+                ic = equity + (net_debt_val or 0)
+                if ic > 0:
+                    performance["roic"] = round(netinc / ic * 100, 2)
+
+    # ROCE = EBIT / Capital Employed;  CE ≈ Equity for financials
+    if performance.get("roce") is None:
+        op_margin = performance.get("operating_margin")
+        rev       = raw.get("revenue")
+        roe       = raw.get("roe")
+        netinc    = raw.get("netinc")
+        if op_margin and rev and roe and roe > 0 and netinc:
+            ebit   = op_margin / 100 * rev
+            equity = netinc / (roe / 100)
+            if equity > 0:
+                performance["roce"] = round(ebit / equity * 100, 2)
+
+    # Volatility, Sharpe, Max Drawdown from price history
+    for k, v in _calculate_from_history(ticker).items():
+        if performance.get(k) is None:
+            performance[k] = v
+
+    # Revenue / Earnings / FCF growth from stored quarterly data
+    for k, v in _calculate_growth_metrics(ticker).items():
+        if performance.get(k) is None:
+            performance[k] = v
+
+    log.info("[Performance] Scraped %s from JS blob", ticker)
     return performance
 
 

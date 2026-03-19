@@ -466,7 +466,7 @@ export default function NGXProfilePage() {
             {ov?.market_cap && (
               <div className="flex items-center gap-1.5 text-[11px]">
                 <span className="text-[var(--ink-4)]">Mkt Cap</span>
-                <span className="font-mono font-medium text-[var(--ink-2)]">{ov.market_cap}</span>
+                <span className="font-mono font-medium text-[var(--ink-2)]">{fmtNGN(ov.market_cap as number | null)}</span>
               </div>
             )}
             {posRow?.Volume != null && (
@@ -750,7 +750,7 @@ export default function NGXProfilePage() {
           {loading
             ? <div className="grid grid-cols-2 gap-3">{[...Array(8)].map((_, i) => <Sk key={i} w="w-full" h="h-8" />)}</div>
             : <div className="grid grid-cols-2 gap-x-6 gap-y-3.5">
-              <Stat label="Market Cap" value={ov?.market_cap} />
+              <Stat label="Market Cap" value={fmtNGN(ov?.market_cap as number | null)} />
               <Stat label="P/E Ratio" value={ov?.pe_ratio} mono />
               <Stat label="EPS" value={ov?.eps} mono />
               <Stat label="Book Value" value={ov?.book_value} mono />
@@ -798,13 +798,13 @@ export default function NGXProfilePage() {
           {loading
             ? <div className="grid grid-cols-2 gap-3">{[...Array(8)].map((_, i) => <Sk key={i} w="w-full" h="h-8" />)}</div>
             : <div className="grid grid-cols-2 gap-x-6 gap-y-3.5">
-              <Stat label="Revenue" value={ov?.revenue} />
-              <Stat label="Net Income" value={ov?.net_income} />
+              <Stat label="Revenue" value={fmtNGN(ov?.revenue as number | null)} />
+              <Stat label="Net Income" value={fmtNGN(ov?.net_income as number | null)} />
               <Stat label="Current Ratio" value={ov?.current_ratio} mono />
               <Stat label="Quick Ratio" value={perf?.quick_ratio} mono />
               <Stat label="D/E Ratio" value={ov?.debt_to_equity} mono />
               <Stat label="Debt/EBITDA" value={perf?.debt_ebitda} mono />
-              <Stat label="Net Debt" value={perf?.net_debt} mono />
+              <Stat label="Net Debt" value={fmtNGN(perf?.net_debt as number | null)} mono />
               <Stat label="Int. Coverage" value={perf?.interest_coverage} mono />
             </div>
           }
@@ -844,12 +844,12 @@ export default function NGXProfilePage() {
           {loading
             ? <div className="grid grid-cols-2 gap-3">{[...Array(6)].map((_, i) => <Sk key={i} w="w-full" h="h-8" />)}</div>
             : <div className="grid grid-cols-2 gap-x-6 gap-y-3.5">
-              <Stat label="Op. Cash Flow" value={perf?.operating_cash_flow} />
-              <Stat label="Free Cash Flow" value={perf?.free_cash_flow} />
+              <Stat label="Op. Cash Flow" value={fmtNGN(perf?.operating_cash_flow as number | null)} />
+              <Stat label="Free Cash Flow" value={fmtNGN(perf?.free_cash_flow as number | null)} />
               <Stat label="FCF / Share" value={perf?.fcf_per_share} mono />
               <Stat label="FCF Margin" value={perf?.fcf_margin} />
               <Stat label="FCF Yield" value={perf?.fcf_yield} />
-              <Stat label="CapEx" value={perf?.capex} mono />
+              <Stat label="CapEx" value={fmtNGN(perf?.capex as number | null)} mono />
             </div>
           }
         </div>

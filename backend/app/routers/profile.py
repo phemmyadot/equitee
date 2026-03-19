@@ -16,7 +16,7 @@ from sqlalchemy.orm import Session
 
 from app.services.profile    import get_profile
 from app.services.dividends  import get_dividend
-from app.services.financials import get_earnings_history, get_balance_sheet
+from app.services.financials import get_earnings_history, get_balance_sheet, get_cash_flows
 from app.services.overview   import fetch_chart_history
 from app.db.engine  import get_db
 from app.db.crud    import get_price_history as db_get_price_history
@@ -108,6 +108,15 @@ class BalanceSheetResponse(BaseModel):
     assets:      list[Optional[float]]
     liabilities: list[Optional[float]]
     equity:      list[Optional[float]]
+    net_cash:    list[Optional[float]] = []
+
+
+class CashFlowResponse(BaseModel):
+    ticker:   str
+    periods:  list[str]
+    capex:    list[Optional[float]]
+    fcf:      list[Optional[float]]
+    net_debt: list[Optional[float]]
 
 
 @router.get("/ngx/{ticker}/earnings", response_model=EarningsHistoryResponse)
@@ -126,6 +135,15 @@ def ngx_balance_sheet(ticker: str, _: User = Depends(get_current_user)):
     if not data or not data.get("periods"):
         raise HTTPException(status_code=404, detail=f"No balance sheet data for {ticker.upper()}")
     return BalanceSheetResponse(ticker=ticker.upper(), **data)
+
+
+@router.get("/ngx/{ticker}/cash-flows", response_model=CashFlowResponse)
+def ngx_cash_flows(ticker: str, _: User = Depends(get_current_user)):
+    """Quarterly cash flows — up to 8 quarters, oldest first."""
+    data = get_cash_flows(ticker.upper())
+    if not data or not data.get("periods"):
+        raise HTTPException(status_code=404, detail=f"No cash flow data for {ticker.upper()}")
+    return CashFlowResponse(ticker=ticker.upper(), **data)
 
 
 # ── Full ticker data endpoint ─────────────────────────────────────────────────
