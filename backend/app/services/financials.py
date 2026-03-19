@@ -1,22 +1,23 @@
 """
 Financials Service
 ==================
-  - Price history:    Yahoo Finance chart API  → OHLCV (NGX tickers use .LG suffix)
-  - Earnings history: NGX_SOURCE_BASE_URL /financials/?p=quarterly  → Revenue, EPS, Net Income
-  - Balance sheet:    NGX_SOURCE_BASE_URL /financials/balance-sheet/ → Assets, Liabilities, Equity
+  - Earnings history: NGX_SOURCE_BASE_URL /financials/?p=quarterly
+                      → Revenue, EPS, Net Income  (quarterly)
+  - Balance sheet:    NGX_SOURCE_BASE_URL /financials/balance-sheet/
+                      → Assets, Liabilities, Equity  (annual)
 
-NGX_SOURCE_BASE_URL is a Next.js app. The /financials/ sub-pages server-render a static
-HTML table that BeautifulSoup can parse. The main quote page is JS-only, so we use
-Yahoo Finance for price history instead of scraping it.
+The pages are SvelteKit apps that embed financial data as a JSON blob inside
+a <script> tag.  We extract the `financialData:{...}` object with regex instead
+of parsing an HTML table (which is JS-rendered and invisible to BeautifulSoup).
 """
 
+import json
 import logging
 import re
 import time
 from datetime import datetime, timezone
 from typing import Optional
 import requests
-from bs4 import BeautifulSoup
 
 from app.config import settings
 from app.db.engine import SessionLocal
@@ -36,90 +37,65 @@ _HEADERS = {
     "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
 }
 
-_YAHOO_HEADERS = {
-    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)",
-    "Accept":     "application/json",
-}
 
+# ── helpers ───────────────────────────────────────────────────────────────────
 
-# ── Price history via Yahoo Finance ──────────────────────────────────────────
-
-def _get_soup(url: str) -> Optional[BeautifulSoup]:
+def _fetch_text(url: str) -> Optional[str]:
     try:
         r = requests.get(url, headers=_HEADERS, timeout=15)
         r.raise_for_status()
-        return BeautifulSoup(r.text, "html.parser")
+        return r.text
     except Exception as exc:
         log.warning("[Financials] fetch failed %s: %s", url, exc)
         return None
 
 
-def _clean_num(text: str) -> Optional[float]:
-    """Parse '₦12.3B', '-4.56', '1,234' → float or None."""
-    t = text.strip().replace(",", "").replace("₦", "").replace("$", "")
-    # Handle magnitude suffixes
-    mult = 1.0
-    if t.endswith("T"):
-        mult, t = 1e12, t[:-1]
-    elif t.endswith("B"):
-        mult, t = 1e9,  t[:-1]
-    elif t.endswith("M"):
-        mult, t = 1e6,  t[:-1]
-    elif t.endswith("K"):
-        mult, t = 1e3,  t[:-1]
+def _extract_js_array(text: str, key: str) -> list:
+    """
+    Extract a named array from the embedded JS financialData blob.
+    e.g. key='revenue' → [521342000000, 453347000000, ...]
+    Data comes newest-first from the source.
+
+    Handles JS quirks that are not valid JSON:
+      - leading-dot floats:  .840  →  0.840
+      - negative leading-dot: -.5  → -0.5
+    """
+    m = re.search(rf'\b{re.escape(key)}:\[([^\]]*)\]', text)
+    if not m or not m.group(1).strip():
+        return []
+    raw = m.group(1)
+    # Fix leading-dot floats (e.g. .84 → 0.84, -.84 → -0.84)
+    raw = re.sub(r'(?<![0-9])(\.)([0-9])', r'0.\2', raw)
+    raw = re.sub(r'(-)(0\.)([0-9])', r'-0.\3', raw)
     try:
-        return float(t) * mult
-    except (ValueError, TypeError):
-        return None
+        return json.loads(f'[{raw}]')
+    except json.JSONDecodeError:
+        return []
 
 
-def _parse_table(soup: BeautifulSoup, row_labels: list[str]) -> dict[str, list]:
-    """
-    Find the first <table> and extract columns matching row_labels.
-    Returns {label: [val1, val2, ...]} ordered oldest→newest,
-    plus a special 'periods' key for column headers.
-    """
-    result: dict[str, list] = {lbl: [] for lbl in row_labels}
-    result["periods"] = []
-
-    table = soup.find("table")
-    if not table:
-        return result
-
-    rows = table.find_all("tr")
-    if not rows:
-        return result
-
-    # Header row → period labels
-    header_cells = rows[0].find_all(["th", "td"])
-    periods = [c.get_text(strip=True) for c in header_cells[1:]]  # skip first (row-label col)
-    result["periods"] = list(reversed(periods))  # oldest first
-
-    for row in rows[1:]:
-        cells = row.find_all(["th", "td"])
-        if not cells:
-            continue
-        label_text = cells[0].get_text(strip=True)
-        for target in row_labels:
-            # Fuzzy match — label contains the target keyword
-            if target.lower() in label_text.lower():
-                vals = [_clean_num(c.get_text(strip=True)) for c in cells[1:]]
-                result[target] = list(reversed(vals))  # oldest first
-                break
-
-    return result
+def _oldest_first(lst: list, n: int) -> list:
+    """Take up to n items from the front (newest-first source) and reverse."""
+    return list(reversed(lst[:n]))
 
 
-#
+def _has_data(result: dict) -> bool:
+    """Return False if every value in all numeric arrays is None (stale/empty cache)."""
+    for key in ("revenue", "eps", "net_income", "assets", "liabilities", "equity"):
+        arr = result.get(key, [])
+        if any(v is not None for v in arr):
+            return True
+    return False
+
+
 # ── Earnings history ──────────────────────────────────────────────────────────
 
 def get_earnings_history(ticker: str) -> Optional[dict]:
     """
-    Returns dict:
+    Returns dict (oldest → newest):
       {
-        "periods":  ["Q1 2022", "Q2 2022", ...],   # up to 8 quarters
-        "revenue":  [1.2e9, 1.4e9, ...],
-        "eps":      [3.2, 4.1, ...],
+        "periods":    ["Q1 2022", "Q2 2022", ...],   # up to 8 quarters
+        "revenue":    [1.2e9, 1.4e9, ...],
+        "eps":        [3.2, 4.1, ...],
         "net_income": [...],
       }
     """
@@ -136,26 +112,37 @@ def get_earnings_history(ticker: str) -> Optional[dict]:
         row = crud.get_financials_cache(db, ticker.upper(), "earnings")
         if row is not None:
             age = (datetime.now(timezone.utc) - row.fetched_at).total_seconds()
-            if age < settings.FINANCIALS_TTL:
-                result = crud.financials_row_to_dict(row)
+            result = crud.financials_row_to_dict(row)
+            if age < settings.FINANCIALS_TTL and _has_data(result):
                 _cache[cache_key]    = result
                 _cache_ts[cache_key] = now
                 log.debug("[Financials] earnings %s from DB (age %.0fs)", ticker, age)
                 return result
 
-        # Scrape
+        # Scrape — extract JSON blob from embedded JS
         url  = f"{settings.NGX_SOURCE_BASE_URL}/quote/ngx/{ticker.lower()}/financials/?p=quarterly"
-        soup = _get_soup(url)
-        if not soup:
+        text = _fetch_text(url)
+        if not text:
             return None
 
-        data = _parse_table(soup, ["Revenue", "EPS", "Net Income"])
-        n = min(8, len(data.get("periods", [])))
+        fiscal_year    = _extract_js_array(text, "fiscalYear")
+        fiscal_quarter = _extract_js_array(text, "fiscalQuarter")
+        revenue        = _extract_js_array(text, "revenue")
+        eps            = _extract_js_array(text, "epsBasic")
+        net_income     = _extract_js_array(text, "netinc")
+
+        if not fiscal_year:
+            log.warning("[Financials] earnings %s: financialData not found in page", ticker)
+            return None
+
+        periods = [f"{q} {y}" for q, y in zip(fiscal_quarter, fiscal_year)]
+        n = min(8, len(periods))
+
         result = {
-            "periods":    data["periods"][-n:],
-            "revenue":    data.get("Revenue",    [])[-n:],
-            "eps":        data.get("EPS",        [])[-n:],
-            "net_income": data.get("Net Income", [])[-n:],
+            "periods":    _oldest_first(periods,    n),
+            "revenue":    _oldest_first(revenue,    n),
+            "eps":        _oldest_first(eps,        n),
+            "net_income": _oldest_first(net_income, n),
         }
 
         crud.upsert_financials_cache(db, ticker.upper(), "earnings", result)
@@ -168,11 +155,11 @@ def get_earnings_history(ticker: str) -> Optional[dict]:
         db.close()
 
 
-# ── Balance sheet trend ───────────────────────────────────────────────────────
+# ── Balance sheet ─────────────────────────────────────────────────────────────
 
 def get_balance_sheet(ticker: str) -> Optional[dict]:
     """
-    Returns dict:
+    Returns dict (oldest → newest):
       {
         "periods":     ["2020", "2021", "2022", "2023"],
         "assets":      [...],
@@ -193,8 +180,8 @@ def get_balance_sheet(ticker: str) -> Optional[dict]:
         row = crud.get_financials_cache(db, ticker.upper(), "balance")
         if row is not None:
             age = (datetime.now(timezone.utc) - row.fetched_at).total_seconds()
-            if age < settings.FINANCIALS_TTL:
-                result = crud.financials_row_to_dict(row)
+            result = crud.financials_row_to_dict(row)
+            if age < settings.FINANCIALS_TTL and _has_data(result):
                 _cache[cache_key]    = result
                 _cache_ts[cache_key] = now
                 log.debug("[Financials] balance sheet %s from DB (age %.0fs)", ticker, age)
@@ -202,17 +189,35 @@ def get_balance_sheet(ticker: str) -> Optional[dict]:
 
         # Scrape
         url  = f"{settings.NGX_SOURCE_BASE_URL}/quote/ngx/{ticker.lower()}/financials/balance-sheet/"
-        soup = _get_soup(url)
-        if not soup:
+        text = _fetch_text(url)
+        if not text:
             return None
 
-        data = _parse_table(soup, ["Total Assets", "Total Liabilities", "Shareholders' Equity"])
-        n = min(4, len(data.get("periods", [])))
+        fiscal_year   = _extract_js_array(text, "fiscalYear")
+        assets        = _extract_js_array(text, "assets")
+        liabilities   = _extract_js_array(text, "liabilitiesBank")
+        equity        = _extract_js_array(text, "equity")
+
+        if not fiscal_year:
+            log.warning("[Financials] balance sheet %s: financialData not found in page", ticker)
+            return None
+
+        # Annual periods only (balance sheet is yearly) — deduplicate by fiscal year
+        seen: set = set()
+        idx: list = []
+        for i, y in enumerate(fiscal_year):
+            if y not in seen:
+                seen.add(y)
+                idx.append(i)
+
+        n = min(4, len(idx))
+        idx = idx[:n]   # newest first, then reverse
+
         result = {
-            "periods":     data["periods"][-n:],
-            "assets":      data.get("Total Assets",         [])[-n:],
-            "liabilities": data.get("Total Liabilities",    [])[-n:],
-            "equity":      data.get("Shareholders' Equity", [])[-n:],
+            "periods":     list(reversed([fiscal_year[i]   for i in idx])),
+            "assets":      list(reversed([assets[i]        for i in idx if i < len(assets)])),
+            "liabilities": list(reversed([liabilities[i]   for i in idx if i < len(liabilities)])),
+            "equity":      list(reversed([equity[i]        for i in idx if i < len(equity)])),
         }
 
         crud.upsert_financials_cache(db, ticker.upper(), "balance", result)
