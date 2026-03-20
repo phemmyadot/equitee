@@ -318,6 +318,10 @@ export interface TickerPerformance {
   volatility:         string | number | null;
   sharpe_ratio:       string | number | null;
   max_drawdown:       string | number | null;
+  rsi_14:             number | null;
+  ma_50:              number | null;
+  ma_200:             number | null;
+  golden_cross:       boolean | null;
 }
 
 export interface TickerData {

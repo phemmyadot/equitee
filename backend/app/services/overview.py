@@ -124,18 +124,19 @@ def fetch_chart_history(ticker: str, days: int = 90) -> list[dict]:
 
 
 def _calculate_from_history(ticker: str) -> dict:
-    """Derive volatility, Sharpe ratio, and max drawdown from price history."""
+    """Derive volatility, Sharpe, max drawdown, RSI-14, MA-50, MA-200 from price history."""
     import math
-    history = fetch_chart_history(ticker, days=365)
+    # 400 days to ensure ≥200 trading-day data for MA-200
+    history = fetch_chart_history(ticker, days=400)
     prices  = [r["price"]      for r in history if r.get("price")]
     changes = [r["change_pct"] for r in history if r.get("change_pct") is not None]
     if len(changes) < 20:
         return {}
 
     daily_returns = [c / 100 for c in changes]
-    n       = len(daily_returns)
-    mean_r  = sum(daily_returns) / n
-    var     = sum((r - mean_r) ** 2 for r in daily_returns) / max(n - 1, 1)
+    n_r     = len(daily_returns)
+    mean_r  = sum(daily_returns) / n_r
+    var     = sum((r - mean_r) ** 2 for r in daily_returns) / max(n_r - 1, 1)
     std_day = math.sqrt(var) if var > 0 else 0
     result: dict = {}
 
@@ -154,6 +155,26 @@ def _calculate_from_history(ticker: str) -> dict:
             if dd > max_dd:
                 max_dd = dd
         result["max_drawdown"] = round(-max_dd, 2)   # negative = drawdown
+
+    # RSI-14 (Wilder's simple average over last 14 periods)
+    if len(prices) >= 15:
+        deltas   = [prices[i] - prices[i - 1] for i in range(1, len(prices))]
+        last14   = deltas[-14:]
+        avg_gain = sum(max(d, 0) for d in last14) / 14
+        avg_loss = sum(max(-d, 0) for d in last14) / 14
+        if avg_loss == 0:
+            result["rsi_14"] = 100.0
+        else:
+            rs = avg_gain / avg_loss
+            result["rsi_14"] = round(100 - 100 / (1 + rs), 1)
+
+    # Simple moving averages
+    if len(prices) >= 50:
+        result["ma_50"] = round(sum(prices[-50:]) / 50, 2)
+    if len(prices) >= 200:
+        result["ma_200"] = round(sum(prices[-200:]) / 200, 2)
+    if "ma_50" in result and "ma_200" in result:
+        result["golden_cross"] = result["ma_50"] > result["ma_200"]
 
     return result
 

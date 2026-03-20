@@ -259,6 +259,7 @@ def ngx_full(
             "revenue_growth_yoy", "earnings_growth_yoy", "fcf_growth_yoy", "dividend_growth_yoy",
             "piotroski_score", "altman_zscore",
             "volatility", "sharpe_ratio", "max_drawdown",
+            "rsi_14", "ma_50", "ma_200", "golden_cross",
         ]}
 
     # ── Enrich period returns from DB price history ───────────────────────
