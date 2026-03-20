@@ -349,6 +349,65 @@ export default function NGXProfilePage() {
   const sectorName = posRow?.Sector ?? '';
   const sectorCol = sectorColor(sectorName);
 
+  // ── Computed investor metrics ─────────────────────────────────────────────
+  const _n = (v: string | number | null | undefined) => {
+    if (v == null) return null;
+    const f = parseFloat(String(v).replace(/[^0-9.-]/g, ''));
+    return isNaN(f) ? null : f;
+  };
+
+  // Graham Number = √(22.5 × EPS × Book Value/Share)
+  const grahamNum = (() => {
+    const eps = _n(ov?.eps), bv = _n(ov?.book_value);
+    if (eps == null || bv == null || eps <= 0 || bv <= 0) return null;
+    return Math.sqrt(22.5 * eps * bv);
+  })();
+  const grahamMargin = (grahamNum && livePrice)
+    ? ((grahamNum - livePrice) / grahamNum * 100) : null;
+
+  // PEG Ratio = P/E ÷ Earnings Growth
+  const pegRatio = (() => {
+    const pe = _n(ov?.pe_ratio), eg = _n(perf?.earnings_growth_yoy);
+    if (pe == null || eg == null || eg <= 0) return null;
+    return parseFloat((pe / eg).toFixed(2));
+  })();
+
+  // Earnings Yield = EPS / Price × 100  (or 1/PE × 100)
+  const earningsYield = (() => {
+    const pe = _n(ov?.pe_ratio);
+    if (pe && pe > 0) return parseFloat((100 / pe).toFixed(2));
+    const eps = _n(ov?.eps);
+    if (eps && livePrice && livePrice > 0) return parseFloat((eps / livePrice * 100).toFixed(2));
+    return null;
+  })();
+
+  // Payout Ratio = Dividend / EPS × 100
+  const payoutRatio = (() => {
+    const eps = _n(ov?.eps);
+    const div = dividend?.cash_amount;
+    if (eps && div && eps > 0) return parseFloat((div / eps * 100).toFixed(1));
+    return null;
+  })();
+
+  // Accruals Ratio = (Net Income − Op Cash Flow) / Total Assets × 100
+  // Total Assets ≈ Net Income / ROA
+  const accrualsRatio = (() => {
+    const ni = _n(ov?.net_income), ocf = _n(perf?.operating_cash_flow), roa = _n(perf?.roa);
+    if (ni == null || ocf == null || roa == null || roa <= 0) return null;
+    const totalAssets = ni / (roa / 100);
+    return parseFloat(((ni - ocf) / totalAssets * 100).toFixed(2));
+  })();
+
+  // Liquidity Risk = Daily Volume / Total Shares × 100
+  // Total Shares = Market Cap / Price
+  const liquidityPct = (() => {
+    const vol = _n(data?.price?.volume) ?? _n(posRow?.Volume);
+    const mktCap = _n(ov?.market_cap);
+    if (vol == null || mktCap == null || !livePrice || livePrice <= 0) return null;
+    const totalShares = mktCap / livePrice;
+    return parseFloat((vol / totalShares * 100).toFixed(3));
+  })();
+
   // Price chart built inline from ohlcv state
 
   // Earnings chart
@@ -758,6 +817,8 @@ export default function NGXProfilePage() {
               <Stat label="P/S Ratio" value={perf?.price_to_sales} mono />
               <Stat label="EV/EBITDA" value={perf?.ev_ebitda} mono />
               <Stat label="EV/FCF" value={perf?.ev_fcf} mono />
+              <Stat label="PEG Ratio" value={pegRatio} mono />
+              <Stat label="Earnings Yield" value={earningsYield != null ? `${earningsYield.toFixed(2)}%` : null} mono />
             </div>
           }
         </div>
@@ -866,7 +927,113 @@ export default function NGXProfilePage() {
             <Stat label="Dividend Yield" value={ov?.dividend_yield} />
             <Stat label="Dividend Growth" value={perf?.dividend_growth_yoy} />
             <Stat label="Asset Turnover" value={perf?.asset_turnover} mono />
+            <Stat label="Payout Ratio" value={payoutRatio != null ? `${payoutRatio.toFixed(1)}%` : null} mono />
+            <Stat label="Accruals Ratio"
+              value={accrualsRatio != null ? `${accrualsRatio.toFixed(2)}%` : null}
+              mono
+              accent={accrualsRatio != null ? (Math.abs(accrualsRatio) > 10 ? 'warn' : undefined) : undefined}
+            />
           </div>
+        </div>
+      )}
+
+      {/* ── Intrinsic Value + Technical Signals ─────────────────────────── */}
+      {!loading && (
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+
+          {/* Graham Number */}
+          <div className="card px-5 py-4">
+            <SectionLabel>Intrinsic Value</SectionLabel>
+            <div className="grid grid-cols-2 gap-x-6 gap-y-3.5">
+              <Stat label="Graham Number"
+                value={grahamNum != null ? `₦${grahamNum.toFixed(2)}` : null}
+                mono
+              />
+              <Stat label="Margin of Safety"
+                value={grahamMargin != null ? `${grahamMargin.toFixed(1)}%` : null}
+                mono
+                accent={grahamMargin != null ? (grahamMargin > 20 ? 'gain' : grahamMargin < 0 ? 'loss' : undefined) : undefined}
+              />
+              <Stat label="Earnings Yield" value={earningsYield != null ? `${earningsYield.toFixed(2)}%` : null} mono />
+              <Stat label="Liquidity"
+                value={liquidityPct != null ? `${liquidityPct.toFixed(3)}%` : null}
+                mono
+                accent={liquidityPct != null ? (liquidityPct < 0.01 ? 'warn' : undefined) : undefined}
+              />
+            </div>
+            {grahamNum != null && livePrice != null && (
+              <div className="mt-4 pt-3 border-t border-[var(--border)]">
+                <p className="text-[9px] text-[var(--ink-4)] leading-relaxed">
+                  Graham Number is a conservative intrinsic value estimate for stable, profitable companies.
+                  {grahamMargin != null && grahamMargin > 20
+                    ? ` Current price is ${grahamMargin.toFixed(1)}% below — potential margin of safety.`
+                    : grahamMargin != null && grahamMargin < 0
+                      ? ` Current price is ${Math.abs(grahamMargin).toFixed(1)}% above Graham Number — trading at a premium.`
+                      : null}
+                </p>
+              </div>
+            )}
+          </div>
+
+          {/* Technical Signals */}
+          <div className="card px-5 py-4">
+            <SectionLabel>Technical Signals</SectionLabel>
+            {(perf?.rsi_14 != null || perf?.ma_50 != null) ? (
+              <div className="space-y-4">
+                {/* RSI */}
+                {perf.rsi_14 != null && (() => {
+                  const rsi = perf.rsi_14 as number;
+                  const rsiColor = rsi > 70 ? 'var(--loss)' : rsi < 30 ? 'var(--gain)' : 'var(--ink-3)';
+                  const rsiLabel = rsi > 70 ? 'Overbought' : rsi < 30 ? 'Oversold' : 'Neutral';
+                  const rsiPct = rsi;
+                  return (
+                    <div>
+                      <div className="flex items-center justify-between mb-1.5">
+                        <span className="text-[9.5px] font-semibold uppercase tracking-[0.07em] text-[var(--ink-4)]">RSI (14)</span>
+                        <div className="flex items-center gap-2">
+                          <span className="font-mono text-[11px] font-semibold" style={{ color: rsiColor }}>{rsi.toFixed(1)}</span>
+                          <span className="text-[9px] px-1.5 py-0.5 rounded" style={{ background: rsiColor + '22', color: rsiColor }}>{rsiLabel}</span>
+                        </div>
+                      </div>
+                      <div className="relative h-2 rounded-full overflow-hidden bg-gradient-to-r from-[var(--gain)] via-[var(--ink-5)] to-[var(--loss)]">
+                        <div className="absolute top-0 w-1 h-full rounded-full bg-white border border-[var(--border-strong)]"
+                          style={{ left: `calc(${rsiPct}% - 2px)` }} />
+                      </div>
+                      <div className="flex justify-between mt-0.5">
+                        <span className="text-[8px] text-[var(--gain)]">Oversold 30</span>
+                        <span className="text-[8px] text-[var(--loss)]">70 Overbought</span>
+                      </div>
+                    </div>
+                  );
+                })()}
+
+                {/* Moving Averages */}
+                {(perf.ma_50 != null || perf.ma_200 != null) && (
+                  <div className="border-t border-[var(--border)] pt-3 grid grid-cols-2 gap-x-6 gap-y-3">
+                    <Stat label="MA (50)" value={perf.ma_50 != null ? `₦${(perf.ma_50 as number).toFixed(2)}` : null} mono />
+                    <Stat label="MA (200)" value={perf.ma_200 != null ? `₦${(perf.ma_200 as number).toFixed(2)}` : null} mono />
+                    {perf.golden_cross != null && (
+                      <div className="col-span-2 flex items-center gap-2">
+                        <div className="w-2 h-2 rounded-full" style={{ background: perf.golden_cross ? 'var(--gain)' : 'var(--loss)' }} />
+                        <span className="text-[11px] font-semibold" style={{ color: perf.golden_cross ? 'var(--gain)' : 'var(--loss)' }}>
+                          {perf.golden_cross ? 'Golden Cross — MA50 above MA200 (bullish)' : 'Death Cross — MA50 below MA200 (bearish)'}
+                        </span>
+                      </div>
+                    )}
+                    {livePrice != null && perf.ma_50 != null && (
+                      <div className="col-span-2 text-[9px] text-[var(--ink-4)]">
+                        Price is {livePrice > (perf.ma_50 as number) ? 'above' : 'below'} 50-day MA
+                        {perf.ma_200 != null ? ` and ${livePrice > (perf.ma_200 as number) ? 'above' : 'below'} 200-day MA` : ''}.
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+            ) : (
+              <p className="text-[11px] text-[var(--ink-4)]">Insufficient price history for technical indicators.</p>
+            )}
+          </div>
+
         </div>
       )}
 
