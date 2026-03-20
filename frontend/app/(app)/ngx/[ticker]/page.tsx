@@ -6,6 +6,7 @@ import Link from 'next/link';
 import {
   fetchNGXTickerData, fetchNGXDividend,
   fetchNGXEarnings, fetchNGXBalanceSheet, fetchNGXPriceHistory,
+  fetchWatchlistCheck, addToWatchlist, removeFromWatchlist,
 } from '@/services/api';
 import { usePortfolio } from '@/context/PortfolioContext';
 import ChartCard from '@/components/ui/ChartCard';
@@ -20,7 +21,7 @@ import type {
   TickerData, DividendInfo, EarningsHistory, BalanceSheet, DBPriceHistory, StockRow,
 } from '@/services/api';
 import {
-  IconChevronRight, IconChartLine, IconExternalLink, IconChartHistory,
+  IconChevronRight, IconChartLine, IconExternalLink, IconChartHistory, IconBookmark,
 } from '@/components/ui/icons';
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -281,6 +282,8 @@ export default function NGXProfilePage() {
   const [ohlcv, setOhlcv] = useState<DBPriceHistory | null>(null);
   const [ohlcvLoad, setOhlcvLoad] = useState(true);
   const [priceDays, setPriceDays] = useState(90);
+  const [watching, setWatching]   = useState<boolean | null>(null);
+  const [watchBusy, setWatchBusy] = useState(false);
 
   const { data: portfolio } = usePortfolio();
   const posRow: StockRow | undefined = portfolio?.ngx_stocks.find(s => s.Ticker === ticker);
@@ -329,6 +332,31 @@ export default function NGXProfilePage() {
       .catch(() => { if (!c) setOhlcvLoad(false); });
     return () => { c = true; };
   }, [priceDays]);
+
+  // Check watchlist status whenever ticker changes
+  useEffect(() => {
+    if (!ticker) return;
+    setWatching(null);
+    fetchWatchlistCheck(ticker)
+      .then(r => setWatching(r.watching))
+      .catch(() => setWatching(false));
+  }, [ticker]);
+
+  const toggleWatch = async () => {
+    if (watchBusy || watching === null) return;
+    setWatchBusy(true);
+    try {
+      if (watching) {
+        await removeFromWatchlist(ticker);
+        setWatching(false);
+      } else {
+        await addToWatchlist(ticker);
+        setWatching(true);
+      }
+    } finally {
+      setWatchBusy(false);
+    }
+  };
 
   // ── Derived ───────────────────────────────────────────────────────────────
   const price = data?.price;
@@ -519,6 +547,25 @@ export default function NGXProfilePage() {
                 </>
                 : <span className="text-[13px] text-[var(--ink-4)]">Price unavailable</span>
             }
+            {/* Watch button — only for non-held tickers */}
+            {watching !== null && !posRow && (
+              <button
+                onClick={toggleWatch}
+                disabled={watchBusy}
+                className={[
+                  'mt-2 flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[11px] font-semibold border transition-colors duration-150 disabled:opacity-50',
+                  watching
+                    ? 'bg-[var(--accent-light)] text-[var(--accent)] border-[var(--accent)]'
+                    : 'bg-[var(--canvas)] text-[var(--ink-3)] border-[var(--border)] hover:border-[var(--accent)] hover:text-[var(--accent)]',
+                ].join(' ')}
+              >
+                <IconBookmark
+                  width={12} height={12}
+                  style={{ fill: watching ? 'var(--accent)' : 'none', stroke: 'currentColor' }}
+                />
+                {watching ? 'Watching' : 'Watch'}
+              </button>
+            )}
           </div>
         </div>
 

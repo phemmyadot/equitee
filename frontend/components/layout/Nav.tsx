@@ -4,7 +4,7 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import clsx from 'clsx';
 import {
-  IconChartLine, IconSearch, IconGlobe, IconClock, IconChartHistory, IconSettings,
+  IconChartLine, IconSearch, IconGlobe, IconClock, IconChartHistory, IconSettings, IconBookmark,
 } from '@/components/ui/icons';
 
 const MOBILE_ITEMS = [
@@ -27,6 +27,10 @@ const MOBILE_ITEMS = [
   {
     href: '/history', label: 'History',
     icon: <IconChartHistory width={18} height={18} />,
+  },
+  {
+    href: '/watchlist', label: 'Watch',
+    icon: <IconBookmark width={18} height={18} />,
   },
   {
     href: '/settings', label: 'Settings',

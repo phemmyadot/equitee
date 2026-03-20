@@ -158,6 +158,34 @@ async function get<T>(path: string): Promise<T> {
   return res.json() as Promise<T>;
 }
 
+async function post<T>(path: string): Promise<T> {
+  let res = await fetch(`${BASE}${path}`, { method: 'POST', cache: 'no-store' });
+  if (res.status === 401) {
+    const refreshed = await tryRefresh();
+    if (!refreshed) { window.location.href = '/login'; throw new Error('Session expired'); }
+    res = await fetch(`${BASE}${path}`, { method: 'POST', cache: 'no-store' });
+  }
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error((err as { detail?: string }).detail ?? res.statusText);
+  }
+  return res.json() as Promise<T>;
+}
+
+async function del<T>(path: string): Promise<T> {
+  let res = await fetch(`${BASE}${path}`, { method: 'DELETE', cache: 'no-store' });
+  if (res.status === 401) {
+    const refreshed = await tryRefresh();
+    if (!refreshed) { window.location.href = '/login'; throw new Error('Session expired'); }
+    res = await fetch(`${BASE}${path}`, { method: 'DELETE', cache: 'no-store' });
+  }
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error((err as { detail?: string }).detail ?? res.statusText);
+  }
+  return res.json() as Promise<T>;
+}
+
 // ── History types ─────────────────────────────────────────────────────────────
 
 export interface PortfolioPoint {
@@ -348,3 +376,25 @@ export const fetchDividends        = () => get<DividendsResponse>('/dividends');
 export const fetchNGXEarnings      = (ticker: string) => get<EarningsHistory>(`/profile/ngx/${ticker}/earnings`);
 export const fetchNGXBalanceSheet  = (ticker: string) => get<BalanceSheet>(`/profile/ngx/${ticker}/balance-sheet`);
 export const fetchNGXPriceHistory  = (ticker: string, days = 90) => get<DBPriceHistory>(`/profile/ngx/${ticker}/price-history?days=${days}`);
+
+// ── Watchlist ──────────────────────────────────────────────────────────────────
+
+export interface WatchlistItem {
+  ticker:      string;
+  market:      string;
+  added_at:    string;
+  price:       TickerPrice | null;
+  profile:     CompanyProfile | null;
+  overview:    TickerOverview | null;
+  performance: TickerPerformance | null;
+}
+
+export interface WatchlistResponse {
+  items: WatchlistItem[];
+  count: number;
+}
+
+export const fetchWatchlist      = () => get<WatchlistResponse>('/watchlist');
+export const fetchWatchlistCheck = (ticker: string) => get<{ ticker: string; watching: boolean }>(`/watchlist/check/${ticker}`);
+export const addToWatchlist      = (ticker: string) => post<{ ticker: string; market: string; added_at: string }>(`/watchlist/${ticker}`);
+export const removeFromWatchlist = (ticker: string) => del<{ ticker: string; removed: boolean }>(`/watchlist/${ticker}`);
