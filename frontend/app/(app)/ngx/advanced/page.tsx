@@ -8,14 +8,16 @@ import { ChartSkeleton } from '@/components/ui/Feedback';
 import PlotlyChart       from '@/components/charts/PlotlyChart';
 import { plotlyLayout, COLORS, sectorColor } from '@/lib/theme';
 import { fmtNGN, fmtPct, isPositive } from '@/lib/formatters';
-import { fetchNGXTickerData } from '@/services/api';
-import type { TickerData } from '@/services/api';
+import { fetchNGXTickerData, fetchCorrelation, fetchAnalytics } from '@/services/api';
+import type { TickerData, CorrelationData, AnalyticsData } from '@/services/api';
 
 export default function NGXAdvancedPage() {
   const { data, loading } = usePortfolio();
   const isFirstLoad = loading && !data;
 
-  const [tickerMap, setTickerMap] = useState<Record<string, TickerData>>({});
+  const [tickerMap,   setTickerMap]   = useState<Record<string, TickerData>>({});
+  const [correlation, setCorrelation] = useState<CorrelationData | null>(null);
+  const [analytics,   setAnalytics]   = useState<AnalyticsData | null>(null);
 
   useEffect(() => {
     const active = (data?.ngx_stocks ?? []).filter(s => s.CurrentEquity != null);
@@ -29,6 +31,11 @@ export default function NGXAdvancedPage() {
         setTickerMap(map);
       });
   }, [data?.ngx_stocks?.length]);
+
+  useEffect(() => {
+    fetchCorrelation(90).then(setCorrelation).catch(() => {});
+    fetchAnalytics(180).then(setAnalytics).catch(() => {});
+  }, []);
 
   if (!data && !loading) return null;
 
@@ -170,6 +177,28 @@ export default function NGXAdvancedPage() {
     hovertemplate: '<b>%{text}</b><br>Weight: %{x:.1f}%<br>Return: %{y:.1f}%<extra></extra>',
   };
 
+  // ── Correlation heatmap trace ─────────────────────────────────────────────────
+  const heatmap = correlation && correlation.tickers.length >= 2 ? {
+    type: 'heatmap',
+    x: correlation.tickers,
+    y: correlation.tickers,
+    z: correlation.matrix,
+    zmin: -1, zmax: 1,
+    colorscale: [
+      [0,    '#BE1B1B'],
+      [0.25, '#E07070'],
+      [0.5,  '#F5F5F5'],
+      [0.75, '#6BAED6'],
+      [1,    '#1A56DB'],
+    ],
+    showscale: true,
+    colorbar: { thickness: 10, len: 0.8, tickfont: { size: 9 }, tickvals: [-1, -0.5, 0, 0.5, 1] },
+    text: correlation.matrix.map(row => row.map(v => v.toFixed(2))),
+    texttemplate: '%{text}',
+    textfont: { size: 10, color: '#333' },
+    hovertemplate: '%{y} × %{x}<br>r = %{z:.3f}<extra></extra>',
+  } : null;
+
   return (
     <div className="space-y-5">
 
@@ -250,6 +279,52 @@ export default function NGXAdvancedPage() {
           />
         </ChartCard>
       </div>
+
+      {/* Analytics KPIs — drawdown + Sharpe */}
+      {analytics && (
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+          <KPICard
+            label="Max Drawdown"
+            value={analytics.max_drawdown_pct != null ? `-${analytics.max_drawdown_pct.toFixed(1)}%` : '—'}
+            sub={`last ${analytics.days}d`}
+            accent={analytics.max_drawdown_pct != null && analytics.max_drawdown_pct > 20 ? 'loss' : analytics.max_drawdown_pct != null && analytics.max_drawdown_pct > 10 ? 'warn' : 'gain'}
+          />
+          <KPICard
+            label="Sharpe Ratio"
+            value={analytics.sharpe != null ? analytics.sharpe.toFixed(2) : '—'}
+            sub="annualised"
+            accent={analytics.sharpe != null && analytics.sharpe > 1 ? 'gain' : analytics.sharpe != null && analytics.sharpe > 0 ? 'neutral' : 'loss'}
+          />
+          <KPICard label="Snapshots" value={analytics.data_points} sub={`last ${analytics.days}d`} accent="neutral" />
+          <KPICard
+            label="Risk-Adj Return"
+            value={analytics.sharpe != null && analytics.max_drawdown_pct != null && analytics.max_drawdown_pct > 0
+              ? (analytics.sharpe / analytics.max_drawdown_pct * 10).toFixed(2) : '—'}
+            sub="Sharpe / drawdown"
+            accent="neutral"
+          />
+        </div>
+      )}
+
+      {/* Correlation heatmap */}
+      {heatmap && (
+        <ChartCard
+          title="Return Correlation"
+          subtitle={`pairwise · last ${correlation!.days}d daily returns`}
+          loading={false}
+          height={Math.max(300, correlation!.tickers.length * 48 + 60)}
+        >
+          <PlotlyChart
+            data={[heatmap]}
+            layout={plotlyLayout({
+              margin: { t:8, b:80, l:80, r:40 },
+              xaxis: { tickfont: { size: 10 }, tickangle: -40 },
+              yaxis: { tickfont: { size: 10 } },
+            })}
+            height={Math.max(300, correlation!.tickers.length * 48 + 60)}
+          />
+        </ChartCard>
+      )}
 
     </div>
   );

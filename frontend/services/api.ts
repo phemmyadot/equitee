@@ -377,6 +377,24 @@ export const fetchNGXEarnings      = (ticker: string) => get<EarningsHistory>(`/
 export const fetchNGXBalanceSheet  = (ticker: string) => get<BalanceSheet>(`/profile/ngx/${ticker}/balance-sheet`);
 export const fetchNGXPriceHistory  = (ticker: string, days = 90) => get<DBPriceHistory>(`/profile/ngx/${ticker}/price-history?days=${days}`);
 
+// ── Analytics ─────────────────────────────────────────────────────────────────
+
+export interface CorrelationData {
+  tickers: string[];
+  matrix:  number[][];
+  days:    number;
+}
+
+export interface AnalyticsData {
+  max_drawdown_pct: number | null;
+  sharpe:           number | null;
+  data_points:      number;
+  days:             number;
+}
+
+export const fetchCorrelation = (days = 90)  => get<CorrelationData>(`/history/correlation?days=${days}`);
+export const fetchAnalytics   = (days = 180) => get<AnalyticsData>(`/history/analytics?days=${days}`);
+
 // ── Watchlist ──────────────────────────────────────────────────────────────────
 
 export interface WatchlistItem {
