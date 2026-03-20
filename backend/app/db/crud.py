@@ -16,7 +16,7 @@ from sqlalchemy.orm import Session
 from app.db.models import (
     Holding, ClosedPosition, PortfolioSnapshot, PriceHistory,
     User, RefreshToken, InviteCode,
-    DividendCache, FinancialsCache,
+    DividendCache, FinancialsCache, DailyPriceHistory,
 )
 
 log = logging.getLogger(__name__)
@@ -514,3 +514,83 @@ def financials_row_to_dict(obj: FinancialsCache) -> dict:
         "equity":      obj.col_c,
         "net_cash":    obj.col_d or [],
     }
+
+
+# ── Daily price history ────────────────────────────────────────────────────────
+
+def get_latest_daily_date(db: Session, ticker: str) -> Optional[str]:
+    """Return the most recent date string stored for a ticker, or None."""
+    stmt = (
+        select(DailyPriceHistory.date)
+        .where(DailyPriceHistory.ticker == ticker.upper())
+        .order_by(desc(DailyPriceHistory.date))
+        .limit(1)
+    )
+    return db.scalars(stmt).first()
+
+
+def upsert_daily_price_rows(db: Session, ticker: str, rows: list[dict]) -> int:
+    """
+    Upsert a list of OHLCV dicts into daily_price_history.
+    Each dict must have 'date' (YYYY-MM-DD) and at least 'close'.
+    Returns the number of rows inserted/updated.
+    """
+    from sqlalchemy.dialects.postgresql import insert as pg_insert
+    if not rows:
+        return 0
+    t = ticker.upper()
+    count = 0
+    for row in rows:
+        stmt = (
+            pg_insert(DailyPriceHistory)
+            .values(
+                ticker     = t,
+                date       = row["date"],
+                close      = row.get("close"),
+                open       = row.get("open"),
+                high       = row.get("high"),
+                low        = row.get("low"),
+                volume     = row.get("volume"),
+                change_pct = row.get("change_pct"),
+                source     = row.get("source", "history"),
+            )
+            .on_conflict_do_update(
+                constraint="uq_daily_price_history_ticker_date",
+                set_={
+                    "close":      row.get("close"),
+                    "open":       row.get("open"),
+                    "high":       row.get("high"),
+                    "low":        row.get("low"),
+                    "volume":     row.get("volume"),
+                    "change_pct": row.get("change_pct"),
+                    "source":     row.get("source", "history"),
+                },
+            )
+        )
+        db.execute(stmt)
+        count += 1
+    db.commit()
+    log.info("[DailyPriceHistory] Upserted %d rows for %s", count, t)
+    return count
+
+
+def get_daily_price_history(db: Session, ticker: str, days: int) -> list[dict]:
+    """Return daily price rows for a ticker for the last N days, oldest first."""
+    from datetime import date, timedelta
+    since = (date.today() - timedelta(days=days)).isoformat()
+    stmt  = (
+        select(DailyPriceHistory)
+        .where(
+            DailyPriceHistory.ticker == ticker.upper(),
+            DailyPriceHistory.date   >= since,
+        )
+        .order_by(DailyPriceHistory.date)
+    )
+    return [
+        {
+            "ts":         r.date,
+            "price":      r.close,
+            "change_pct": r.change_pct,
+        }
+        for r in db.scalars(stmt).all()
+    ]

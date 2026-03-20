@@ -76,16 +76,32 @@ def ngx_price_history(
     current_user: User = Depends(get_current_user),
 ):
     """
-    Price history for a single NGX ticker from our local DB snapshots.
-    Written every NGX_PRICE_TTL seconds by /api/data calls.
+    Price history for a single NGX ticker.
+    Primary: daily_price_history table (history page scraper — up to 400 days).
+    Fallback 1: user-scoped portfolio snapshots.
+    Fallback 2: live chart scrape from quote page.
     """
-    rows = db_get_price_history(db, ticker=ticker.upper(), days=days, user_id=current_user.id)
+    from app.db.crud import get_daily_price_history as get_daily
+    from app.services.history import refresh_ticker_history
+
+    t = ticker.upper()
+
+    # Ensure daily history is fresh (no-op if already current)
+    try:
+        refresh_ticker_history(t)
+    except Exception:
+        pass
+
+    rows = get_daily(db, t, days)
+
     if not rows:
-        rows = fetch_chart_history(ticker.upper(), days=days)
+        rows = db_get_price_history(db, ticker=t, days=days, user_id=current_user.id)
+    if not rows:
+        rows = fetch_chart_history(t, days=days)
     if not rows:
         raise HTTPException(status_code=404, detail="No price history available.")
     return PriceHistoryResponse(
-        ticker     = ticker.upper(),
+        ticker     = t,
         days       = days,
         count      = len(rows),
         dates      = [r["ts"][:10] for r in rows],

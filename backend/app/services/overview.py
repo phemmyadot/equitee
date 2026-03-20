@@ -126,8 +126,15 @@ def fetch_chart_history(ticker: str, days: int = 90) -> list[dict]:
 def _calculate_from_history(ticker: str) -> dict:
     """Derive volatility, Sharpe, max drawdown, RSI-14, MA-50, MA-200 from price history."""
     import math
-    # 400 days to ensure ≥200 trading-day data for MA-200
-    history = fetch_chart_history(ticker, days=400)
+    # Prefer the daily_price_history table (history page scraper, up to 400 days)
+    try:
+        from app.services.history import get_ticker_prices_from_db
+        history = get_ticker_prices_from_db(ticker, days=400)
+    except Exception:
+        history = []
+    # Fall back to live chart scrape if DB returned nothing
+    if not history:
+        history = fetch_chart_history(ticker, days=400)
     prices  = [r["price"]      for r in history if r.get("price")]
     changes = [r["change_pct"] for r in history if r.get("change_pct") is not None]
     if len(changes) < 20:
