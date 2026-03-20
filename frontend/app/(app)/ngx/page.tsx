@@ -1,5 +1,6 @@
 'use client';
 
+import { useState, useEffect } from 'react';
 import Link               from 'next/link';
 import { usePortfolio } from '@/context/PortfolioContext';
 import KPICard          from '@/components/ui/KPICard';
@@ -11,11 +12,30 @@ import { ChartSkeleton, PriceBanner } from '@/components/ui/Feedback';
 import PlotlyChart      from '@/components/charts/PlotlyChart';
 import { plotlyLayout, COLORS, sectorColor } from '@/lib/theme';
 import { fmtNGN, fmtNGNFull, fmtPct, fmtPct2, fmtVol, isPositive } from '@/lib/formatters';
-import type { StockRow } from '@/services/api';
+import { fetchNGXTickerData } from '@/services/api';
+import type { StockRow, TickerData } from '@/services/api';
+import { computeSignal } from '@/components/ui/Signalscore';
+import { computeTargets } from '@/lib/targets';
 
 export default function NGXOverviewPage() {
   const { data, loading } = usePortfolio();
   const isFirstLoad = loading && !data;
+
+  // Per-ticker fundamentals for signal + target computation
+  const [tickerMap, setTickerMap] = useState<Record<string, TickerData>>({});
+
+  useEffect(() => {
+    const active = (data?.ngx_stocks ?? []).filter(s => s.CurrentEquity != null);
+    if (!active.length) return;
+    Promise.allSettled(active.map(s => fetchNGXTickerData(s.Ticker)))
+      .then(results => {
+        const map: Record<string, TickerData> = {};
+        results.forEach((r, i) => {
+          if (r.status === 'fulfilled') map[active[i].Ticker] = r.value;
+        });
+        setTickerMap(map);
+      });
+  }, [data?.ngx_stocks?.length]);
 
   if (!data && !loading) return null;
 
@@ -153,6 +173,45 @@ export default function NGXOverviewPage() {
       sortValue: (r: StockRow) => r.ReturnPct ?? 0,
     },
     { key: 'PriceSource', label: '', render: (v: string) => <SourceBadge source={v} /> },
+    {
+      key: 'signal', label: 'Signal',
+      render: (_: unknown, row: StockRow) => {
+        const td = tickerMap[row.Ticker];
+        if (!td) return <span className="text-[var(--ink-4)] text-[10px]">…</span>;
+        const price = td.price?.price ?? row.LivePrice ?? null;
+        const sig = computeSignal(td.overview, td.performance, price, row, null);
+        if (!sig) return <span className="text-[var(--ink-4)] text-[10px]">—</span>;
+        const _n = (v: string | number | null | undefined) => {
+          if (v == null) return null;
+          const f = parseFloat(String(v).replace(/[^0-9.-]/g, ''));
+          return isNaN(f) ? null : f;
+        };
+        const eps = _n(td.overview?.eps), bv = _n(td.overview?.book_value);
+        const graham = (eps && bv && eps > 0 && bv > 0) ? Math.sqrt(22.5 * eps * bv) : null;
+        const tgt = computeTargets(
+          price, graham,
+          _n(td.performance?.ma_50), _n(td.performance?.ma_200),
+          _n(td.performance?.week_52_high), _n(td.performance?.week_52_low),
+          sig.total,
+        );
+        const zonePrice = sig.total > 1
+          ? (tgt?.buy_low && tgt?.buy_high ? `${fmtNGNFull(tgt.buy_low)}–${fmtNGNFull(tgt.buy_high)}` : null)
+          : sig.total < -1
+          ? (tgt?.sell_low && tgt?.sell_high ? `${fmtNGNFull(tgt.sell_low)}–${fmtNGNFull(tgt.sell_high)}` : null)
+          : null;
+        return (
+          <div className="flex flex-col gap-0.5">
+            <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-full inline-block w-fit"
+              style={{ color: sig.color, background: sig.color + '22' }}>
+              {sig.label}
+            </span>
+            {zonePrice && (
+              <span className="font-mono text-[9px] text-[var(--ink-4)]">{zonePrice}</span>
+            )}
+          </div>
+        );
+      },
+    },
     { key: 'sparkline', label: '90d', render: (_: unknown, row: StockRow) => <Sparkline ticker={row.Ticker} /> },
   ];
 
