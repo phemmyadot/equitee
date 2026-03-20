@@ -1,5 +1,6 @@
 'use client';
 
+import { useState, useEffect } from 'react';
 import { usePortfolio } from '@/context/PortfolioContext';
 import KPICard           from '@/components/ui/KPICard';
 import ChartCard         from '@/components/ui/ChartCard';
@@ -7,17 +8,65 @@ import { ChartSkeleton } from '@/components/ui/Feedback';
 import PlotlyChart       from '@/components/charts/PlotlyChart';
 import { plotlyLayout, COLORS, sectorColor } from '@/lib/theme';
 import { fmtNGN, fmtPct, isPositive } from '@/lib/formatters';
+import { fetchNGXTickerData } from '@/services/api';
+import type { TickerData } from '@/services/api';
 
 export default function NGXAdvancedPage() {
   const { data, loading } = usePortfolio();
   const isFirstLoad = loading && !data;
+
+  const [tickerMap, setTickerMap] = useState<Record<string, TickerData>>({});
+
+  useEffect(() => {
+    const active = (data?.ngx_stocks ?? []).filter(s => s.CurrentEquity != null);
+    if (!active.length) return;
+    Promise.allSettled(active.map(s => fetchNGXTickerData(s.Ticker)))
+      .then(results => {
+        const map: Record<string, TickerData> = {};
+        results.forEach((r, i) => {
+          if (r.status === 'fulfilled') map[active[i].Ticker] = r.value;
+        });
+        setTickerMap(map);
+      });
+  }, [data?.ngx_stocks?.length]);
+
   if (!data && !loading) return null;
 
   const active     = (data?.ngx_stocks ?? []).filter(s => s.CurrentEquity != null);
   const k          = data?.ngx_kpis;
   const wf         = data?.waterfall;
   const meta       = data?.meta;
-  const totalEquity = k?.equity || 1;
+  const totalEquity = (k?.equity || 1);
+
+  // ── Weighted fundamentals ────────────────────────────────────────────────────
+  const _n = (v: string | number | null | undefined) => {
+    if (v == null) return null;
+    const f = parseFloat(String(v).replace(/[^0-9.-]/g, ''));
+    return isNaN(f) ? null : f;
+  };
+  const weightedAvg = (field: (td: TickerData) => number | null) => {
+    let wsum = 0, wt = 0;
+    active.forEach(s => {
+      const td = tickerMap[s.Ticker];
+      if (!td) return;
+      const val = field(td);
+      if (val == null || !isFinite(val)) return;
+      const w = (s.CurrentEquity ?? 0) / totalEquity;
+      wsum += val * w;
+      wt   += w;
+    });
+    return wt > 0.01 ? wsum / wt : null;
+  };
+  const wPE   = weightedAvg(td => _n(td.overview?.pe_ratio));
+  const wROE  = weightedAvg(td => _n(td.overview?.roe));
+  const wBeta = weightedAvg(td => _n(td.performance?.beta));
+  const wDivY = weightedAvg(td => _n(td.overview?.dividend_yield));
+  const annualDivIncome = Object.keys(tickerMap).length > 0
+    ? active.reduce((sum, s) => {
+        const dy = _n(tickerMap[s.Ticker]?.overview?.dividend_yield);
+        return sum + (dy != null ? (s.CurrentEquity ?? 0) * dy / 100 : 0);
+      }, 0)
+    : null;
 
   const costTrace = {
     name: 'Cost', type: 'bar',
@@ -103,6 +152,24 @@ export default function NGXAdvancedPage() {
     hovertemplate: '<b>%{text}</b><br>Return: %{y:.1f}%<br>Risk: %{x:.1f}<extra></extra>',
   };
 
+  const ngx_sectors = data?.ngx_sectors ?? [];
+  const sectorTotalEquity = ngx_sectors.reduce((s, r) => s + (r.Equity ?? 0), 0) || 1;
+  const sectorBubble = {
+    type: 'scatter', mode: 'markers+text',
+    x: ngx_sectors.map(s => (s.Equity ?? 0) / sectorTotalEquity * 100),
+    y: ngx_sectors.map(s => s.GainPct ?? 0),
+    text: ngx_sectors.map(s => s.Sector),
+    textposition: 'top center',
+    textfont: { size: 9, color: COLORS.ink3 },
+    marker: {
+      size: ngx_sectors.map(s => Math.max(14, Math.sqrt((s.Equity ?? 0) / sectorTotalEquity) * 120)),
+      color: ngx_sectors.map(s => sectorColor(s.Sector)),
+      opacity: 0.8,
+      line: { color: '#fff', width: 1.5 },
+    },
+    hovertemplate: '<b>%{text}</b><br>Weight: %{x:.1f}%<br>Return: %{y:.1f}%<extra></extra>',
+  };
+
   return (
     <div className="space-y-5">
 
@@ -118,6 +185,17 @@ export default function NGXAdvancedPage() {
             accent={hhi < 1000 ? 'gain' : hhi < 1800 ? 'warn' : 'loss'}
             delay={200}
           />
+        </>}
+      </div>
+
+      {/* Weighted fundamentals strip */}
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
+        {isFirstLoad ? [...Array(5)].map((_, i) => <ChartSkeleton key={i} height={88} />) : <>
+          <KPICard label="Wtd P/E"           value={wPE   != null ? wPE.toFixed(1)        : '—'} sub="weighted avg"         accent="neutral" delay={0}   />
+          <KPICard label="Wtd ROE"           value={wROE  != null ? wROE.toFixed(1) + '%' : '—'} sub="weighted avg"         accent={wROE != null && wROE > 0 ? 'gain' : 'neutral'} delay={50}  />
+          <KPICard label="Wtd Beta"          value={wBeta != null ? wBeta.toFixed(2)       : '—'} sub="market sensitivity"  accent={wBeta != null && wBeta < 1 ? 'gain' : 'neutral'} delay={100} />
+          <KPICard label="Wtd Div Yield"     value={wDivY != null ? wDivY.toFixed(2) + '%': '—'} sub="weighted avg"         accent="neutral" delay={150} />
+          <KPICard label="Annual Div Income" value={annualDivIncome != null ? fmtNGN(annualDivIncome) : '—'} sub="projected" accent="accent" delay={200} />
         </>}
       </div>
 
@@ -148,17 +226,30 @@ export default function NGXAdvancedPage() {
         </ChartCard>
       </div>
 
-      <ChartCard title="Risk–Return" subtitle="size = equity weight · colour = sector" loading={isFirstLoad} height={400}>
-        <PlotlyChart
-          data={[scatter]}
-          layout={plotlyLayout({
-            margin: { t:16,b:56,l:60,r:16 },
-            xaxis: { title: { text: 'Return deviation from mean', font: { size: 10 } }, tickfont: { size: 9 } },
-            yaxis: { title: { text: 'Return %', font: { size: 10 } }, ticksuffix: '%' },
-          })}
-          height={400}
-        />
-      </ChartCard>
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <ChartCard title="Risk–Return" subtitle="size = equity weight · colour = sector" loading={isFirstLoad} height={400}>
+          <PlotlyChart
+            data={[scatter]}
+            layout={plotlyLayout({
+              margin: { t:16,b:56,l:60,r:16 },
+              xaxis: { title: { text: 'Return deviation from mean', font: { size: 10 } }, tickfont: { size: 9 } },
+              yaxis: { title: { text: 'Return %', font: { size: 10 } }, ticksuffix: '%' },
+            })}
+            height={400}
+          />
+        </ChartCard>
+        <ChartCard title="Sector Weight vs Return" subtitle="size = equity · colour = sector" loading={isFirstLoad} height={400}>
+          <PlotlyChart
+            data={[sectorBubble]}
+            layout={plotlyLayout({
+              margin: { t:16,b:56,l:60,r:16 },
+              xaxis: { title: { text: 'Portfolio weight %', font: { size: 10 } }, tickfont: { size: 9 }, ticksuffix: '%' },
+              yaxis: { title: { text: 'Return %', font: { size: 10 } }, ticksuffix: '%', zerolinecolor: COLORS['border-strong'] },
+            })}
+            height={400}
+          />
+        </ChartCard>
+      </div>
 
     </div>
   );

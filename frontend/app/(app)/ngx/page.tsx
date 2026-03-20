@@ -43,6 +43,42 @@ export default function NGXOverviewPage() {
   const ngx_sectors = data?.ngx_sectors ?? [];
   const meta        = data?.meta;
 
+  // ── Weighted portfolio fundamentals ─────────────────────────────────────────
+  const totalEquity = active.reduce((sum, s) => sum + (s.CurrentEquity ?? 0), 0) || 1;
+  const _n = (v: string | number | null | undefined) => {
+    if (v == null) return null;
+    const f = parseFloat(String(v).replace(/[^0-9.-]/g, ''));
+    return isNaN(f) ? null : f;
+  };
+  const weightedAvg = (field: (td: TickerData) => number | null) => {
+    let wsum = 0, wt = 0;
+    active.forEach(s => {
+      const td = tickerMap[s.Ticker];
+      if (!td) return;
+      const val = field(td);
+      if (val == null || !isFinite(val)) return;
+      const w = (s.CurrentEquity ?? 0) / totalEquity;
+      wsum += val * w;
+      wt   += w;
+    });
+    return wt > 0.01 ? wsum / wt : null;
+  };
+  const wPE    = weightedAvg(td => _n(td.overview?.pe_ratio));
+  const wROE   = weightedAvg(td => _n(td.overview?.roe));
+  const wBeta  = weightedAvg(td => _n(td.performance?.beta));
+  const wDivY  = weightedAvg(td => _n(td.overview?.dividend_yield));
+  const annualDivIncome = Object.keys(tickerMap).length > 0
+    ? active.reduce((sum, s) => {
+        const dy = _n(tickerMap[s.Ticker]?.overview?.dividend_yield);
+        return sum + (dy != null ? (s.CurrentEquity ?? 0) * dy / 100 : 0);
+      }, 0)
+    : null;
+
+  // ── Today's movers ───────────────────────────────────────────────────────────
+  const moversSorted = [...active].sort((a, b) => (b.LiveChangePct ?? 0) - (a.LiveChangePct ?? 0));
+  const topMover    = moversSorted[0] ?? null;
+  const bottomMover = moversSorted[moversSorted.length - 1] ?? null;
+
   const equityBar = {
     type: 'bar',
     x: active.map(s => s.Ticker),
@@ -137,7 +173,15 @@ export default function NGXOverviewPage() {
       sortValue: (r: StockRow) => r.LiveChangePct ?? 0,
     },
     { key: 'CurrentEquity', label: 'Equity', right: true,
-      render: (v: number) => <span className="font-mono font-semibold text-[var(--ink)]">{fmtNGN(v)}</span>,
+      render: (v: number, row: StockRow) => {
+        const wt = ((row.CurrentEquity ?? 0) / totalEquity * 100);
+        return (
+          <div className="flex flex-col items-end gap-0.5">
+            <span className="font-mono font-semibold text-[var(--ink)]">{fmtNGN(v)}</span>
+            <span className="font-mono text-[9px] text-[var(--ink-4)]">{wt.toFixed(1)}%</span>
+          </div>
+        );
+      },
       sortValue: (r: StockRow) => r.CurrentEquity ?? 0,
     },
     { key: 'UnrealizedPL', label: 'G/L', right: true,
@@ -201,7 +245,7 @@ export default function NGXOverviewPage() {
   return (
     <div className="space-y-5">
 
-      {/* KPI strip */}
+      {/* KPI strip — portfolio summary */}
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
         {isFirstLoad
           ? [...Array(6)].map((_, i) => <ChartSkeleton key={i} height={88} />)
@@ -212,6 +256,20 @@ export default function NGXOverviewPage() {
             <KPICard label="Return"          value={fmtPct(k?.return_pct)}  accent={isPositive(k?.return_pct) ? 'gain':'loss'} delay={150} />
             <KPICard label="Realized P/L"    value={fmtNGN(k?.realized_pl)} accent={isPositive(k?.realized_pl) ? 'gain':'loss'} delay={200} />
             <KPICard label="Positions"       value={k?.positions ?? '—'}    accent="accent"                           delay={250} />
+          </>
+        }
+      </div>
+
+      {/* KPI strip — weighted fundamentals */}
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
+        {isFirstLoad
+          ? [...Array(5)].map((_, i) => <ChartSkeleton key={i} height={88} />)
+          : <>
+            <KPICard label="Wtd P/E"          value={wPE   != null ? wPE.toFixed(1)  : '—'} sub="weighted avg"         accent="neutral" delay={0}   />
+            <KPICard label="Wtd ROE"          value={wROE  != null ? wROE.toFixed(1) + '%' : '—'} sub="weighted avg"   accent={wROE != null && wROE > 0 ? 'gain' : 'neutral'} delay={50}  />
+            <KPICard label="Wtd Beta"         value={wBeta != null ? wBeta.toFixed(2) : '—'} sub="market sensitivity" accent={wBeta != null && wBeta < 1 ? 'gain' : 'neutral'} delay={100} />
+            <KPICard label="Wtd Div Yield"    value={wDivY != null ? wDivY.toFixed(2) + '%' : '—'} sub="weighted avg" accent="neutral" delay={150} />
+            <KPICard label="Annual Div Income" value={annualDivIncome != null ? fmtNGN(annualDivIncome) : '—'} sub="projected" accent="accent" delay={200} />
           </>
         }
       </div>
@@ -269,6 +327,32 @@ export default function NGXOverviewPage() {
           height={300}
         />
       </ChartCard>
+
+      {/* Today's movers callout */}
+      {!isFirstLoad && topMover && bottomMover && topMover.Ticker !== bottomMover.Ticker && (
+        <div className="grid grid-cols-2 gap-3">
+          {[
+            { label: "Today's Best", row: topMover,    sign: 1  },
+            { label: "Today's Worst", row: bottomMover, sign: -1 },
+          ].map(({ label, row, sign }) => {
+            const pct = row.LiveChangePct ?? 0;
+            const col = sign > 0 ? 'var(--gain)' : 'var(--loss)';
+            const bg  = sign > 0 ? 'var(--gain-light)' : 'var(--loss-light)';
+            return (
+              <div key={label} className="card px-4 py-3 flex items-center gap-3" style={{ background: bg }}>
+                <div className="flex-1 min-w-0">
+                  <p className="text-[9px] font-bold uppercase tracking-widest" style={{ color: col }}>{label}</p>
+                  <p className="font-mono font-bold text-[14px] text-[var(--ink)] leading-tight mt-0.5">{row.Ticker}</p>
+                  <p className="text-[10px] text-[var(--ink-3)] truncate">{row.Stock}</p>
+                </div>
+                <span className="font-mono font-bold text-[18px] shrink-0" style={{ color: col }}>
+                  {fmtPct2(pct)}
+                </span>
+              </div>
+            );
+          })}
+        </div>
+      )}
 
       {/* Holdings table */}
       <ChartCard title="Holdings Detail" loading={isFirstLoad} height={420}>
