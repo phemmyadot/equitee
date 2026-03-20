@@ -52,17 +52,18 @@ const SETTINGS_ICON = <IconSettings width={15} height={15} />;
 const LOGOUT_ICON = <IconLogOut width={12} height={12} />;
 
 export default function Header({ usdngn, fxSource, lastUpdated, loading, onRefresh }: HeaderProps) {
-  const [now, setNow]  = useState<Date>(new Date());
+  const [now, setNow]  = useState<Date | null>(null);
   const pathname       = usePathname();
   const { autoRefreshInterval, setAutoRefreshInterval, nextRefreshIn } = usePortfolio();
   const { user, logout } = useAuth();
 
   useEffect(() => {
+    setNow(new Date());
     const id = setInterval(() => setNow(new Date()), 1000);
     return () => clearInterval(id);
   }, []);
 
-  const ageSeconds = lastUpdated
+  const ageSeconds = lastUpdated && now
     ? Math.round((now.getTime() - lastUpdated.getTime()) / 1000)
     : null;
 
@@ -154,9 +155,10 @@ export default function Header({ usdngn, fxSource, lastUpdated, loading, onRefre
               <circle cx="9" cy="9" r={r} fill="none" stroke="var(--accent)" strokeWidth="2.5"
                 strokeDasharray={`${dash} ${circ}`} strokeLinecap="round"
                 style={{ transition: 'stroke-dasharray 1s linear' }}
+                suppressHydrationWarning
               />
             </svg>
-            <span className="font-mono text-[10px] font-medium text-[var(--ink-3)] w-7 tabular-nums">
+            <span className="font-mono text-[10px] font-medium text-[var(--ink-3)] w-7 tabular-nums" suppressHydrationWarning>
               {fmtCountdown(nextRefreshIn)}
             </span>
           </div>
