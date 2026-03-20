@@ -229,3 +229,30 @@ class FinancialsCache(Base):
         UniqueConstraint("ticker", "cache_type", name="uq_financials_cache_ticker_type"),
         Index("ix_financials_cache_ticker_type", "ticker", "cache_type"),
     )
+
+
+# ── daily_price_history ────────────────────────────────────────────────────────
+
+class DailyPriceHistory(Base):
+    """
+    One row per ticker per calendar date.
+    Populated by the /history/ page scraper (stockanalysis.com) with daily OHLCV data.
+    Powers RSI, MA-50/200 and other technical indicators that need 200+ days.
+    """
+    __tablename__ = "daily_price_history"
+
+    id:         Mapped[int]   = mapped_column(Integer, primary_key=True, autoincrement=True)
+    ticker:     Mapped[str]   = mapped_column(String,  nullable=False)
+    date:       Mapped[str]   = mapped_column(String,  nullable=False)   # ISO date YYYY-MM-DD
+    close:      Mapped[float] = mapped_column(Float,   nullable=True)
+    open:       Mapped[float] = mapped_column(Float,   nullable=True)
+    high:       Mapped[float] = mapped_column(Float,   nullable=True)
+    low:        Mapped[float] = mapped_column(Float,   nullable=True)
+    volume:     Mapped[float] = mapped_column(Float,   nullable=True)
+    change_pct: Mapped[float] = mapped_column(Float,   nullable=True)
+    source:     Mapped[str]   = mapped_column(String,  nullable=False, default="history")
+
+    __table_args__ = (
+        UniqueConstraint("ticker", "date", name="uq_daily_price_history_ticker_date"),
+        Index("ix_daily_price_history_ticker_date", "ticker", "date"),
+    )
