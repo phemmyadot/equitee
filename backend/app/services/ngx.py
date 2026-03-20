@@ -282,28 +282,45 @@ def cache_age() -> Optional[int]:
 def enrich_with_volumes(tickers: List[str]) -> Dict[str, NGXPrice]:
     """
     Return prices for specific tickers with volume data fetched from individual pages.
-    This is for portfolio holdings only (not all 143 tickers) to avoid excessive requests.
+    Intraday requests are fired in parallel via a thread pool.
     """
+    from concurrent.futures import ThreadPoolExecutor, as_completed
+
     _refresh_cache()
+    tickers = [t.upper() for t in tickers]
+
+    # Only enrich tickers that are actually in the price cache
+    valid = [t for t in tickers if t in _cache["prices"]]
+    if not valid:
+        return {}
+
+    def _fetch(ticker: str):
+        return ticker, _get_quote_intraday(ticker)
+
+    intraday_map: Dict[str, Dict] = {}
+    with ThreadPoolExecutor(max_workers=min(len(valid), 10)) as ex:
+        futures = {ex.submit(_fetch, t): t for t in valid}
+        for future in as_completed(futures):
+            try:
+                t, data = future.result()
+                intraday_map[t] = data
+            except Exception:
+                intraday_map[futures[future]] = {}
+
     prices = {}
-    
-    for ticker in tickers:
-        ticker = ticker.upper()
-        price_obj = _cache["prices"].get(ticker)
-        
-        if price_obj:
-            intraday = _get_quote_intraday(ticker)
-            enriched = NGXPrice(
-                symbol=price_obj.symbol,
-                price=price_obj.price,
-                close=price_obj.close,
-                change=price_obj.change,
-                change_pct=price_obj.change_pct,
-                high=intraday["high"]   or price_obj.high,
-                low=intraday["low"]    or price_obj.low,
-                volume=intraday["volume"] or price_obj.volume,
-                value=price_obj.value,
-            )
-            prices[ticker] = enriched
-    
+    for ticker in valid:
+        price_obj = _cache["prices"][ticker]
+        intraday  = intraday_map.get(ticker, {})
+        prices[ticker] = NGXPrice(
+            symbol     = price_obj.symbol,
+            price      = price_obj.price,
+            close      = price_obj.close,
+            change     = price_obj.change,
+            change_pct = price_obj.change_pct,
+            high       = intraday.get("high")   or price_obj.high,
+            low        = intraday.get("low")    or price_obj.low,
+            volume     = intraday.get("volume") or price_obj.volume,
+            value      = price_obj.value,
+        )
+
     return prices
