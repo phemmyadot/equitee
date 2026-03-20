@@ -606,6 +606,97 @@ def get_daily_price_history(db: Session, ticker: str, days: int) -> list[dict]:
         for r in db.scalars(stmt).all()
     ]
 
+def get_correlation_matrix(db: Session, tickers: list[str], days: int) -> dict:
+    """
+    Compute pairwise Pearson correlation of daily returns for a list of tickers.
+    Uses daily_price_history.change_pct over the last `days` calendar days.
+    Returns { tickers: [...], matrix: [[...], ...] }.
+    """
+    from datetime import date, timedelta
+    since = (date.today() - timedelta(days=days)).isoformat()
+    upper = [t.upper() for t in tickers]
+
+    stmt = (
+        select(DailyPriceHistory.ticker, DailyPriceHistory.date, DailyPriceHistory.change_pct)
+        .where(
+            DailyPriceHistory.ticker.in_(upper),
+            DailyPriceHistory.date >= since,
+            DailyPriceHistory.change_pct.isnot(None),
+        )
+        .order_by(DailyPriceHistory.date)
+    )
+    rows = db.execute(stmt).fetchall()
+
+    # Build {ticker: {date: return}} mapping
+    from collections import defaultdict
+    series: dict[str, dict[str, float]] = defaultdict(dict)
+    all_dates: set[str] = set()
+    for ticker, date_str, chg in rows:
+        series[ticker][date_str] = chg
+        all_dates.add(date_str)
+
+    sorted_dates = sorted(all_dates)
+    present = [t for t in upper if t in series]
+    if len(present) < 2 or not sorted_dates:
+        return {"tickers": present, "matrix": []}
+
+    # Build returns matrix — fill missing with 0
+    import math
+    mat = [[series[t].get(d, 0.0) for d in sorted_dates] for t in present]
+
+    def pearson(a: list[float], b: list[float]) -> float:
+        n = len(a)
+        if n < 2:
+            return 0.0
+        ma = sum(a) / n
+        mb = sum(b) / n
+        num  = sum((a[i] - ma) * (b[i] - mb) for i in range(n))
+        dena = math.sqrt(sum((x - ma) ** 2 for x in a))
+        denb = math.sqrt(sum((x - mb) ** 2 for x in b))
+        if dena == 0 or denb == 0:
+            return 0.0
+        return round(num / (dena * denb), 4)
+
+    n = len(present)
+    matrix = [[pearson(mat[i], mat[j]) for j in range(n)] for i in range(n)]
+    return {"tickers": present, "matrix": matrix}
+
+
+def get_portfolio_analytics(db: Session, user_id: int, days: int) -> dict:
+    """
+    Compute max drawdown and annualised Sharpe ratio from portfolio_snapshots
+    for the last `days` calendar days.
+    Uses ngx_equity_ngn as the value series.
+    Returns { max_drawdown_pct, sharpe, data_points }.
+    """
+    import math
+    snaps = get_portfolio_history(db, days=days, user_id=user_id)
+    values = [s.ngx_equity_ngn for s in snaps if s.ngx_equity_ngn > 0]
+
+    if len(values) < 2:
+        return {"max_drawdown_pct": None, "sharpe": None, "data_points": len(values)}
+
+    # Max drawdown
+    peak = values[0]
+    max_dd = 0.0
+    for v in values:
+        peak = max(peak, v)
+        dd = (peak - v) / peak if peak > 0 else 0
+        max_dd = max(max_dd, dd)
+
+    # Daily returns
+    returns = [(values[i] - values[i - 1]) / values[i - 1] for i in range(1, len(values))]
+    mean_r = sum(returns) / len(returns)
+    std_r  = math.sqrt(sum((r - mean_r) ** 2 for r in returns) / len(returns))
+    sharpe = round((mean_r / std_r) * math.sqrt(252), 3) if std_r > 0 else None
+
+    return {
+        "max_drawdown_pct": round(max_dd * 100, 2),
+        "sharpe":           sharpe,
+        "data_points":      len(values),
+    }
+
+
 # ── Watchlist ──────────────────────────────────────────────────────────────────
 
 def get_watchlist(db: Session, user_id: int) -> list[Watchlist]:

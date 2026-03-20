@@ -1,8 +1,10 @@
 """
 History Router
 ==============
-GET /api/history/portfolio          — portfolio value time series
-GET /api/history/prices/{ticker}    — single-ticker price history
+GET /api/history/portfolio              — portfolio value time series
+GET /api/history/prices/{ticker}        — single-ticker price history
+GET /api/history/correlation            — pairwise return correlation matrix
+GET /api/history/analytics              — max drawdown + Sharpe ratio
 """
 
 import logging
@@ -15,7 +17,11 @@ from typing import Optional
 from app.db.engine import get_db
 from app.db.models import User
 from app.auth.dependencies import get_current_user
-from app.db.crud import get_portfolio_history, get_price_history
+from app.db.crud import (
+    get_portfolio_history, get_price_history,
+    get_correlation_matrix, get_portfolio_analytics,
+    get_active_holdings,
+)
 
 log = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/history", tags=["history"])
@@ -122,3 +128,65 @@ def price_history(
     except Exception:
         log.exception("Error fetching price history for %s", ticker)
         raise HTTPException(status_code=500, detail="Failed to fetch price history")
+
+
+# ── Correlation ─────────────────────────────────────────────────────────────────
+
+class CorrelationResponse(BaseModel):
+    tickers: list[str]
+    matrix:  list[list[float]]
+    days:    int
+
+
+@router.get("/correlation", response_model=CorrelationResponse)
+def correlation(
+    days: int = Query(default=90, ge=10, le=365),
+    db:   Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """
+    Returns pairwise Pearson correlation of daily returns for all held NGX tickers.
+    Uses daily_price_history.change_pct.
+    """
+    try:
+        holdings = get_active_holdings(db, market="ngx", user_id=current_user.id)
+        tickers  = [h.ticker for h in holdings if h.is_active]
+        if len(tickers) < 2:
+            return CorrelationResponse(tickers=tickers, matrix=[], days=days)
+        result = get_correlation_matrix(db, tickers=tickers, days=days)
+        return CorrelationResponse(tickers=result["tickers"], matrix=result["matrix"], days=days)
+    except Exception:
+        log.exception("Error computing correlation matrix")
+        raise HTTPException(status_code=500, detail="Failed to compute correlation matrix")
+
+
+# ── Analytics (drawdown + Sharpe) ──────────────────────────────────────────────
+
+class AnalyticsResponse(BaseModel):
+    max_drawdown_pct: Optional[float]
+    sharpe:           Optional[float]
+    data_points:      int
+    days:             int
+
+
+@router.get("/analytics", response_model=AnalyticsResponse)
+def analytics(
+    days: int = Query(default=180, ge=10, le=730),
+    db:   Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """
+    Returns max drawdown (%) and annualised Sharpe ratio computed from
+    portfolio_snapshots over the last `days` calendar days.
+    """
+    try:
+        result = get_portfolio_analytics(db, user_id=current_user.id, days=days)
+        return AnalyticsResponse(
+            max_drawdown_pct = result["max_drawdown_pct"],
+            sharpe           = result["sharpe"],
+            data_points      = result["data_points"],
+            days             = days,
+        )
+    except Exception:
+        log.exception("Error computing portfolio analytics")
+        raise HTTPException(status_code=500, detail="Failed to compute portfolio analytics")
