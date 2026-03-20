@@ -529,6 +529,17 @@ def get_latest_daily_date(db: Session, ticker: str) -> Optional[str]:
     return db.scalars(stmt).first()
 
 
+def get_oldest_daily_date(db: Session, ticker: str) -> Optional[str]:
+    """Return the oldest date string stored for a ticker, or None."""
+    stmt = (
+        select(DailyPriceHistory.date)
+        .where(DailyPriceHistory.ticker == ticker.upper())
+        .order_by(DailyPriceHistory.date)
+        .limit(1)
+    )
+    return db.scalars(stmt).first()
+
+
 def upsert_daily_price_rows(db: Session, ticker: str, rows: list[dict]) -> int:
     """
     Upsert a list of OHLCV dicts into daily_price_history.

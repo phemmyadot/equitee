@@ -142,15 +142,19 @@ def refresh_ticker_history(ticker: str, force: bool = False) -> int:
     Ensure the daily_price_history table is up to date for this ticker.
 
     Logic:
-    - If the latest stored date is today (or yesterday for weekend), skip.
-    - Otherwise scrape the history page and upsert new rows.
-    - If history page returns nothing, fall back to chart scraper.
+    1. If the latest stored date is already today, skip (already current).
+    2. Scrape the history page for new rows (dates after latest stored).
+    3. If the history page returned data AND the oldest stored date is less
+       than 400 days back, backfill older dates from the chart scraper so
+       that volatility/MA calculations have a full dataset immediately.
+    4. If the history page returned nothing, fall back entirely to the chart
+       scraper (covers tickers whose history page returns 404).
 
-    Returns the number of rows upserted (0 if already current).
+    Returns the total number of rows upserted.
     """
-    from app.db.crud import get_latest_daily_date, upsert_daily_price_rows
+    from app.db.crud import get_latest_daily_date, get_oldest_daily_date, upsert_daily_price_rows
 
-    t   = ticker.upper()
+    t     = ticker.upper()
     today = date.today().isoformat()
 
     with SessionLocal() as db:
@@ -160,24 +164,38 @@ def refresh_ticker_history(ticker: str, force: bool = False) -> int:
             log.debug("[History] %s already current (latest=%s)", t, latest)
             return 0
 
-        # Scrape primary source
-        rows = _scrape_history_page(t)
+        total = 0
 
-        # Filter to only new rows when we already have some data
-        if rows and latest:
-            rows = [r for r in rows if r["date"] > latest]
+        # ── Step 1: scrape history page for recent rows ────────────────────
+        history_rows = _scrape_history_page(t)
+        new_rows = [r for r in history_rows if not latest or r["date"] > latest]
+        if new_rows:
+            total += upsert_daily_price_rows(db, t, new_rows)
 
-        # Fallback to chart scraper if history page had nothing
-        if not rows:
-            rows = _fallback_chart_rows(t, days=400)
-            if rows and latest:
-                rows = [r for r in rows if r["date"] > latest]
+        # ── Step 2: backfill older data from chart scraper ─────────────────
+        # Only needed when the history page provided data (i.e. page exists)
+        # and we don't yet have 400 days of history.
+        if history_rows:
+            oldest = get_oldest_daily_date(db, t)
+            cutoff = (date.today() - timedelta(days=395)).isoformat()
+            if oldest and oldest > cutoff:
+                chart_rows = _fallback_chart_rows(t, days=400)
+                older_rows = [r for r in chart_rows if r["date"] < oldest]
+                if older_rows:
+                    log.info("[History] Backfilling %d older rows for %s (oldest was %s)",
+                             len(older_rows), t, oldest)
+                    total += upsert_daily_price_rows(db, t, older_rows)
 
-        if not rows:
+        # ── Step 3: full fallback when history page returned nothing ───────
+        if not history_rows:
+            chart_rows = _fallback_chart_rows(t, days=400)
+            new_chart  = [r for r in chart_rows if not latest or r["date"] > latest]
+            if new_chart:
+                total += upsert_daily_price_rows(db, t, new_chart)
+
+        if total == 0:
             log.info("[History] No new rows for %s", t)
-            return 0
-
-        return upsert_daily_price_rows(db, t, rows)
+        return total
 
 
 def get_ticker_prices_from_db(ticker: str, days: int = 400) -> list[dict]:
