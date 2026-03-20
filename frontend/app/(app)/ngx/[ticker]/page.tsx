@@ -10,7 +10,9 @@ import {
 import { usePortfolio } from '@/context/PortfolioContext';
 import ChartCard from '@/components/ui/ChartCard';
 import { ErrorMessage } from '@/components/ui/Feedback';
-import SignalScore from '@/components/ui/Signalscore';
+import SignalScore, { computeSignal } from '@/components/ui/Signalscore';
+import PriceTargets from '@/components/ui/PriceTargets';
+import { computeTargets } from '@/lib/targets';
 import PlotlyChart from '@/components/charts/PlotlyChart';
 import { plotlyLayout, COLORS, sectorColor } from '@/lib/theme';
 import { fmtNGNFull, fmtNGN, fmtPct, fmtPct2, fmtVol, isPositive } from '@/lib/formatters';
@@ -397,6 +399,18 @@ export default function NGXProfilePage() {
     return parseFloat((vol / totalShares * 100).toFixed(3));
   })();
 
+  // Signal + price targets
+  const signalResult = computeSignal(ov, perf, livePrice, posRow, dividend);
+  const targetResult = computeTargets(
+    livePrice ?? null,
+    grahamNum ?? null,
+    _n(perf?.ma_50),
+    _n(perf?.ma_200),
+    _n(perf?.week_52_high),
+    _n(perf?.week_52_low),
+    signalResult?.total ?? null,
+  );
+
   // Price chart built inline from ohlcv state
 
   // Earnings chart
@@ -557,6 +571,18 @@ export default function NGXProfilePage() {
         dividend={dividend}
         loading={loading}
       />
+
+      {/* ── Price Targets ───────────────────────────────────────────────── */}
+      {!loading && targetResult && livePrice && signalResult && (
+        <PriceTargets
+          result={targetResult}
+          price={livePrice}
+          w52l={_n(perf?.week_52_low)}
+          w52h={_n(perf?.week_52_high)}
+          label={signalResult.label}
+          color={signalResult.color}
+        />
+      )}
 
       {/* ── Dividend card ──────────────────────────────────────────────── */}
       {(divLoading || dividend) && (
