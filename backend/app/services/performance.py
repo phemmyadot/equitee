@@ -18,6 +18,12 @@ log = logging.getLogger(__name__)
 _overview_cache: Dict = {}
 _overview_ts: Dict = {}
 
+# Short-lived cache for the stats blob so get_overview and get_performance
+# don't both fire an HTTP request to the same /statistics/ URL in one request.
+_blob_cache: Dict = {}
+_blob_ts: Dict = {}
+_BLOB_TTL = 300   # 5 minutes
+
 _HEADERS = {
     "User-Agent": (
         "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
@@ -43,7 +49,15 @@ def _scrape_stats_blob(ticker: str) -> Dict[str, Optional[float]]:
     Fetch /statistics/ and extract all id→hover numeric values
     from the SvelteKit data blob.
     Returns a flat dict: {id_string: float_or_None}
+
+    Cached for _BLOB_TTL seconds so that get_overview and get_performance
+    (both called from /full) share the same HTTP response.
     """
+    key = ticker.upper()
+    now = time.time()
+    if key in _blob_cache and (now - _blob_ts.get(key, 0)) < _BLOB_TTL:
+        return _blob_cache[key]
+
     url = f"{settings.NGX_SOURCE_BASE_URL}/quote/ngx/{ticker.lower()}/statistics/"
     try:
         resp = requests.get(url, headers=_HEADERS, timeout=15)
@@ -56,7 +70,11 @@ def _scrape_stats_blob(ticker: str) -> Dict[str, Optional[float]]:
     items = re.findall(
         r'\{id:"(\w+)",title:"[^"]*",value:"[^"]*",hover:"([^"]*)"', text
     )
-    return {id_: _parse_hover(hover) for id_, hover in items}
+    result = {id_: _parse_hover(hover) for id_, hover in items}
+    if result:
+        _blob_cache[key] = result
+        _blob_ts[key]    = now
+    return result
 
 
 def _scrape_overview(ticker: str) -> Optional[Dict]:
