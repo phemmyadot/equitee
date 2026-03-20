@@ -20,7 +20,7 @@ import type {
   TickerData, DividendInfo, EarningsHistory, BalanceSheet, DBPriceHistory, StockRow,
 } from '@/services/api';
 import {
-  IconChevronRight, IconChartLine, IconExternalLink, IconShield, IconChartHistory,
+  IconChevronRight, IconChartLine, IconExternalLink, IconChartHistory,
 } from '@/components/ui/icons';
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -584,74 +584,6 @@ export default function NGXProfilePage() {
         />
       )}
 
-      {/* ── Dividend card ──────────────────────────────────────────────── */}
-      {(divLoading || dividend) && (
-        <div className="card px-5 py-4">
-          <div className="flex items-center justify-between mb-3">
-            <div className="flex items-center gap-2">
-              <div className="w-6 h-6 rounded-md bg-[var(--gain-light)] flex items-center justify-center">
-                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="var(--gain)" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                  <line x1="12" y1="1" x2="12" y2="23" /><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6" />
-                </svg>
-              </div>
-              <span className="text-[11px] font-bold uppercase tracking-[0.08em] text-[var(--ink-3)]">Dividend</span>
-            </div>
-            {dividend?.timestamp && (
-              <span className="text-[10px] font-mono text-[var(--ink-4)]">
-                cached {new Date(dividend.timestamp).toLocaleDateString()}
-              </span>
-            )}
-          </div>
-          {divLoading
-            ? <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-              {[...Array(4)].map((_, i) => (
-                <div key={i} className="flex flex-col gap-1.5"><Sk w="w-16" h="h-2.5" /><Sk w="w-24" h="h-4" /></div>
-              ))}
-            </div>
-            : dividend
-              ? <div className="grid grid-cols-2 sm:grid-cols-4 gap-x-6 gap-y-4">
-                <div className="flex flex-col gap-0.5">
-                  <span className="text-[9.5px] font-semibold uppercase tracking-[0.07em] text-[var(--ink-4)]">Cash Amount</span>
-                  <span className="font-mono text-[20px] font-bold text-[var(--gain)] leading-none mt-0.5">
-                    {dividend.cash_amount != null ? `₦${dividend.cash_amount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 3 })}` : '—'}
-                  </span>
-                  <span className="text-[9px] text-[var(--ink-4)] font-mono mt-0.5">{dividend.currency} per share</span>
-                </div>
-                <div className="flex flex-col gap-0.5">
-                  <span className="text-[9.5px] font-semibold uppercase tracking-[0.07em] text-[var(--ink-4)]">Ex-Div Date</span>
-                  <span className="font-mono text-[13px] font-semibold text-[var(--ink-2)]">{dividend.ex_dividend_date ?? '—'}</span>
-                  <span className="text-[9px] text-[var(--ink-4)] mt-0.5">Must hold before this</span>
-                </div>
-                <div className="flex flex-col gap-0.5">
-                  <span className="text-[9.5px] font-semibold uppercase tracking-[0.07em] text-[var(--ink-4)]">Record Date</span>
-                  <span className="font-mono text-[13px] font-semibold text-[var(--ink-2)]">{dividend.record_date ?? '—'}</span>
-                  <span className="text-[9px] text-[var(--ink-4)] mt-0.5">Eligibility confirmed</span>
-                </div>
-                <div className="flex flex-col gap-0.5">
-                  <span className="text-[9.5px] font-semibold uppercase tracking-[0.07em] text-[var(--ink-4)]">Pay Date</span>
-                  <span className="font-mono text-[13px] font-semibold text-[var(--ink-2)]">{dividend.pay_date ?? '—'}</span>
-                  <span className="text-[9px] text-[var(--ink-4)] mt-0.5">Payment sent</span>
-                </div>
-                {posRow && dividend.cash_amount != null && (
-                  <div className="sm:col-span-4 mt-1 pt-3 border-t border-[var(--border)] flex items-center gap-3">
-                    <IconShield width={12} height={12} style={{ stroke: 'var(--ink-4)' }} />
-                    <span className="text-[11px] text-[var(--ink-3)]">
-                      My projected payout
-                      <span className="font-mono font-bold text-[var(--gain)] ml-2 text-[12px]">
-                        ₦{(posRow.Shares * dividend.cash_amount).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                      </span>
-                      <span className="text-[var(--ink-4)] ml-1.5 text-[10px]">
-                        ({posRow.Shares.toLocaleString()} shares × ₦{dividend.cash_amount.toFixed(3)})
-                      </span>
-                    </span>
-                  </div>
-                )}
-              </div>
-              : <p className="text-[12px] text-[var(--ink-4)]">No upcoming dividend data available for {ticker}.</p>
-          }
-        </div>
-      )}
-
       {/* ── Portfolio position strip ────────────────────────────────────── */}
       {posRow && (
         <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-5 gap-3">
@@ -766,241 +698,19 @@ export default function NGXProfilePage() {
         }
       </div>
 
-      {/* ── Earnings history + Balance sheet ───────────────────────────── */}
+      {/* ── Technical Signals + Return Momentum ────────────────────────── */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
 
-        {/* Earnings history — NEW */}
-        <ChartCard title="Earnings History" subtitle="quarterly revenue · EPS" loading={earnLoad} height={280}>
-          {!earnLoad && (!earnings || !earnings.periods.length)
-            ? <div className="flex items-center justify-center h-[280px] text-[12px] text-[var(--ink-4)]">
-              No earnings data available
-            </div>
-            : <PlotlyChart
-              data={[revenueBar, epsLine]}
-              layout={{
-                ...plotlyLayout({ margin: { t: 8, b: 56, l: 64, r: 48 } }),
-                yaxis: { ...plotlyLayout().yaxis, tickprefix: '₦', title: { text: 'Revenue (B)', font: { size: 10 } } },
-                yaxis2: {
-                  overlaying: 'y', side: 'right',
-                  tickfont: { size: 10, color: COLORS.ink4, family: "'JetBrains Mono',monospace" },
-                  gridcolor: 'transparent', zerolinecolor: COLORS.border,
-                  title: { text: 'EPS', font: { size: 10 } }
-                },
-                legend: { orientation: 'h', y: -0.22 },
-                barmode: 'group',
-              }}
-              height={280}
-            />
-          }
-        </ChartCard>
-
-        {/* Balance sheet trend — NEW */}
-        <ChartCard title="Balance Sheet Trend" subtitle="annual assets · liabilities · equity" loading={bsLoad} height={280}>
-          {!bsLoad && (!balance || !balance.periods.length)
-            ? <div className="flex items-center justify-center h-[280px] text-[12px] text-[var(--ink-4)]">
-              No balance sheet data available
-            </div>
-            : <PlotlyChart
-              data={[
-                bsArea('Assets', balance?.assets ?? [], COLORS.accent, 'tozeroy'),
-                bsArea('Liabilities', balance?.liabilities ?? [], COLORS.loss, 'tonexty'),
-                bsArea('Equity', balance?.equity ?? [], COLORS.gain, 'tonexty'),
-              ]}
-              layout={{
-                ...plotlyLayout({ margin: { t: 8, b: 56, l: 64, r: 16 } }),
-                yaxis: { ...plotlyLayout().yaxis, tickprefix: '₦', ticksuffix: 'B' },
-                legend: { orientation: 'h', y: -0.22 },
-              }}
-              height={280}
-            />
-          }
-        </ChartCard>
-      </div>
-
-      {/* ── Fundamentals 2-col ─────────────────────────────────────────── */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
         <div className="card px-5 py-4">
-          <SectionLabel>Valuation</SectionLabel>
+          <SectionLabel>Technical Signals</SectionLabel>
           {loading
-            ? <div className="grid grid-cols-2 gap-3">{[...Array(8)].map((_, i) => <Sk key={i} w="w-full" h="h-8" />)}</div>
-            : <div className="grid grid-cols-2 gap-x-6 gap-y-3.5">
-              <Stat label="Market Cap" value={fmtNGN(ov?.market_cap as number | null)} />
-              <Stat label="P/E Ratio" value={ov?.pe_ratio} mono />
-              <Stat label="EPS" value={ov?.eps} mono />
-              <Stat label="Book Value" value={ov?.book_value} mono />
-              <Stat label="P/B Ratio" value={perf?.price_to_book} mono />
-              <Stat label="P/S Ratio" value={perf?.price_to_sales} mono />
-              <Stat label="EV/EBITDA" value={perf?.ev_ebitda} mono />
-              <Stat label="EV/FCF" value={perf?.ev_fcf} mono />
-              <Stat label="PEG Ratio" value={pegRatio} mono />
-              <Stat label="Earnings Yield" value={earningsYield != null ? `${earningsYield.toFixed(2)}%` : null} mono />
-            </div>
-          }
-        </div>
-        <div className="card px-5 py-4">
-          <SectionLabel>Profitability</SectionLabel>
-          {loading
-            ? <div className="grid grid-cols-2 gap-3">{[...Array(8)].map((_, i) => <Sk key={i} w="w-full" h="h-8" />)}</div>
-            : <div className="grid grid-cols-2 gap-x-6 gap-y-3.5">
-              <Stat label="Gross Margin" value={ov?.gross_margin} />
-              <Stat label="Net Margin" value={ov?.net_margin} />
-              <Stat label="Op. Margin" value={perf?.operating_margin} />
-              <Stat label="EBITDA Margin" value={perf?.ebitda_margin} />
-              <Stat label="ROE" value={ov?.roe} mono />
-              <Stat label="ROA" value={perf?.roa} mono />
-              <Stat label="ROIC" value={perf?.roic} mono />
-              <Stat label="ROCE" value={perf?.roce} mono />
-            </div>
-          }
-        </div>
-      </div>
-
-      {/* ── Return momentum ladder + Financial health ───────────────────── */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-
-        {/* Momentum ladder — REPLACES flat returns grid */}
-        <div className="card px-5 py-4">
-          <SectionLabel>Return Momentum</SectionLabel>
-          {loading
-            ? <div className="space-y-2">{[...Array(7)].map((_, i) => <Sk key={i} w="w-full" h="h-7" />)}</div>
-            : perf
-              ? <MomentumLadder perf={perf} />
-              : <p className="text-[11px] text-[var(--ink-4)]">No return data</p>
-          }
-        </div>
-
-        <div className="card px-5 py-4">
-          <SectionLabel>Financial Health</SectionLabel>
-          {loading
-            ? <div className="grid grid-cols-2 gap-3">{[...Array(8)].map((_, i) => <Sk key={i} w="w-full" h="h-8" />)}</div>
-            : <div className="grid grid-cols-2 gap-x-6 gap-y-3.5">
-              <Stat label="Revenue" value={fmtNGN(ov?.revenue as number | null)} />
-              <Stat label="Net Income" value={fmtNGN(ov?.net_income as number | null)} />
-              <Stat label="Current Ratio" value={ov?.current_ratio} mono />
-              <Stat label="Quick Ratio" value={perf?.quick_ratio} mono />
-              <Stat label="D/E Ratio" value={ov?.debt_to_equity} mono />
-              <Stat label="Debt/EBITDA" value={perf?.debt_ebitda} mono />
-              <Stat label="Net Debt" value={fmtNGN(perf?.net_debt as number | null)} mono />
-              <Stat label="Int. Coverage" value={perf?.interest_coverage} mono />
-            </div>
-          }
-        </div>
-      </div>
-
-      {/* ── Quality scores (Piotroski + Altman badges) + Cash flow ─────── */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-
-        {/* Quality badges — REPLACED raw Stat cells */}
-        <div className="card px-5 py-4">
-          <SectionLabel>Quality &amp; Risk</SectionLabel>
-          {loading
-            ? <div className="space-y-4">{[...Array(4)].map((_, i) => <Sk key={i} w="w-full" h="h-12" />)}</div>
-            : <div className="space-y-5">
-              <div>
-                <span className="text-[9.5px] font-semibold uppercase tracking-[0.07em] text-[var(--ink-4)] block mb-2">Piotroski F-Score</span>
-                <PiotroskiBadge score={perf?.piotroski_score ?? null} />
-              </div>
-              <div className="border-t border-[var(--border)] pt-4">
-                <span className="text-[9.5px] font-semibold uppercase tracking-[0.07em] text-[var(--ink-4)] block mb-2">Altman Z-Score</span>
-                <AltmanBadge score={perf?.altman_zscore ?? null} />
-              </div>
-              <div className="border-t border-[var(--border)] pt-4 grid grid-cols-2 gap-x-6 gap-y-3">
-                <Stat label="Beta" value={perf?.beta} mono />
-                <Stat label="Volatility" value={perf?.volatility} mono />
-                <Stat label="Sharpe" value={perf?.sharpe_ratio} mono />
-                <Stat label="Max Drawdown" value={perf?.max_drawdown} mono
-                  accent={perf?.max_drawdown ? 'loss' : undefined} />
-              </div>
-            </div>
-          }
-        </div>
-
-        <div className="card px-5 py-4">
-          <SectionLabel>Cash Flow</SectionLabel>
-          {loading
-            ? <div className="grid grid-cols-2 gap-3">{[...Array(6)].map((_, i) => <Sk key={i} w="w-full" h="h-8" />)}</div>
-            : <div className="grid grid-cols-2 gap-x-6 gap-y-3.5">
-              <Stat label="Op. Cash Flow" value={fmtNGN(perf?.operating_cash_flow as number | null)} />
-              <Stat label="Free Cash Flow" value={fmtNGN(perf?.free_cash_flow as number | null)} />
-              <Stat label="FCF / Share" value={perf?.fcf_per_share} mono />
-              <Stat label="FCF Margin" value={perf?.fcf_margin} />
-              <Stat label="FCF Yield" value={perf?.fcf_yield} />
-              <Stat label="CapEx" value={fmtNGN(perf?.capex as number | null)} mono />
-            </div>
-          }
-        </div>
-      </div>
-
-      {/* ── Growth & Dividends ──────────────────────────────────────────── */}
-      {!loading && (perf?.revenue_growth_yoy || perf?.earnings_growth_yoy || ov?.dividend_yield) && (
-        <div className="card px-5 py-4">
-          <SectionLabel>Growth &amp; Dividends</SectionLabel>
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-x-6 gap-y-3.5">
-            <Stat label="Revenue Growth" value={perf?.revenue_growth_yoy} />
-            <Stat label="Earnings Growth" value={perf?.earnings_growth_yoy} />
-            <Stat label="FCF Growth" value={perf?.fcf_growth_yoy} />
-            <Stat label="Dividend Yield" value={ov?.dividend_yield} />
-            <Stat label="Dividend Growth" value={perf?.dividend_growth_yoy} />
-            <Stat label="Asset Turnover" value={perf?.asset_turnover} mono />
-            <Stat label="Payout Ratio" value={payoutRatio != null ? `${payoutRatio.toFixed(1)}%` : null} mono />
-            <Stat label="Accruals Ratio"
-              value={accrualsRatio != null ? `${accrualsRatio.toFixed(2)}%` : null}
-              mono
-              accent={accrualsRatio != null ? (Math.abs(accrualsRatio) > 10 ? 'warn' : undefined) : undefined}
-            />
-          </div>
-        </div>
-      )}
-
-      {/* ── Intrinsic Value + Technical Signals ─────────────────────────── */}
-      {!loading && (
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-
-          {/* Graham Number */}
-          <div className="card px-5 py-4">
-            <SectionLabel>Intrinsic Value</SectionLabel>
-            <div className="grid grid-cols-2 gap-x-6 gap-y-3.5">
-              <Stat label="Graham Number"
-                value={grahamNum != null ? `₦${grahamNum.toFixed(2)}` : null}
-                mono
-              />
-              <Stat label="Margin of Safety"
-                value={grahamMargin != null ? `${grahamMargin.toFixed(1)}%` : null}
-                mono
-                accent={grahamMargin != null ? (grahamMargin > 20 ? 'gain' : grahamMargin < 0 ? 'loss' : undefined) : undefined}
-              />
-              <Stat label="Earnings Yield" value={earningsYield != null ? `${earningsYield.toFixed(2)}%` : null} mono />
-              <Stat label="Liquidity"
-                value={liquidityPct != null ? `${liquidityPct.toFixed(3)}%` : null}
-                mono
-                accent={liquidityPct != null ? (liquidityPct < 0.01 ? 'warn' : undefined) : undefined}
-              />
-            </div>
-            {grahamNum != null && livePrice != null && (
-              <div className="mt-4 pt-3 border-t border-[var(--border)]">
-                <p className="text-[9px] text-[var(--ink-4)] leading-relaxed">
-                  Graham Number is a conservative intrinsic value estimate for stable, profitable companies.
-                  {grahamMargin != null && grahamMargin > 20
-                    ? ` Current price is ${grahamMargin.toFixed(1)}% below — potential margin of safety.`
-                    : grahamMargin != null && grahamMargin < 0
-                      ? ` Current price is ${Math.abs(grahamMargin).toFixed(1)}% above Graham Number — trading at a premium.`
-                      : null}
-                </p>
-              </div>
-            )}
-          </div>
-
-          {/* Technical Signals */}
-          <div className="card px-5 py-4">
-            <SectionLabel>Technical Signals</SectionLabel>
-            {(perf?.rsi_14 != null || perf?.ma_50 != null) ? (
+            ? <div className="space-y-4">{[...Array(3)].map((_, i) => <Sk key={i} w="w-full" h="h-10" />)}</div>
+            : (perf?.rsi_14 != null || perf?.ma_50 != null) ? (
               <div className="space-y-4">
-                {/* RSI */}
                 {perf.rsi_14 != null && (() => {
                   const rsi = perf.rsi_14 as number;
                   const rsiColor = rsi > 70 ? 'var(--loss)' : rsi < 30 ? 'var(--gain)' : 'var(--ink-3)';
                   const rsiLabel = rsi > 70 ? 'Overbought' : rsi < 30 ? 'Oversold' : 'Neutral';
-                  const rsiPct = rsi;
                   return (
                     <div>
                       <div className="flex items-center justify-between mb-1.5">
@@ -1012,7 +722,7 @@ export default function NGXProfilePage() {
                       </div>
                       <div className="relative h-2 rounded-full overflow-hidden bg-gradient-to-r from-[var(--gain)] via-[var(--ink-5)] to-[var(--loss)]">
                         <div className="absolute top-0 w-1 h-full rounded-full bg-white border border-[var(--border-strong)]"
-                          style={{ left: `calc(${rsiPct}% - 2px)` }} />
+                          style={{ left: `calc(${rsi}% - 2px)` }} />
                       </div>
                       <div className="flex justify-between mt-0.5">
                         <span className="text-[8px] text-[var(--gain)]">Oversold 30</span>
@@ -1021,8 +731,6 @@ export default function NGXProfilePage() {
                     </div>
                   );
                 })()}
-
-                {/* Moving Averages */}
                 {(perf.ma_50 != null || perf.ma_200 != null) && (
                   <div className="border-t border-[var(--border)] pt-3 grid grid-cols-2 gap-x-6 gap-y-3">
                     <Stat label="MA (50)" value={perf.ma_50 != null ? `₦${(perf.ma_50 as number).toFixed(2)}` : null} mono />
@@ -1046,11 +754,296 @@ export default function NGXProfilePage() {
               </div>
             ) : (
               <p className="text-[11px] text-[var(--ink-4)]">Insufficient price history for technical indicators.</p>
+            )
+          }
+        </div>
+
+        <div className="card px-5 py-4">
+          <SectionLabel>Return Momentum</SectionLabel>
+          {loading
+            ? <div className="space-y-2">{[...Array(5)].map((_, i) => <Sk key={i} w="w-full" h="h-7" />)}</div>
+            : perf
+              ? <MomentumLadder perf={perf} />
+              : <p className="text-[11px] text-[var(--ink-4)]">No return data</p>
+          }
+        </div>
+      </div>
+
+      {/* ── Valuation + Intrinsic Value ──────────────────────────────────── */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+        <div className="card px-5 py-4">
+          <SectionLabel>Valuation</SectionLabel>
+          {loading
+            ? <div className="grid grid-cols-2 gap-3">{[...Array(8)].map((_, i) => <Sk key={i} w="w-full" h="h-8" />)}</div>
+            : <div className="grid grid-cols-2 gap-x-6 gap-y-3.5">
+              <Stat label="Market Cap" value={fmtNGN(ov?.market_cap as number | null)} />
+              <Stat label="P/E Ratio" value={ov?.pe_ratio} mono />
+              <Stat label="EPS" value={ov?.eps} mono />
+              <Stat label="Book Value" value={ov?.book_value} mono />
+              <Stat label="P/B Ratio" value={perf?.price_to_book} mono />
+              <Stat label="P/S Ratio" value={perf?.price_to_sales} mono />
+              <Stat label="EV/EBITDA" value={perf?.ev_ebitda} mono />
+              <Stat label="EV/FCF" value={perf?.ev_fcf} mono />
+              <Stat label="PEG Ratio" value={pegRatio} mono />
+              <Stat label="Earnings Yield" value={earningsYield != null ? `${earningsYield.toFixed(2)}%` : null} mono />
+            </div>
+          }
+        </div>
+
+        <div className="card px-5 py-4">
+          <SectionLabel>Intrinsic Value</SectionLabel>
+          {loading
+            ? <div className="grid grid-cols-2 gap-3">{[...Array(4)].map((_, i) => <Sk key={i} w="w-full" h="h-8" />)}</div>
+            : <div className="space-y-4">
+              <div className="grid grid-cols-2 gap-x-6 gap-y-3.5">
+                <Stat label="Graham Number"
+                  value={grahamNum != null ? `₦${grahamNum.toFixed(2)}` : null}
+                  mono
+                />
+                <Stat label="Margin of Safety"
+                  value={grahamMargin != null ? `${grahamMargin.toFixed(1)}%` : null}
+                  mono
+                  accent={grahamMargin != null ? (grahamMargin > 20 ? 'gain' : grahamMargin < 0 ? 'loss' : undefined) : undefined}
+                />
+                <Stat label="Earnings Yield" value={earningsYield != null ? `${earningsYield.toFixed(2)}%` : null} mono />
+                <Stat label="Liquidity"
+                  value={liquidityPct != null ? `${liquidityPct.toFixed(3)}%` : null}
+                  mono
+                  accent={liquidityPct != null ? (liquidityPct < 0.01 ? 'warn' : undefined) : undefined}
+                />
+              </div>
+              {grahamNum != null && livePrice != null && (
+                <div className="pt-3 border-t border-[var(--border)]">
+                  <p className="text-[9px] text-[var(--ink-4)] leading-relaxed">
+                    Graham Number is a conservative intrinsic value estimate for stable, profitable companies.
+                    {grahamMargin != null && grahamMargin > 20
+                      ? ` Current price is ${grahamMargin.toFixed(1)}% below — potential margin of safety.`
+                      : grahamMargin != null && grahamMargin < 0
+                        ? ` Current price is ${Math.abs(grahamMargin).toFixed(1)}% above Graham Number — trading at a premium.`
+                        : null}
+                  </p>
+                </div>
+              )}
+            </div>
+          }
+        </div>
+      </div>
+
+      {/* ── Profitability + Quality & Risk ───────────────────────────────── */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+        <div className="card px-5 py-4">
+          <SectionLabel>Profitability</SectionLabel>
+          {loading
+            ? <div className="grid grid-cols-2 gap-3">{[...Array(8)].map((_, i) => <Sk key={i} w="w-full" h="h-8" />)}</div>
+            : <div className="grid grid-cols-2 gap-x-6 gap-y-3.5">
+              <Stat label="Gross Margin" value={ov?.gross_margin} />
+              <Stat label="Net Margin" value={ov?.net_margin} />
+              <Stat label="Op. Margin" value={perf?.operating_margin} />
+              <Stat label="EBITDA Margin" value={perf?.ebitda_margin} />
+              <Stat label="ROE" value={ov?.roe} mono />
+              <Stat label="ROA" value={perf?.roa} mono />
+              <Stat label="ROIC" value={perf?.roic} mono />
+              <Stat label="ROCE" value={perf?.roce} mono />
+            </div>
+          }
+        </div>
+
+        <div className="card px-5 py-4">
+          <SectionLabel>Quality &amp; Risk</SectionLabel>
+          {loading
+            ? <div className="space-y-4">{[...Array(4)].map((_, i) => <Sk key={i} w="w-full" h="h-12" />)}</div>
+            : <div className="space-y-5">
+              <div>
+                <span className="text-[9.5px] font-semibold uppercase tracking-[0.07em] text-[var(--ink-4)] block mb-2">Piotroski F-Score</span>
+                <PiotroskiBadge score={perf?.piotroski_score ?? null} />
+              </div>
+              <div className="border-t border-[var(--border)] pt-4">
+                <span className="text-[9.5px] font-semibold uppercase tracking-[0.07em] text-[var(--ink-4)] block mb-2">Altman Z-Score</span>
+                <AltmanBadge score={perf?.altman_zscore ?? null} />
+              </div>
+              <div className="border-t border-[var(--border)] pt-4 grid grid-cols-2 gap-x-6 gap-y-3">
+                <Stat label="Beta" value={perf?.beta} mono />
+                <Stat label="Volatility" value={perf?.volatility} mono />
+                <Stat label="Sharpe" value={perf?.sharpe_ratio} mono />
+                <Stat label="Max Drawdown" value={perf?.max_drawdown} mono
+                  accent={perf?.max_drawdown ? 'loss' : undefined} />
+              </div>
+            </div>
+          }
+        </div>
+      </div>
+
+      {/* ── Dividend ─────────────────────────────────────────────────────── */}
+      {(divLoading || dividend) && (
+        <div className="card px-5 py-4">
+          <div className="flex items-center justify-between mb-3">
+            <div className="flex items-center gap-2">
+              <div className="w-6 h-6 rounded-md bg-[var(--gain-light)] flex items-center justify-center">
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="var(--gain)" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                  <line x1="12" y1="1" x2="12" y2="23" /><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6" />
+                </svg>
+              </div>
+              <span className="text-[11px] font-bold uppercase tracking-[0.08em] text-[var(--ink-3)]">Dividend</span>
+            </div>
+            {dividend?.timestamp && (
+              <span className="text-[10px] font-mono text-[var(--ink-4)]">
+                cached {new Date(dividend.timestamp).toLocaleDateString()}
+              </span>
             )}
           </div>
-
+          {divLoading
+            ? <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+              {[...Array(4)].map((_, i) => (
+                <div key={i} className="flex flex-col gap-1.5"><Sk w="w-16" h="h-2.5" /><Sk w="w-24" h="h-4" /></div>
+              ))}
+            </div>
+            : dividend
+              ? <div className="grid grid-cols-2 sm:grid-cols-4 gap-x-6 gap-y-4">
+                <div className="flex flex-col gap-0.5">
+                  <span className="text-[9.5px] font-semibold uppercase tracking-[0.07em] text-[var(--ink-4)]">Cash Amount</span>
+                  <span className="font-mono text-[20px] font-bold text-[var(--gain)] leading-none mt-0.5">
+                    {dividend.cash_amount != null ? `₦${dividend.cash_amount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 3 })}` : '—'}
+                  </span>
+                  <span className="text-[9px] text-[var(--ink-4)] font-mono mt-0.5">{dividend.currency} per share</span>
+                </div>
+                <div className="flex flex-col gap-0.5">
+                  <span className="text-[9.5px] font-semibold uppercase tracking-[0.07em] text-[var(--ink-4)]">Ex-Div Date</span>
+                  <span className="font-mono text-[13px] font-semibold text-[var(--ink-2)]">{dividend.ex_dividend_date ?? '—'}</span>
+                  <span className="text-[9px] text-[var(--ink-4)] mt-0.5">Must hold before this</span>
+                </div>
+                <div className="flex flex-col gap-0.5">
+                  <span className="text-[9.5px] font-semibold uppercase tracking-[0.07em] text-[var(--ink-4)]">Record Date</span>
+                  <span className="font-mono text-[13px] font-semibold text-[var(--ink-2)]">{dividend.record_date ?? '—'}</span>
+                  <span className="text-[9px] text-[var(--ink-4)] mt-0.5">Eligibility confirmed</span>
+                </div>
+                <div className="flex flex-col gap-0.5">
+                  <span className="text-[9.5px] font-semibold uppercase tracking-[0.07em] text-[var(--ink-4)]">Pay Date</span>
+                  <span className="font-mono text-[13px] font-semibold text-[var(--ink-2)]">{dividend.pay_date ?? '—'}</span>
+                  <span className="text-[9px] text-[var(--ink-4)] mt-0.5">Payment sent</span>
+                </div>
+                {posRow && dividend.cash_amount != null && (
+                  <div className="sm:col-span-4 mt-1 pt-3 border-t border-[var(--border)] flex items-center gap-3">
+                    <span className="text-[11px] text-[var(--ink-3)]">
+                      My projected payout
+                      <span className="font-mono font-bold text-[var(--gain)] ml-2 text-[12px]">
+                        ₦{(posRow.Shares * dividend.cash_amount).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                      </span>
+                      <span className="text-[var(--ink-4)] ml-1.5 text-[10px]">
+                        ({posRow.Shares.toLocaleString()} shares × ₦{dividend.cash_amount.toFixed(3)})
+                      </span>
+                    </span>
+                  </div>
+                )}
+              </div>
+              : <p className="text-[12px] text-[var(--ink-4)]">No upcoming dividend data available for {ticker}.</p>
+          }
         </div>
       )}
+
+      {/* ── Growth & Dividends ───────────────────────────────────────────── */}
+      {!loading && (perf?.revenue_growth_yoy || perf?.earnings_growth_yoy || ov?.dividend_yield) && (
+        <div className="card px-5 py-4">
+          <SectionLabel>Growth &amp; Dividends</SectionLabel>
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-x-6 gap-y-3.5">
+            <Stat label="Revenue Growth" value={perf?.revenue_growth_yoy} />
+            <Stat label="Earnings Growth" value={perf?.earnings_growth_yoy} />
+            <Stat label="FCF Growth" value={perf?.fcf_growth_yoy} />
+            <Stat label="Dividend Yield" value={ov?.dividend_yield} />
+            <Stat label="Dividend Growth" value={perf?.dividend_growth_yoy} />
+            <Stat label="Asset Turnover" value={perf?.asset_turnover} mono />
+            <Stat label="Payout Ratio" value={payoutRatio != null ? `${payoutRatio.toFixed(1)}%` : null} mono />
+            <Stat label="Accruals Ratio"
+              value={accrualsRatio != null ? `${accrualsRatio.toFixed(2)}%` : null}
+              mono
+              accent={accrualsRatio != null ? (Math.abs(accrualsRatio) > 10 ? 'warn' : undefined) : undefined}
+            />
+          </div>
+        </div>
+      )}
+
+      {/* ── Cash Flow + Financial Health ─────────────────────────────────── */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+        <div className="card px-5 py-4">
+          <SectionLabel>Cash Flow</SectionLabel>
+          {loading
+            ? <div className="grid grid-cols-2 gap-3">{[...Array(6)].map((_, i) => <Sk key={i} w="w-full" h="h-8" />)}</div>
+            : <div className="grid grid-cols-2 gap-x-6 gap-y-3.5">
+              <Stat label="Op. Cash Flow" value={fmtNGN(perf?.operating_cash_flow as number | null)} />
+              <Stat label="Free Cash Flow" value={fmtNGN(perf?.free_cash_flow as number | null)} />
+              <Stat label="FCF / Share" value={perf?.fcf_per_share} mono />
+              <Stat label="FCF Margin" value={perf?.fcf_margin} />
+              <Stat label="FCF Yield" value={perf?.fcf_yield} />
+              <Stat label="CapEx" value={fmtNGN(perf?.capex as number | null)} mono />
+            </div>
+          }
+        </div>
+
+        <div className="card px-5 py-4">
+          <SectionLabel>Financial Health</SectionLabel>
+          {loading
+            ? <div className="grid grid-cols-2 gap-3">{[...Array(8)].map((_, i) => <Sk key={i} w="w-full" h="h-8" />)}</div>
+            : <div className="grid grid-cols-2 gap-x-6 gap-y-3.5">
+              <Stat label="Revenue" value={fmtNGN(ov?.revenue as number | null)} />
+              <Stat label="Net Income" value={fmtNGN(ov?.net_income as number | null)} />
+              <Stat label="Current Ratio" value={ov?.current_ratio} mono />
+              <Stat label="Quick Ratio" value={perf?.quick_ratio} mono />
+              <Stat label="D/E Ratio" value={ov?.debt_to_equity} mono />
+              <Stat label="Debt/EBITDA" value={perf?.debt_ebitda} mono />
+              <Stat label="Net Debt" value={fmtNGN(perf?.net_debt as number | null)} mono />
+              <Stat label="Int. Coverage" value={perf?.interest_coverage} mono />
+            </div>
+          }
+        </div>
+      </div>
+
+      {/* ── Earnings + Balance Sheet ─────────────────────────────────────── */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+
+        <ChartCard title="Earnings History" subtitle="quarterly revenue · EPS" loading={earnLoad} height={280}>
+          {!earnLoad && (!earnings || !earnings.periods.length)
+            ? <div className="flex items-center justify-center h-[280px] text-[12px] text-[var(--ink-4)]">
+              No earnings data available
+            </div>
+            : <PlotlyChart
+              data={[revenueBar, epsLine]}
+              layout={{
+                ...plotlyLayout({ margin: { t: 8, b: 56, l: 64, r: 48 } }),
+                yaxis: { ...plotlyLayout().yaxis, tickprefix: '₦', title: { text: 'Revenue (B)', font: { size: 10 } } },
+                yaxis2: {
+                  overlaying: 'y', side: 'right',
+                  tickfont: { size: 10, color: COLORS.ink4, family: "'JetBrains Mono',monospace" },
+                  gridcolor: 'transparent', zerolinecolor: COLORS.border,
+                  title: { text: 'EPS', font: { size: 10 } },
+                },
+                legend: { orientation: 'h', y: -0.22 },
+                barmode: 'group',
+              }}
+              height={280}
+            />
+          }
+        </ChartCard>
+
+        <ChartCard title="Balance Sheet Trend" subtitle="annual assets · liabilities · equity" loading={bsLoad} height={280}>
+          {!bsLoad && (!balance || !balance.periods.length)
+            ? <div className="flex items-center justify-center h-[280px] text-[12px] text-[var(--ink-4)]">
+              No balance sheet data available
+            </div>
+            : <PlotlyChart
+              data={[
+                bsArea('Assets', balance?.assets ?? [], COLORS.accent, 'tozeroy'),
+                bsArea('Liabilities', balance?.liabilities ?? [], COLORS.loss, 'tonexty'),
+                bsArea('Equity', balance?.equity ?? [], COLORS.gain, 'tonexty'),
+              ]}
+              layout={{
+                ...plotlyLayout({ margin: { t: 8, b: 56, l: 64, r: 16 } }),
+                yaxis: { ...plotlyLayout().yaxis, tickprefix: '₦', ticksuffix: 'B' },
+                legend: { orientation: 'h', y: -0.22 },
+              }}
+              height={280}
+            />
+          }
+        </ChartCard>
+      </div>
 
     </div>
   );
