@@ -283,61 +283,50 @@ export default function NGXProfilePage() {
   const { data: portfolio } = usePortfolio();
   const posRow: StockRow | undefined = portfolio?.ngx_stocks.find(s => s.Ticker === ticker);
 
-  // Fetch ticker data
+  // Fetch all ticker data in parallel on ticker change
   useEffect(() => {
     if (!ticker) return;
     let c = false;
     setLoading(true); setError(null);
-    fetchNGXTickerData(ticker)
-      .then(d => { if (!c) { setData(d); setLoading(false); } })
-      .catch(e => { if (!c) { setError(e.message); setLoading(false); } });
+    setDivLoading(true); setEarnLoad(true); setBsLoad(true); setOhlcvLoad(true);
+
+    Promise.allSettled([
+      fetchNGXTickerData(ticker),
+      fetchNGXDividend(ticker),
+      fetchNGXEarnings(ticker),
+      fetchNGXBalanceSheet(ticker),
+      fetchNGXPriceHistory(ticker, priceDays),
+    ]).then(([tickerRes, divRes, earnRes, bsRes, ohlcvRes]) => {
+      if (c) return;
+      if (tickerRes.status === 'fulfilled') { setData(tickerRes.value); }
+      else { setError(tickerRes.reason?.message ?? 'Failed to load ticker data'); }
+      setLoading(false);
+
+      setDividend(divRes.status === 'fulfilled' ? divRes.value : null);
+      setDivLoading(false);
+
+      setEarnings(earnRes.status === 'fulfilled' ? earnRes.value : null);
+      setEarnLoad(false);
+
+      setBalance(bsRes.status === 'fulfilled' ? bsRes.value : null);
+      setBsLoad(false);
+
+      setOhlcv(ohlcvRes.status === 'fulfilled' ? ohlcvRes.value : null);
+      setOhlcvLoad(false);
+    });
     return () => { c = true; };
   }, [ticker]);
 
-  // Fetch dividend (404 = no data, not an error)
+  // Fetch price history when day range changes (independent of ticker reload)
   useEffect(() => {
     if (!ticker) return;
     let c = false;
-    setDivLoading(true);
-    fetchNGXDividend(ticker)
-      .then(d => { if (!c) { setDividend(d); setDivLoading(false); } })
-      .catch(() => { if (!c) setDivLoading(false); });
-    return () => { c = true; };
-  }, [ticker]);
-
-  // Fetch earnings history
-  useEffect(() => {
-    if (!ticker) return;
-    let c = false;
-    setEarnLoad(true);
-    fetchNGXEarnings(ticker)
-      .then(d => { if (!c) { setEarnings(d); setEarnLoad(false); } })
-      .catch(() => { if (!c) setEarnLoad(false); });
-    return () => { c = true; };
-  }, [ticker]);
-
-  // Fetch balance sheet
-  useEffect(() => {
-    if (!ticker) return;
-    let c = false;
-    setBsLoad(true);
-    fetchNGXBalanceSheet(ticker)
-      .then(d => { if (!c) { setBalance(d); setBsLoad(false); } })
-      .catch(() => { if (!c) setBsLoad(false); });
-    return () => { c = true; };
-  }, [ticker]);
-
-  // Fetch price history from DB
-  useEffect(() => {
-    if (!ticker) return;
-    let c = false;
-    setOhlcvLoad(true);
-    setOhlcv(null);
+    setOhlcvLoad(true); setOhlcv(null);
     fetchNGXPriceHistory(ticker, priceDays)
       .then(d => { if (!c) { setOhlcv(d); setOhlcvLoad(false); } })
       .catch(() => { if (!c) setOhlcvLoad(false); });
     return () => { c = true; };
-  }, [ticker, priceDays]);
+  }, [priceDays]);
 
   // ── Derived ───────────────────────────────────────────────────────────────
   const price = data?.price;

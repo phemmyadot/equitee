@@ -210,35 +210,46 @@ def ngx_full(
     """
     Comprehensive single-ticker endpoint combining price, profile,
     overview (fundamentals), and performance (returns, risk, quality).
+    Profile, overview, and performance are fetched in parallel.
     All sub-fetches are fault-tolerant — a failed service returns null
     rather than failing the whole request.
     """
+    from concurrent.futures import ThreadPoolExecutor
+
     t = ticker.upper()
+
+    # ── Parallel fetch: profile + overview + performance ──────────────────
+    # overview and performance share a cached stats blob so firing them
+    # concurrently is safe — the second caller hits the in-memory cache.
+    with ThreadPoolExecutor(max_workers=3) as ex:
+        f_profile  = ex.submit(_safe, _get_profile, t)
+        f_overview = ex.submit(_safe, _overview_service.get_overview, t)
+        f_perf     = ex.submit(_safe, _performance_service.get_performance, t)
+        # Price + intraday can also run in parallel
+        f_price    = ex.submit(_safe, _prices_service.get_price, t)
+        f_intraday = ex.submit(_safe, _ngx_service._get_quote_intraday, t)
+
+    profile_raw = f_profile.result()
+    ov_raw      = f_overview.result()
+    perf_raw    = f_perf.result()
+    pd          = f_price.result()
+    intraday    = f_intraday.result() or {}
 
     # ── Price ─────────────────────────────────────────────────────────────
     price_out = None
-    try:
-        pd = _prices_service.get_price(t)
-        if pd:
-            try:
-                intraday = _ngx_service._get_quote_intraday(t)
-                pd.high   = intraday["high"]   or pd.high
-                pd.low    = intraday["low"]    or pd.low
-                pd.volume = intraday["volume"] or pd.volume
-            except Exception:
-                pass
-            price_out = TickerPriceOut(
-                symbol     = pd.symbol,
-                price      = pd.price,
-                change     = pd.change,
-                change_pct = pd.change_pct,
-                volume     = pd.volume,
-            )
-    except Exception:
-        pass
+    if pd:
+        pd.high   = intraday.get("high")   or pd.high
+        pd.low    = intraday.get("low")    or pd.low
+        pd.volume = intraday.get("volume") or pd.volume
+        price_out = TickerPriceOut(
+            symbol     = pd.symbol,
+            price      = pd.price,
+            change     = pd.change,
+            change_pct = pd.change_pct,
+            volume     = pd.volume,
+        )
 
     # ── Profile ───────────────────────────────────────────────────────────
-    profile_raw = _safe(_get_profile, t)
     profile_out = None
     if profile_raw:
         profile_out = {
@@ -250,8 +261,7 @@ def ngx_full(
         }
 
     # ── Overview (fundamentals) ───────────────────────────────────────────
-    ov_raw   = _safe(_overview_service.get_overview, t)
-    ov_out   = None
+    ov_out = None
     if ov_raw:
         ov_out = {k: ov_raw.get(k) for k in [
             "market_cap", "pe_ratio", "eps", "dividend_yield",
@@ -260,7 +270,6 @@ def ngx_full(
         ]}
 
     # ── Performance (returns, margins, quality) ───────────────────────────
-    perf_raw = _safe(_performance_service.get_performance, t)
     perf_out = None
     if perf_raw:
         perf_out = {k: perf_raw.get(k) for k in [
