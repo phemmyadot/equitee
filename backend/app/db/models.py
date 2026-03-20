@@ -256,3 +256,21 @@ class DailyPriceHistory(Base):
         UniqueConstraint("ticker", "date", name="uq_daily_price_history_ticker_date"),
         Index("ix_daily_price_history_ticker_date", "ticker", "date"),
     )
+
+
+# ── watchlist ──────────────────────────────────────────────────────────────────
+
+class Watchlist(Base):
+    """Tickers a user wants to monitor but doesn't hold in their portfolio."""
+    __tablename__ = "watchlist"
+
+    id:         Mapped[int]      = mapped_column(Integer, primary_key=True, autoincrement=True)
+    user_id:    Mapped[int]      = mapped_column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
+    ticker:     Mapped[str]      = mapped_column(String,  nullable=False)
+    market:     Mapped[str]      = mapped_column(String,  nullable=False, default="NGX")
+    added_at:   Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now, nullable=False)
+
+    __table_args__ = (
+        UniqueConstraint("user_id", "ticker", name="uq_watchlist_user_ticker"),
+        Index("ix_watchlist_user_id", "user_id"),
+    )

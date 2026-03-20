@@ -16,7 +16,7 @@ from sqlalchemy.orm import Session
 from app.db.models import (
     Holding, ClosedPosition, PortfolioSnapshot, PriceHistory,
     User, RefreshToken, InviteCode,
-    DividendCache, FinancialsCache, DailyPriceHistory,
+    DividendCache, FinancialsCache, DailyPriceHistory, Watchlist,
 )
 
 log = logging.getLogger(__name__)
@@ -605,3 +605,35 @@ def get_daily_price_history(db: Session, ticker: str, days: int) -> list[dict]:
         }
         for r in db.scalars(stmt).all()
     ]
+
+# ── Watchlist ──────────────────────────────────────────────────────────────────
+
+def get_watchlist(db: Session, user_id: int) -> list[Watchlist]:
+    stmt = select(Watchlist).where(Watchlist.user_id == user_id).order_by(Watchlist.added_at)
+    return list(db.scalars(stmt).all())
+
+def watchlist_has(db: Session, user_id: int, ticker: str) -> bool:
+    stmt = select(Watchlist.id).where(
+        Watchlist.user_id == user_id,
+        Watchlist.ticker  == ticker.upper(),
+    )
+    return db.scalar(stmt) is not None
+
+def add_to_watchlist(db: Session, user_id: int, ticker: str, market: str = "NGX") -> Watchlist:
+    row = Watchlist(user_id=user_id, ticker=ticker.upper(), market=market)
+    db.add(row)
+    db.commit()
+    db.refresh(row)
+    return row
+
+def remove_from_watchlist(db: Session, user_id: int, ticker: str) -> bool:
+    stmt = select(Watchlist).where(
+        Watchlist.user_id == user_id,
+        Watchlist.ticker  == ticker.upper(),
+    )
+    row = db.scalar(stmt)
+    if not row:
+        return False
+    db.delete(row)
+    db.commit()
+    return True

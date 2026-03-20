@@ -9,7 +9,7 @@ import { usePortfolio, REFRESH_INTERVALS, type RefreshInterval } from '@/context
 import { useAuth } from '@/context/AuthContext';
 import {
   IconChartLine, IconSearch, IconGlobe, IconClock, IconChartHistory,
-  IconSettings, IconLogOut,
+  IconSettings, IconLogOut, IconBookmark,
 } from '@/components/ui/icons';
 
 interface HeaderProps {
@@ -40,6 +40,10 @@ const NAV_ITEMS = [
   {
     href: '/history', label: 'History',
     icon: <IconChartHistory width={14} height={14} />,
+  },
+  {
+    href: '/watchlist', label: 'Watchlist',
+    icon: <IconBookmark width={14} height={14} />,
   },
 ] as const;
 
