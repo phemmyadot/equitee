@@ -74,11 +74,17 @@ async def lifespan(app: FastAPI):
     yield
     # ── Shutdown (nothing to do) ──────────────────────────────────────────────
 
+_is_prod = settings.ENVIRONMENT == "production"
+
 app = FastAPI(
     title       = "equitee API",
     description = "NGX + US equity portfolio with live prices and FX conversion.",
     version     = "2.0.0",
     lifespan    = lifespan,
+    # Disable interactive docs in production — they expose the full API schema
+    docs_url    = None if _is_prod else "/docs",
+    redoc_url   = None if _is_prod else "/redoc",
+    openapi_url = None if _is_prod else "/openapi.json",
 )
 
 app.state.limiter = limiter
