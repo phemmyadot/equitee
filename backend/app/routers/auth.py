@@ -29,7 +29,7 @@ def _set_auth_cookies(response: Response, user: User, db: Session) -> None:
     response.set_cookie(
         "access_token", access_token,
         max_age=settings.ACCESS_TOKEN_EXPIRE_MINUTES * 60,
-        httponly=True, samesite="lax", secure=settings.ENVIRONMENT == "production",
+        httponly=True, samesite="none", secure=settings.ENVIRONMENT == "production",
     )
 
     refresh_token = str(uuid.uuid4())
@@ -38,7 +38,7 @@ def _set_auth_cookies(response: Response, user: User, db: Session) -> None:
     response.set_cookie(
         "refresh_token", refresh_token,
         max_age=settings.REFRESH_TOKEN_EXPIRE_DAYS * 86400,
-        httponly=True, samesite="lax", secure=settings.ENVIRONMENT == "production",
+        httponly=True, samesite="none", secure=settings.ENVIRONMENT == "production",
     )
 
 
@@ -162,7 +162,7 @@ def refresh(request: Request, response: Response, db: Session = Depends(get_db))
     response.set_cookie(
         "access_token", access_token,
         max_age=settings.ACCESS_TOKEN_EXPIRE_MINUTES * 60,
-        httponly=True, samesite="lax", secure=settings.ENVIRONMENT == "production",
+        httponly=True, samesite="none", secure=settings.ENVIRONMENT == "production",
     )
     return {"ok": True}
 
