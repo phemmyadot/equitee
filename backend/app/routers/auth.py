@@ -9,7 +9,7 @@ from datetime import datetime, timezone, timedelta
 
 from fastapi import APIRouter, Depends, HTTPException, Response, Request, status
 from app.limiter import limiter
-from pydantic import BaseModel, EmailStr, field_validator
+from pydantic import BaseModel, EmailStr, Field, field_validator
 from sqlalchemy.orm import Session
 
 from app.config import settings
@@ -23,22 +23,30 @@ log = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/auth", tags=["auth"])
 
+
 def _set_auth_cookies(response: Response, user: User, db: Session) -> None:
     """Issue access token cookie and create+store a refresh token cookie."""
     access_token = create_access_token(user.id)
     response.set_cookie(
         "access_token", access_token,
         max_age=settings.ACCESS_TOKEN_EXPIRE_MINUTES * 60,
-        httponly=True, samesite="lax", secure=settings.ENVIRONMENT == "production",
+        httponly=True,
+        samesite="lax",
+        secure=settings.ENVIRONMENT == "production",
+        domain=".babafemicodes.dev" if settings.ENVIRONMENT == "production" else None,
     )
 
     refresh_token = str(uuid.uuid4())
-    expires_at = datetime.now(timezone.utc) + timedelta(days=settings.REFRESH_TOKEN_EXPIRE_DAYS)
+    expires_at = datetime.now(timezone.utc) + \
+        timedelta(days=settings.REFRESH_TOKEN_EXPIRE_DAYS)
     crud.create_refresh_token(db, user.id, refresh_token, expires_at)
     response.set_cookie(
         "refresh_token", refresh_token,
         max_age=settings.REFRESH_TOKEN_EXPIRE_DAYS * 86400,
-        httponly=True, samesite="lax", secure=settings.ENVIRONMENT == "production",
+        httponly=True,
+        samesite="lax",
+        secure=settings.ENVIRONMENT == "production",
+        domain=".babafemicodes.dev" if settings.ENVIRONMENT == "production" else None,
     )
 
 
@@ -47,7 +55,7 @@ def _set_auth_cookies(response: Response, user: User, db: Session) -> None:
 class RegisterRequest(BaseModel):
     email: EmailStr
     username: str
-    password: str
+    password: str = Field(..., json_schema_extra={"format": "password"})
     invite_code: str | None = None
 
     @field_validator("password")
@@ -71,7 +79,7 @@ class RegisterRequest(BaseModel):
 
 class LoginRequest(BaseModel):
     username_or_email: str
-    password: str
+    password: str = Field(..., json_schema_extra={"format": "password"})
 
 
 class UserResponse(BaseModel):
@@ -95,14 +103,16 @@ def register(request: Request, body: RegisterRequest, response: Response, db: Se
             raise HTTPException(status_code=400, detail="Invite code required")
         invite = crud.get_invite_code(db, body.invite_code)
         if invite is None or invite.used_by is not None:
-            raise HTTPException(status_code=400, detail="Invalid or already-used invite code")
+            raise HTTPException(
+                status_code=400, detail="Invalid or already-used invite code")
 
     if crud.get_user_by_email(db, body.email):
         raise HTTPException(status_code=409, detail="Email already registered")
     if crud.get_user_by_username(db, body.username):
         raise HTTPException(status_code=409, detail="Username already taken")
 
-    user = crud.create_user(db, body.email, body.username, hash_password(body.password))
+    user = crud.create_user(db, body.email, body.username,
+                            hash_password(body.password))
 
     if settings.REGISTRATION_MODE == "invite" and body.invite_code:
         crud.use_invite_code(db, body.invite_code, user.id)
@@ -156,13 +166,17 @@ def refresh(request: Request, response: Response, db: Session = Depends(get_db))
 
     user = db.get(User, stored.user_id)
     if user is None or not user.is_active:
-        raise HTTPException(status_code=401, detail="User not found or disabled")
+        raise HTTPException(
+            status_code=401, detail="User not found or disabled")
 
     access_token = create_access_token(user.id)
     response.set_cookie(
         "access_token", access_token,
         max_age=settings.ACCESS_TOKEN_EXPIRE_MINUTES * 60,
-        httponly=True, samesite="lax", secure=settings.ENVIRONMENT == "production",
+        httponly=True,
+        samesite="lax",
+        secure=settings.ENVIRONMENT == "production",
+        domain=".babafemicodes.dev" if settings.ENVIRONMENT == "production" else None,
     )
     return {"ok": True}
 
