@@ -206,7 +206,7 @@ export default function WatchlistPage() {
             <table className="w-full text-left border-collapse">
               <thead>
                 <tr className="border-b border-[var(--border)] bg-[var(--canvas)]">
-                  {['Ticker', 'Company', 'Sector', 'Price', 'Day %', 'P/E', 'ROE', '52W Range', 'Signal', '90d', ''].map(h => (
+                  {['Ticker', 'Company', 'Sector', 'Price', 'Day %', 'Since Added', 'P/E', 'ROE', '52W Range', 'Signal', '90d', ''].map(h => (
                     <th key={h} className="px-3 py-2.5 text-[9.5px] font-bold uppercase tracking-[0.07em] text-[var(--ink-4)] whitespace-nowrap">
                       {h}
                     </th>
@@ -216,7 +216,7 @@ export default function WatchlistPage() {
               <tbody>
                 {items.map(item => {
                   const inBuyZone = InBuyZone({ item });
-                  const sector = item.profile?.sector ?? '';
+                  const sector = item.profile?.sector || item.profile?.industry || '';
                   const sCol   = sectorColor(sector);
                   const price  = item.price?.price;
                   const changePct = item.price?.change_pct;
@@ -278,6 +278,15 @@ export default function WatchlistPage() {
                         {changePct != null
                           ? <span className={`font-mono text-[11px] font-medium ${isPositive(changePct) ? 'text-[var(--gain)]' : 'text-[var(--loss)]'}`}>
                               {fmtPct2(changePct)}
+                            </span>
+                          : <span className="text-[var(--ink-4)]">—</span>}
+                      </td>
+
+                      {/* Since Added */}
+                      <td className="px-3 py-3 text-right">
+                        {item.since_added_pct != null
+                          ? <span className={`font-mono text-[11px] font-medium ${isPositive(item.since_added_pct) ? 'text-[var(--gain)]' : 'text-[var(--loss)]'}`}>
+                              {fmtPct2(item.since_added_pct)}
                             </span>
                           : <span className="text-[var(--ink-4)]">—</span>}
                       </td>

@@ -70,7 +70,9 @@ def _scrape_profile(ticker: str) -> Optional[Dict]:
                 value = cols[1].get_text(strip=True)
                 
                 # Map table cells to profile fields
-                if "industry" in label:
+                if "sector" in label:
+                    profile["sector"] = value
+                elif "industry" in label:
                     profile["industry"] = value
                 elif "founded" in label or "incorporated" in label:
                     profile["founded"] = value

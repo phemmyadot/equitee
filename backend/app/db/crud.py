@@ -703,6 +703,13 @@ def get_watchlist(db: Session, user_id: int) -> list[Watchlist]:
     stmt = select(Watchlist).where(Watchlist.user_id == user_id).order_by(Watchlist.added_at)
     return list(db.scalars(stmt).all())
 
+def set_watchlist_added_price(db: Session, watchlist_id: int, price: float) -> None:
+    stmt = select(Watchlist).where(Watchlist.id == watchlist_id)
+    row = db.scalar(stmt)
+    if row:
+        row.added_price = price
+        db.commit()
+
 def watchlist_has(db: Session, user_id: int, ticker: str) -> bool:
     stmt = select(Watchlist.id).where(
         Watchlist.user_id == user_id,
@@ -710,8 +717,8 @@ def watchlist_has(db: Session, user_id: int, ticker: str) -> bool:
     )
     return db.scalar(stmt) is not None
 
-def add_to_watchlist(db: Session, user_id: int, ticker: str, market: str = "NGX") -> Watchlist:
-    row = Watchlist(user_id=user_id, ticker=ticker.upper(), market=market)
+def add_to_watchlist(db: Session, user_id: int, ticker: str, market: str = "NGX", added_price: float | None = None) -> Watchlist:
+    row = Watchlist(user_id=user_id, ticker=ticker.upper(), market=market, added_price=added_price)
     db.add(row)
     db.commit()
     db.refresh(row)

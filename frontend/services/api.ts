@@ -355,7 +355,7 @@ export interface TickerPerformance {
 export interface TickerData {
   ticker:      string;
   price:       TickerPrice | null;
-  profile:     Pick<CompanyProfile, 'symbol' | 'name' | 'industry' | 'website' | 'founded'> | null;
+  profile:     Pick<CompanyProfile, 'symbol' | 'name' | 'sector' | 'industry' | 'website' | 'founded'> | null;
   overview:    TickerOverview | null;
   performance: TickerPerformance | null;
   cached_at:   number | null;
@@ -398,13 +398,15 @@ export const fetchAnalytics   = (days = 180) => get<AnalyticsData>(`/history/ana
 // ── Watchlist ──────────────────────────────────────────────────────────────────
 
 export interface WatchlistItem {
-  ticker:      string;
-  market:      string;
-  added_at:    string;
-  price:       TickerPrice | null;
-  profile:     CompanyProfile | null;
-  overview:    TickerOverview | null;
-  performance: TickerPerformance | null;
+  ticker:           string;
+  market:           string;
+  added_at:         string;
+  added_price:      number | null;
+  since_added_pct:  number | null;
+  price:            TickerPrice | null;
+  profile:          CompanyProfile | null;
+  overview:         TickerOverview | null;
+  performance:      TickerPerformance | null;
 }
 
 export interface WatchlistResponse {
