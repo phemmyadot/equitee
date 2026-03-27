@@ -75,13 +75,15 @@ def _fetch_ticker_full(ticker: str) -> dict[str, Any]:
 # ── Response models ────────────────────────────────────────────────────────────
 
 class WatchlistItem(BaseModel):
-    ticker:      str
-    market:      str
-    added_at:    str
-    price:       Optional[dict[str, Any]] = None
-    profile:     Optional[dict[str, Any]] = None
-    overview:    Optional[dict[str, Any]] = None
-    performance: Optional[dict[str, Any]] = None
+    ticker:           str
+    market:           str
+    added_at:         str
+    added_price:      Optional[float] = None
+    since_added_pct:  Optional[float] = None
+    price:            Optional[dict[str, Any]] = None
+    profile:          Optional[dict[str, Any]] = None
+    overview:         Optional[dict[str, Any]] = None
+    performance:      Optional[dict[str, Any]] = None
 
 
 class WatchlistResponse(BaseModel):
@@ -132,16 +134,27 @@ def list_watchlist(
     items = []
     for r in rows:
         td = results.get(r.ticker, {})
+        current_price: float | None = (td.get("price") or {}).get("price")
+        # Backfill added_price for rows that pre-date this feature
+        if r.added_price is None and current_price:
+            r.added_price = current_price
+            db.flush()
+        since_added_pct: float | None = None
+        if r.added_price and current_price:
+            since_added_pct = round((current_price - r.added_price) / r.added_price * 100, 2)
         items.append(WatchlistItem(
-            ticker      = r.ticker,
-            market      = r.market,
-            added_at    = r.added_at.isoformat(),
-            price       = td.get("price"),
-            profile     = td.get("profile"),
-            overview    = td.get("overview"),
-            performance = td.get("performance"),
+            ticker           = r.ticker,
+            market           = r.market,
+            added_at         = r.added_at.isoformat(),
+            added_price      = r.added_price,
+            since_added_pct  = since_added_pct,
+            price            = td.get("price"),
+            profile          = td.get("profile"),
+            overview         = td.get("overview"),
+            performance      = td.get("performance"),
         ))
 
+    db.commit()
     return WatchlistResponse(items=items, count=len(items))
 
 
@@ -154,7 +167,9 @@ def add_watch(
     t = ticker.upper()
     if watchlist_has(db, current_user.id, t):
         raise HTTPException(status_code=409, detail=f"{t} is already on your watchlist")
-    row = add_to_watchlist(db, current_user.id, t)
+    pd = _safe(_prices_service.get_price, t)
+    added_price: float | None = pd.price if pd else None
+    row = add_to_watchlist(db, current_user.id, t, added_price=added_price)
     return {"ticker": row.ticker, "market": row.market, "added_at": row.added_at.isoformat()}
 
 

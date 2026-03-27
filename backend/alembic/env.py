@@ -14,7 +14,7 @@ from app.db.engine import Base, _normalise_url
 import app.db.models  # noqa: F401 — registers all ORM models with Base
 
 config = context.config
-config.set_main_option("sqlalchemy.url", _normalise_url(settings.DATABASE_URL))
+config.set_main_option("sqlalchemy.url", _normalise_url(settings.DATABASE_URL).replace("%", "%%"))
 
 if config.config_file_name is not None:
     fileConfig(config.config_file_name)
