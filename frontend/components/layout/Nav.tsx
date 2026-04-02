@@ -4,36 +4,50 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import clsx from 'clsx';
 import {
-  IconChartLine, IconSearch, IconGlobe, IconClock, IconChartHistory, IconSettings, IconBookmark,
-} from '@/components/ui/icons';
+  IconChartLine,
+  IconSearch,
+  IconGlobe,
+  IconClock,
+  IconChartHistory,
+  IconSettings,
+  IconBookmark,
+} from '@/components/atoms/icons';
 
 const MOBILE_ITEMS = [
   {
-    href: '/ngx', label: 'NGX', exact: true,
+    href: '/ngx',
+    label: 'NGX',
+    exact: true,
     icon: <IconChartLine width={18} height={18} />,
   },
   {
-    href: '/ngx/advanced', label: 'Adv',
+    href: '/ngx/advanced',
+    label: 'Adv',
     icon: <IconSearch width={18} height={18} />,
   },
   {
-    href: '/us', label: 'US',
+    href: '/us',
+    label: 'US',
     icon: <IconGlobe width={18} height={18} />,
   },
   {
-    href: '/dividends', label: 'Divs',
+    href: '/dividends',
+    label: 'Divs',
     icon: <IconClock width={18} height={18} />,
   },
   {
-    href: '/history', label: 'History',
+    href: '/history',
+    label: 'History',
     icon: <IconChartHistory width={18} height={18} />,
   },
   {
-    href: '/watchlist', label: 'Watch',
+    href: '/watchlist',
+    label: 'Watch',
     icon: <IconBookmark width={18} height={18} />,
   },
   {
-    href: '/settings', label: 'Settings',
+    href: '/settings',
+    label: 'Settings',
     icon: <IconSettings width={18} height={18} />,
   },
 ] as const;
@@ -63,16 +77,20 @@ export default function Nav() {
                   : {}
               }
             >
-              <span className={clsx(
-                'transition-colors duration-150',
-                active ? 'text-white' : 'text-[var(--ink-4)]'
-              )}>
+              <span
+                className={clsx(
+                  'transition-colors duration-150',
+                  active ? 'text-white' : 'text-[var(--ink-4)]',
+                )}
+              >
                 {item.icon}
               </span>
-              <span className={clsx(
-                'text-[9px] font-semibold tracking-wide leading-none mt-1 transition-colors duration-150',
-                active ? 'text-white' : 'text-[var(--ink-4)]'
-              )}>
+              <span
+                className={clsx(
+                  'text-[9px] font-semibold tracking-wide leading-none mt-1 transition-colors duration-150',
+                  active ? 'text-white' : 'text-[var(--ink-4)]',
+                )}
+              >
                 {item.label}
               </span>
             </Link>

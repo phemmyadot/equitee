@@ -1,17 +1,22 @@
-import ChartErrorBoundary from './ChartErrorBoundary';
-import { ChartSkeleton }   from './Feedback';
+import ChartErrorBoundary from '@/components/molecules/ChartErrorBoundary';
+import { ChartSkeleton } from '@/components/atoms/Feedback';
 
 interface ChartCardProps {
-  title:      string;
-  subtitle?:  string;
-  height?:    number;
-  loading?:   boolean;
-  children:   React.ReactNode;
+  title: string;
+  subtitle?: string;
+  height?: number;
+  loading?: boolean;
+  children: React.ReactNode;
   className?: string;
 }
 
 export default function ChartCard({
-  title, subtitle, height = 320, loading = false, children, className = '',
+  title,
+  subtitle,
+  height = 320,
+  loading = false,
+  children,
+  className = '',
 }: ChartCardProps) {
   return (
     <div className={`chart-card ${className}`}>

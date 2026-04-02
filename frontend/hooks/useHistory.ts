@@ -2,14 +2,14 @@
 
 import { useState, useEffect } from 'react';
 import { fetchPortfolioHistory, fetchPriceHistory } from '@/services/api';
-import type { PortfolioHistory, PriceHistory } from '@/services/api';
+import type { PortfolioHistory, PriceHistory } from '@/models';
 
 // ── Portfolio history ─────────────────────────────────────────────────────────
 
 export function usePortfolioHistory(days = 90) {
-  const [data,    setData]    = useState<PortfolioHistory | null>(null);
+  const [data, setData] = useState<PortfolioHistory | null>(null);
   const [loading, setLoading] = useState(true);
-  const [error,   setError]   = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -17,10 +17,22 @@ export function usePortfolioHistory(days = 90) {
     setError(null);
 
     fetchPortfolioHistory(days)
-      .then(d  => { if (!cancelled) { setData(d); setLoading(false); } })
-      .catch(e => { if (!cancelled) { setError(e.message); setLoading(false); } });
+      .then((d) => {
+        if (!cancelled) {
+          setData(d);
+          setLoading(false);
+        }
+      })
+      .catch((e) => {
+        if (!cancelled) {
+          setError(e.message);
+          setLoading(false);
+        }
+      });
 
-    return () => { cancelled = true; };
+    return () => {
+      cancelled = true;
+    };
   }, [days]);
 
   return { data, loading, error };
@@ -29,9 +41,9 @@ export function usePortfolioHistory(days = 90) {
 // ── Single-ticker price history ───────────────────────────────────────────────
 
 export function usePriceHistory(ticker: string, days = 90) {
-  const [data,    setData]    = useState<PriceHistory | null>(null);
+  const [data, setData] = useState<PriceHistory | null>(null);
   const [loading, setLoading] = useState(true);
-  const [error,   setError]   = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     if (!ticker) return;
@@ -40,10 +52,22 @@ export function usePriceHistory(ticker: string, days = 90) {
     setError(null);
 
     fetchPriceHistory(ticker, days)
-      .then(d  => { if (!cancelled) { setData(d); setLoading(false); } })
-      .catch(e => { if (!cancelled) { setError(e.message); setLoading(false); } });
+      .then((d) => {
+        if (!cancelled) {
+          setData(d);
+          setLoading(false);
+        }
+      })
+      .catch((e) => {
+        if (!cancelled) {
+          setError(e.message);
+          setLoading(false);
+        }
+      });
 
-    return () => { cancelled = true; };
+    return () => {
+      cancelled = true;
+    };
   }, [ticker, days]);
 
   return { data, loading, error };

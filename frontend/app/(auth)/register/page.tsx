@@ -16,10 +16,10 @@ function validateEmail(v: string): string {
 
 function validatePassword(v: string): string[] {
   const missing: string[] = [];
-  if (v.length < 8)               missing.push('at least 8 characters');
-  if (!/[A-Z]/.test(v))           missing.push('one uppercase letter');
-  if (!/[a-z]/.test(v))           missing.push('one lowercase letter');
-  if (!/\d/.test(v))              missing.push('one number');
+  if (v.length < 8) missing.push('at least 8 characters');
+  if (!/[A-Z]/.test(v)) missing.push('one uppercase letter');
+  if (!/[a-z]/.test(v)) missing.push('one lowercase letter');
+  if (!/\d/.test(v)) missing.push('one number');
   if (!/[!@#$%^&*()_+\-=\[\]{};':"\\|,.<>/?`~]/.test(v)) missing.push('one special character');
   return missing;
 }
@@ -29,10 +29,10 @@ function validatePassword(v: string): string[] {
 function PasswordStrength({ password }: { password: string }) {
   if (!password) return null;
   const missing = validatePassword(password);
-  const score   = 5 - missing.length;   // 0–5
+  const score = 5 - missing.length; // 0–5
 
-  const label  = score <= 1 ? 'Weak' : score <= 3 ? 'Fair' : score === 4 ? 'Good' : 'Strong';
-  const color  = score <= 1 ? 'var(--loss)' : score <= 3 ? 'var(--warn)' : 'var(--gain)';
+  const label = score <= 1 ? 'Weak' : score <= 3 ? 'Fair' : score === 4 ? 'Good' : 'Strong';
+  const color = score <= 1 ? 'var(--loss)' : score <= 3 ? 'var(--warn)' : 'var(--gain)';
   const widths = ['20%', '20%', '40%', '60%', '80%', '100%'];
 
   return (
@@ -44,11 +44,11 @@ function PasswordStrength({ password }: { password: string }) {
         />
       </div>
       <div className="flex items-center justify-between">
-        <span className="text-[10px] font-semibold" style={{ color }}>{label}</span>
+        <span className="text-[10px] font-semibold" style={{ color }}>
+          {label}
+        </span>
         {missing.length > 0 && (
-          <span className="text-[10px] text-[var(--ink-4)]">
-            Needs: {missing.join(', ')}
-          </span>
+          <span className="text-[10px] text-[var(--ink-4)]">Needs: {missing.join(', ')}</span>
         )}
       </div>
     </div>
@@ -59,26 +59,26 @@ function PasswordStrength({ password }: { password: string }) {
 
 export default function RegisterPage() {
   const { register } = useAuth();
-  const [email,      setEmail]      = useState('');
-  const [username,   setUsername]   = useState('');
-  const [password,   setPassword]   = useState('');
+  const [email, setEmail] = useState('');
+  const [username, setUsername] = useState('');
+  const [password, setPassword] = useState('');
   const [inviteCode, setInviteCode] = useState('');
-  const [errors,     setErrors]     = useState<Record<string, string>>({});
-  const [error,      setError]      = useState('');
-  const [loading,    setLoading]    = useState(false);
-  const [touched,    setTouched]    = useState<Record<string, boolean>>({});
+  const [errors, setErrors] = useState<Record<string, string>>({});
+  const [error, setError] = useState('');
+  const [loading, setLoading] = useState(false);
+  const [touched, setTouched] = useState<Record<string, boolean>>({});
 
   const needsInvite = REGISTRATION_MODE === 'invite';
 
-  const touch = (field: string) => setTouched(t => ({ ...t, [field]: true }));
+  const touch = (field: string) => setTouched((t) => ({ ...t, [field]: true }));
 
-  const emailError    = touched.email    ? validateEmail(email)    : '';
-  const passwordMsgs  = touched.password ? validatePassword(password) : [];
+  const emailError = touched.email ? validateEmail(email) : '';
+  const passwordMsgs = touched.password ? validatePassword(password) : [];
   const passwordError = passwordMsgs.length > 0 ? `Needs: ${passwordMsgs.join(', ')}` : '';
 
   function validate(): boolean {
     const allTouched = { email: true, password: true };
-    setTouched(t => ({ ...t, ...allTouched }));
+    setTouched((t) => ({ ...t, ...allTouched }));
     return !validateEmail(email) && validatePassword(password).length === 0;
   }
 
@@ -88,7 +88,7 @@ export default function RegisterPage() {
     if (!validate()) return;
     setLoading(true);
     try {
-      await register(email, username, password, needsInvite ? (inviteCode || undefined) : undefined);
+      await register(email, username, password, needsInvite ? inviteCode || undefined : undefined);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Registration failed');
     } finally {
@@ -96,25 +96,33 @@ export default function RegisterPage() {
     }
   }
 
-  const inputClass = (field: string) => [
-    'h-9 px-3 text-[13px] border rounded-lg bg-[var(--canvas)] text-[var(--ink)]',
-    'placeholder:text-[var(--ink-4)] outline-none transition',
-    errors[field] || (field === 'email' && emailError) || (field === 'password' && passwordError)
-      ? 'border-[var(--loss)] focus:border-[var(--loss)] focus:ring-2 focus:ring-red-100'
-      : 'border-[var(--border)] focus:border-[var(--accent)] focus:ring-2 focus:ring-[var(--accent)]/10',
-  ].join(' ');
+  const inputClass = (field: string) =>
+    [
+      'h-9 px-3 text-[13px] border rounded-lg bg-[var(--canvas)] text-[var(--ink)]',
+      'placeholder:text-[var(--ink-4)] outline-none transition',
+      errors[field] || (field === 'email' && emailError) || (field === 'password' && passwordError)
+        ? 'border-[var(--loss)] focus:border-[var(--loss)] focus:ring-2 focus:ring-red-100'
+        : 'border-[var(--border)] focus:border-[var(--accent)] focus:ring-2 focus:ring-[var(--accent)]/10',
+    ].join(' ');
 
   return (
     <div className="min-h-dvh flex items-center justify-center bg-[var(--canvas)] px-4">
       <div className="w-full max-w-sm">
-
         {/* Tagline lockup */}
         <div className="flex justify-center mb-8">
-          <img src="/equitee-lockup-tagline.svg" alt="equitee — Your edge in the market." width={260} height={98} />
+          <img
+            src="/equitee-lockup-tagline.svg"
+            alt="equitee — Your edge in the market."
+            width={260}
+            height={98}
+          />
         </div>
 
         {/* Card */}
-        <div className="bg-white border border-[var(--border)] rounded-2xl p-8" style={{ boxShadow: '0 4px 24px rgba(0,0,0,0.06)' }}>
+        <div
+          className="bg-white border border-[var(--border)] rounded-2xl p-8"
+          style={{ boxShadow: '0 4px 24px rgba(0,0,0,0.06)' }}
+        >
           <h1 className="text-[16px] font-bold text-[var(--ink)] mb-1">Create account</h1>
           <p className="text-[12px] text-[var(--ink-4)] mb-6">
             {needsInvite
@@ -129,7 +137,6 @@ export default function RegisterPage() {
           )}
 
           <form onSubmit={handleSubmit} className="flex flex-col gap-4">
-
             {needsInvite && (
               <div className="flex flex-col gap-1.5">
                 <label className="text-[11px] font-semibold text-[var(--ink-3)] uppercase tracking-wide">
@@ -138,7 +145,7 @@ export default function RegisterPage() {
                 <input
                   type="text"
                   value={inviteCode}
-                  onChange={e => setInviteCode(e.target.value.toUpperCase())}
+                  onChange={(e) => setInviteCode(e.target.value.toUpperCase())}
                   required
                   autoFocus
                   placeholder="XXXXXXXX"
@@ -155,16 +162,14 @@ export default function RegisterPage() {
               <input
                 type="email"
                 value={email}
-                onChange={e => setEmail(e.target.value)}
+                onChange={(e) => setEmail(e.target.value)}
                 onBlur={() => touch('email')}
                 required
                 autoComplete="email"
                 placeholder="you@example.com"
                 className={inputClass('email')}
               />
-              {emailError && (
-                <span className="text-[11px] text-[var(--loss)]">{emailError}</span>
-              )}
+              {emailError && <span className="text-[11px] text-[var(--loss)]">{emailError}</span>}
             </div>
 
             {/* Username */}
@@ -175,7 +180,7 @@ export default function RegisterPage() {
               <input
                 type="text"
                 value={username}
-                onChange={e => setUsername(e.target.value)}
+                onChange={(e) => setUsername(e.target.value)}
                 required
                 autoComplete="username"
                 placeholder="johndoe"
@@ -191,7 +196,7 @@ export default function RegisterPage() {
               <input
                 type="password"
                 value={password}
-                onChange={e => setPassword(e.target.value)}
+                onChange={(e) => setPassword(e.target.value)}
                 onBlur={() => touch('password')}
                 required
                 autoComplete="new-password"

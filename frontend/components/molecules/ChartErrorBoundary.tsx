@@ -1,10 +1,17 @@
 'use client';
 
 import { Component, type ReactNode, type ErrorInfo } from 'react';
-import { IconAlertCircle } from '@/components/ui/icons';
+import { IconAlertCircle } from '@/components/atoms/icons';
 
-interface Props   { children: ReactNode; title?: string; height?: number; }
-interface State   { hasError: boolean; message: string; }
+interface Props {
+  children: ReactNode;
+  title?: string;
+  height?: number;
+}
+interface State {
+  hasError: boolean;
+  message: string;
+}
 
 export default class ChartErrorBoundary extends Component<Props, State> {
   constructor(props: Props) {
@@ -36,7 +43,9 @@ export default class ChartErrorBoundary extends Component<Props, State> {
           {title ? `${title} failed to render` : 'Chart error'}
         </span>
         {message && (
-          <span className="text-[10px] text-[var(--ink-3)] max-w-[260px] text-center px-4">{message}</span>
+          <span className="text-[10px] text-[var(--ink-3)] max-w-[260px] text-center px-4">
+            {message}
+          </span>
         )}
         <button
           onClick={() => this.setState({ hasError: false, message: '' })}

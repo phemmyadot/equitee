@@ -1,4 +1,4 @@
-import type { NextConfig } from "next";
+import type { NextConfig } from 'next';
 
 /** @type {import('next').NextConfig} */
 const nextConfig = {
@@ -16,7 +16,7 @@ const nextConfig = {
     const backendUrl = process.env.API_URL || 'http://localhost:8000';
     return [
       {
-        source:      '/api/:path*',
+        source: '/api/:path*',
         destination: `${backendUrl}/api/:path*`,
       },
     ];

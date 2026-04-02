@@ -1,5 +1,5 @@
 @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600&family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap');
-@import "tailwindcss";
+@import 'tailwindcss';
 
 @tailwind base;
 @tailwind components;
@@ -10,49 +10,49 @@
 ───────────────────────────────────────────────────────────────── */
 :root {
   /* Surfaces */
-  --canvas:      #F7F8FA;
-  --surface:     #FFFFFF;
-  --sidebar:     #F0F2F5;
-  --border:      #E4E7EC;
-  --border-strong: #CBD2DC;
+  --canvas: #f7f8fa;
+  --surface: #ffffff;
+  --sidebar: #f0f2f5;
+  --border: #e4e7ec;
+  --border-strong: #cbd2dc;
 
   /* Typography */
-  --ink:         #0F1728;
-  --ink-2:       #374151;
-  --ink-3:       #6B7280;
-  --ink-4:       #9CA3AF;
+  --ink: #0f1728;
+  --ink-2: #374151;
+  --ink-3: #6b7280;
+  --ink-4: #9ca3af;
 
   /* Accent */
-  --accent:      #1DB87A;
-  --accent-light:#E6F7F0;
+  --accent: #1db87a;
+  --accent-light: #e6f7f0;
 
   /* Semantic */
-  --gain:        #0A7B44;
-  --gain-light:  #E6F4EE;
-  --loss:        #BE1B1B;
-  --loss-light:  #FDEAEA;
-  --warn:        #92600A;
-  --warn-light:  #FEF3CD;
-  --teal:        #0E7490;
-  --purple:      #6D28D9;
+  --gain: #0a7b44;
+  --gain-light: #e6f4ee;
+  --loss: #be1b1b;
+  --loss-light: #fdeaea;
+  --warn: #92600a;
+  --warn-light: #fef3cd;
+  --teal: #0e7490;
+  --purple: #6d28d9;
 
   /* Shadows */
-  --shadow-card:   0 1px 3px rgba(15,23,42,0.06), 0 1px 2px rgba(15,23,42,0.04);
-  --shadow-md:     0 4px 12px rgba(15,23,42,0.08), 0 1px 3px rgba(15,23,42,0.04);
-  --shadow-hover:  0 6px 20px rgba(15,23,42,0.10), 0 2px 6px rgba(15,23,42,0.06);
+  --shadow-card: 0 1px 3px rgba(15, 23, 42, 0.06), 0 1px 2px rgba(15, 23, 42, 0.04);
+  --shadow-md: 0 4px 12px rgba(15, 23, 42, 0.08), 0 1px 3px rgba(15, 23, 42, 0.04);
+  --shadow-hover: 0 6px 20px rgba(15, 23, 42, 0.1), 0 2px 6px rgba(15, 23, 42, 0.06);
 
   /* Fonts */
   --font-sans: 'Plus Jakarta Sans', sans-serif;
   --font-mono: 'JetBrains Mono', monospace;
 
   /* Layout */
-  --header-h:   56px;  /* top bar only */
-  --nav-h:      40px;  /* desktop nav strip */
-  --mobile-nav: 64px;  /* mobile bottom nav */
+  --header-h: 56px; /* top bar only */
+  --nav-h: 40px; /* desktop nav strip */
+  --mobile-nav: 64px; /* mobile bottom nav */
   --content-max: 1440px;
-  --page-px:    20px;       /* mobile */
-  --page-px-md: 32px;       /* tablet */
-  --page-px-lg: 48px;       /* desktop */
+  --page-px: 20px; /* mobile */
+  --page-px-md: 32px; /* tablet */
+  --page-px-lg: 48px; /* desktop */
 }
 
 html {
@@ -75,21 +75,49 @@ body {
 /* ─────────────────────────────────────────────────────────────────
    SCROLLBAR
 ───────────────────────────────────────────────────────────────── */
-::-webkit-scrollbar        { width: 6px; height: 6px; }
-::-webkit-scrollbar-track  { background: var(--canvas); }
-::-webkit-scrollbar-thumb  { background: var(--border-strong); border-radius: 3px; }
-::-webkit-scrollbar-thumb:hover { background: var(--ink-4); }
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: var(--canvas);
+}
+::-webkit-scrollbar-thumb {
+  background: var(--border-strong);
+  border-radius: 3px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: var(--ink-4);
+}
 
 /* ─────────────────────────────────────────────────────────────────
    TYPOGRAPHY UTILITIES
 ───────────────────────────────────────────────────────────────── */
-.mono          { font-family: var(--font-mono); }
-.label         { font-size: 10px; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; color: var(--ink-3); }
-.section-title { font-size: 11px; font-weight: 600; letter-spacing: 0.07em; text-transform: uppercase; color: var(--ink-4); }
+.mono {
+  font-family: var(--font-mono);
+}
+.label {
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--ink-3);
+}
+.section-title {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  color: var(--ink-4);
+}
 
 /* Semantic colours */
-.pos { color: var(--gain); }
-.neg { color: var(--loss); }
+.pos {
+  color: var(--gain);
+}
+.neg {
+  color: var(--loss);
+}
 
 /* ─────────────────────────────────────────────────────────────────
    CARD
@@ -113,7 +141,9 @@ body {
 }
 
 @media (max-width: 640px) {
-  .chart-card { padding: 14px; }
+  .chart-card {
+    padding: 14px;
+  }
 }
 
 .chart-title {
@@ -160,7 +190,9 @@ body {
 }
 
 .data-table th.right,
-.data-table td.right { text-align: right; }
+.data-table td.right {
+  text-align: right;
+}
 
 .data-table td {
   padding: 10px 12px;
@@ -170,10 +202,12 @@ body {
   font-size: 12px;
 }
 
-.data-table tbody tr:last-child td { border-bottom: none; }
+.data-table tbody tr:last-child td {
+  border-bottom: none;
+}
 
 .data-table tbody tr:hover td {
-  background: #F7F8FA;
+  background: #f7f8fa;
 }
 
 /* ─────────────────────────────────────────────────────────────────
@@ -192,9 +226,18 @@ body {
   white-space: nowrap;
 }
 
-.badge-live   { color: var(--gain);  background: var(--gain-light);  }
-.badge-yahoo  { color: var(--warn);  background: var(--warn-light);  }
-.badge-nodata { color: var(--ink-4); background: var(--sidebar);     }
+.badge-live {
+  color: var(--gain);
+  background: var(--gain-light);
+}
+.badge-yahoo {
+  color: var(--warn);
+  background: var(--warn-light);
+}
+.badge-nodata {
+  color: var(--ink-4);
+  background: var(--sidebar);
+}
 
 /* ─────────────────────────────────────────────────────────────────
    PRICE BANNER
@@ -204,7 +247,7 @@ body {
   font-size: 11px;
   color: var(--ink-3);
   background: var(--accent-light);
-  border: 1px solid #B7E5CE;
+  border: 1px solid #b7e5ce;
   border-radius: 6px;
   padding: 8px 14px;
   letter-spacing: 0.02em;
@@ -214,17 +257,16 @@ body {
    SKELETON SHIMMER
 ───────────────────────────────────────────────────────────────── */
 @keyframes shimmer {
-  0%   { background-position: -600px 0; }
-  100% { background-position: 600px 0; }
+  0% {
+    background-position: -600px 0;
+  }
+  100% {
+    background-position: 600px 0;
+  }
 }
 
 .skeleton {
-  background: linear-gradient(
-    90deg,
-    #F0F2F5 25%,
-    #E4E7EC 50%,
-    #F0F2F5 75%
-  );
+  background: linear-gradient(90deg, #f0f2f5 25%, #e4e7ec 50%, #f0f2f5 75%);
   background-size: 1200px 100%;
   animation: shimmer 1.6s ease-in-out infinite;
   border-radius: 6px;
@@ -234,8 +276,14 @@ body {
    KPI CARD ANIMATION
 ───────────────────────────────────────────────────────────────── */
 @keyframes kpi-in {
-  from { opacity: 0; transform: translateY(6px); }
-  to   { opacity: 1; transform: translateY(0); }
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 
 .kpi-animate {
@@ -246,8 +294,14 @@ body {
    PAGE ENTRANCE
 ───────────────────────────────────────────────────────────────── */
 @keyframes page-in {
-  from { opacity: 0; transform: translateY(4px); }
-  to   { opacity: 1; transform: translateY(0); }
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 
 .page-enter {

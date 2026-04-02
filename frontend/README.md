@@ -7,14 +7,14 @@ Deployed on **Netlify**, proxies all `/api/*` requests to the Render backend.
 
 ## Stack
 
-| Layer | Tech |
-|---|---|
-| Framework | Next.js 16 (App Router) |
-| Language | TypeScript |
-| Styling | Tailwind CSS + CSS custom properties |
-| Charts | Plotly.js |
-| Auth | httpOnly cookie JWT — no localStorage |
-| State | React Context (Auth + Portfolio) |
+| Layer     | Tech                                  |
+| --------- | ------------------------------------- |
+| Framework | Next.js 16 (App Router)               |
+| Language  | TypeScript                            |
+| Styling   | Tailwind CSS + CSS custom properties  |
+| Charts    | Plotly.js                             |
+| Auth      | httpOnly cookie JWT — no localStorage |
+| State     | React Context (Auth + Portfolio)      |
 
 ---
 
@@ -69,18 +69,18 @@ frontend/
 
 ## Pages
 
-| Route | Description |
-|---|---|
-| `/ngx` | NGX overview — KPIs, equity chart, sector donut, treemap, holdings table |
-| `/ngx/advanced` | Advanced analytics — volatility, drawdown, correlation |
-| `/ngx/[ticker]` | Individual stock — profile, financials, performance |
-| `/us` | US equities overview |
-| `/combined` | NGX + US combined portfolio view |
-| `/dividends` | Dividend calendar |
-| `/history` | Portfolio value snapshots over time |
-| `/settings` | Add / edit / buy / sell / delete holdings; invite code management (admin) |
-| `/login` | Login |
-| `/register` | Register with invite code |
+| Route           | Description                                                               |
+| --------------- | ------------------------------------------------------------------------- |
+| `/ngx`          | NGX overview — KPIs, equity chart, sector donut, treemap, holdings table  |
+| `/ngx/advanced` | Advanced analytics — volatility, drawdown, correlation                    |
+| `/ngx/[ticker]` | Individual stock — profile, financials, performance                       |
+| `/us`           | US equities overview                                                      |
+| `/combined`     | NGX + US combined portfolio view                                          |
+| `/dividends`    | Dividend calendar                                                         |
+| `/history`      | Portfolio value snapshots over time                                       |
+| `/settings`     | Add / edit / buy / sell / delete holdings; invite code management (admin) |
+| `/login`        | Login                                                                     |
+| `/register`     | Register with invite code                                                 |
 
 ---
 
@@ -95,8 +95,8 @@ frontend/
 
 ## Environment variables
 
-| Variable | Required | Default | Description |
-|---|---|---|---|
+| Variable  | Required  | Default                 | Description                                       |
+| --------- | --------- | ----------------------- | ------------------------------------------------- |
 | `API_URL` | ✅ (prod) | `http://localhost:8000` | Backend URL used by the Next.js server-side proxy |
 
 Set `API_URL` in Netlify's environment settings pointing to your Render backend URL.

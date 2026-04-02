@@ -4,53 +4,27 @@
 
 const BASE = '/api/settings';
 
-export interface HoldingRecord {
-  id:         number;
-  ticker:     string;
-  name:       string;
-  market:     'ngx' | 'us';
-  shares:     number;
-  avg_cost:   number;
-  sector:     string;
-  is_active:  boolean;
-  created_at: string;
-}
-
-export interface ClosedRecord {
-  id:          number;
-  ticker:      string;
-  name:        string;
-  market:      string;
-  realized_pl: number;
-  closed_at:   string;
-}
-
-export interface SellResult {
-  holding:          HoldingRecord;
-  realized_pl:      number;
-  fully_closed:     boolean;
-  closed_position?: ClosedRecord;
-}
+export type { HoldingRecord, ClosedRecord, SellResult } from '@/models/holdings';
+import type { HoldingRecord, ClosedRecord, SellResult } from '@/models/holdings';
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
-async function request<T>(
-  path: string,
-  method: string,
-  body?: unknown,
-): Promise<T> {
+async function request<T>(path: string, method: string, body?: unknown): Promise<T> {
   const opts = {
     method,
-    headers: body ? { 'Content-Type': 'application/json' } : {} as Record<string, string>,
-    body:    body ? JSON.stringify(body) : undefined,
-    cache:   'no-store' as RequestCache,
+    headers: body ? { 'Content-Type': 'application/json' } : ({} as Record<string, string>),
+    body: body ? JSON.stringify(body) : undefined,
+    cache: 'no-store' as RequestCache,
   };
 
   let res = await fetch(`${BASE}${path}`, opts);
 
   if (res.status === 401) {
     const r = await fetch('/api/auth/refresh', { method: 'POST' });
-    if (!r.ok) { window.location.href = '/login'; throw new Error('Session expired'); }
+    if (!r.ok) {
+      window.location.href = '/login';
+      throw new Error('Session expired');
+    }
     res = await fetch(`${BASE}${path}`, opts);
   }
 
@@ -62,20 +36,28 @@ async function request<T>(
 
 // ── Holdings ──────────────────────────────────────────────────────────────────
 
-export const getHoldings = () =>
-  request<HoldingRecord[]>('/holdings', 'GET');
+export const getHoldings = () => request<HoldingRecord[]>('/holdings', 'GET');
 
 export const createHolding = (body: {
-  ticker: string; name: string; market: string;
-  shares: number; avg_cost: number; sector: string;
+  ticker: string;
+  name: string;
+  market: string;
+  shares: number;
+  avg_cost: number;
+  sector: string;
 }) => request<HoldingRecord>('/holdings', 'POST', body);
 
-export const updateHolding = (id: number, body: {
-  name?: string; sector?: string; avg_cost?: number; shares?: number;
-}) => request<HoldingRecord>(`/holdings/${id}`, 'PUT', body);
+export const updateHolding = (
+  id: number,
+  body: {
+    name?: string;
+    sector?: string;
+    avg_cost?: number;
+    shares?: number;
+  },
+) => request<HoldingRecord>(`/holdings/${id}`, 'PUT', body);
 
-export const deleteHolding = (id: number) =>
-  request<void>(`/holdings/${id}`, 'DELETE');
+export const deleteHolding = (id: number) => request<void>(`/holdings/${id}`, 'DELETE');
 
 export const buyShares = (id: number, body: { shares: number; buy_price: number }) =>
   request<HoldingRecord>(`/holdings/${id}/buy`, 'POST', body);
@@ -85,5 +67,4 @@ export const sellShares = (id: number, body: { shares_sold: number; sale_price: 
 
 // ── Closed positions ──────────────────────────────────────────────────────────
 
-export const getClosedPositions = () =>
-  request<ClosedRecord[]>('/closed', 'GET');
+export const getClosedPositions = () => request<ClosedRecord[]>('/closed', 'GET');

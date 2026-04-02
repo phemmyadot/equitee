@@ -17,9 +17,5 @@ export default function SourceBadge({ source }: { source: Source }) {
       </span>
     );
   }
-  return (
-    <span className="badge badge-nodata text-[var(--ink-4)]">
-      — n/a
-    </span>
-  );
+  return <span className="badge badge-nodata text-[var(--ink-4)]">— n/a</span>;
 }
