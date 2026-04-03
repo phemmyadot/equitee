@@ -37,7 +37,7 @@ export type {
   DividendsResponse,
 } from '@/models/dividends';
 
-export type { CorrelationData, AnalyticsData } from '@/models/analytics';
+export type { CorrelationData, AnalyticsData, RelativeStrengthItem, RelativeStrengthData } from '@/models/analytics';
 
 export type { WatchlistItem, WatchlistResponse } from '@/models/watchlist';
 
@@ -119,6 +119,7 @@ import type {
   DBPriceHistory,
   CorrelationData,
   AnalyticsData,
+  RelativeStrengthData,
   WatchlistResponse,
 } from '@/models';
 
@@ -147,6 +148,8 @@ export const fetchNGXPriceHistory = (ticker: string, days = 90) =>
 export const fetchCorrelation = (days = 90) =>
   get<CorrelationData>(`/history/correlation?days=${days}`);
 export const fetchAnalytics = (days = 180) => get<AnalyticsData>(`/history/analytics?days=${days}`);
+export const fetchRelativeStrength = (days = 90) =>
+  get<RelativeStrengthData>(`/history/relative-strength?days=${days}`);
 export const fetchWatchlist = () => get<WatchlistResponse>('/watchlist');
 export const fetchWatchlistCheck = (ticker: string) =>
   get<{ ticker: string; watching: boolean }>(`/watchlist/check/${ticker}`);

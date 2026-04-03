@@ -14,7 +14,7 @@ import logging
 import time
 import re
 from typing import Optional
-from datetime import datetime, timezone
+from datetime import datetime, timezone, date
 
 try:
     import requests
@@ -279,4 +279,140 @@ def get_dividends(tickers: list[str]) -> dict[str, Optional[DividendInfo]]:
 def cache_age() -> Optional[int]:
     """Returns age of cache in seconds, or None if empty"""
     return int(time.time() - _cache["ts"]) if _cache["ts"] else None
+
+
+# ── Dividend history (streak) ─────────────────────────────────────────────────
+
+def _extract_year(date_str: str) -> Optional[str]:
+    m = re.search(r'(20\d{2})', date_str)
+    return m.group(1) if m else None
+
+
+def _fetch_all_dividends_bs(ticker: str) -> list[dict]:
+    """
+    Scrape ALL dividend rows from the dividend page and group by year.
+    Returns list of {'year': str, 'cash_amount': float} sorted oldest→newest.
+    """
+    url = f"{settings.NGX_SOURCE_BASE_URL}/quote/ngx/{ticker}/dividend/"
+    try:
+        headers = {
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
+            "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+        }
+        response = requests.get(url, headers=headers, timeout=10)
+        response.raise_for_status()
+        soup = BeautifulSoup(response.text, 'html.parser')
+        by_year: dict[str, float] = {}
+        for table in soup.find_all('table'):
+            rows = table.find_all('tr')
+            if len(rows) < 2:
+                continue
+            for row in rows[1:]:
+                cells = row.find_all(['td', 'th'])
+                if len(cells) < 2:
+                    continue
+                cell_texts = [c.get_text(strip=True) for c in cells]
+                ex_date   = cell_texts[0]
+                cash_text = cell_texts[1] if len(cell_texts) > 1 else ''
+                if not _is_date(ex_date) or not _is_currency(cash_text):
+                    continue
+                amount = _parse_currency_value(cash_text)
+                year   = _extract_year(ex_date)
+                if amount and year:
+                    by_year[year] = by_year.get(year, 0) + amount
+        if not by_year:
+            return []
+        return sorted(
+            [{'year': y, 'cash_amount': round(a, 4)} for y, a in by_year.items()],
+            key=lambda x: x['year'],
+        )
+    except Exception as exc:
+        log.warning("[DividendHistory] %s failed: %s", ticker, exc)
+        return []
+
+
+def compute_streak(history: list[dict]) -> dict:
+    """
+    Compute dividend streak from history [{year, cash_amount}] (oldest→newest).
+    Returns {streak, years_paid, growing}.
+    """
+    if not history:
+        return {'streak': 0, 'years_paid': 0, 'growing': False}
+
+    year_set     = {int(h['year']) for h in history}
+    latest       = max(year_set)
+    current_year = date.today().year
+
+    streak = 0
+    if latest >= current_year - 1:
+        streak = 1
+        y = latest - 1
+        while y in year_set:
+            streak += 1
+            y -= 1
+
+    by_year      = {h['year']: h['cash_amount'] for h in history}
+    recent_years = sorted(by_year.keys())[-3:]
+    growing = (
+        len(recent_years) >= 2
+        and all(
+            by_year[recent_years[i]] <= by_year[recent_years[i + 1]]
+            for i in range(len(recent_years) - 1)
+        )
+    )
+    return {'streak': streak, 'years_paid': len(history), 'growing': growing}
+
+
+_history_cache: dict    = {}
+_history_cache_ts: dict = {}
+
+
+def get_dividend_history(ticker: str) -> dict:
+    """
+    Two-level cache for dividend history.
+    Returns {'streak': int, 'years_paid': int, 'growing': bool, 'history': list}.
+    """
+    global _history_cache, _history_cache_ts
+    t   = ticker.upper()
+    now = time.time()
+    key = f"divhist:{t}"
+
+    if key in _history_cache and (now - _history_cache_ts.get(key, 0)) < settings.FINANCIALS_TTL:
+        return _history_cache[key]
+
+    db = SessionLocal()
+    try:
+        row = crud.get_financials_cache(db, t, 'dividends')
+        if row is not None:
+            age = (datetime.now(timezone.utc) - row.fetched_at).total_seconds()
+            if age < settings.FINANCIALS_TTL and row.periods:
+                history = [
+                    {'year': y, 'cash_amount': a}
+                    for y, a in zip(row.periods, row.col_a)
+                    if a is not None
+                ]
+                result = {**compute_streak(history), 'history': history}
+                _history_cache[key]    = result
+                _history_cache_ts[key] = now
+                return result
+
+        log.info("[DividendHistory] fetching %s", t)
+        if not HAS_BEAUTIFULSOUP:
+            result = {'streak': 0, 'years_paid': 0, 'growing': False, 'history': []}
+        else:
+            history     = _fetch_all_dividends_bs(t)
+            streak_data = compute_streak(history)
+            result      = {**streak_data, 'history': history}
+            if history:
+                crud.upsert_financials_cache(db, t, 'dividends', {
+                    'periods': [h['year'] for h in history],
+                    'amounts': [h['cash_amount'] for h in history],
+                })
+                log.info("[DividendHistory] %s → %d years, streak=%d", t, len(history), result['streak'])
+
+        _history_cache[key]    = result
+        _history_cache_ts[key] = now
+        return result
+    finally:
+        db.close()
 

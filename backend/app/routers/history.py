@@ -20,11 +20,13 @@ from app.auth.dependencies import get_current_user
 from app.db.crud import (
     get_portfolio_history, get_price_history,
     get_correlation_matrix, get_portfolio_analytics,
-    get_active_holdings,
+    get_active_holdings, get_daily_price_history,
 )
 
 log = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/history", tags=["history"])
+
+_INDEX_TICKER = "NGXASI"
 
 
 # ── Response models ────────────────────────────────────────────────────────────
@@ -190,3 +192,85 @@ def analytics(
     except Exception:
         log.exception("Error computing portfolio analytics")
         raise HTTPException(status_code=500, detail="Failed to compute portfolio analytics")
+
+
+# ── Relative Strength vs NGX All-Share Index ───────────────────────────────────
+
+def _cumulative_return(rows: list[dict]) -> Optional[float]:
+    if len(rows) < 2:
+        return None
+    first = rows[0].get("price")
+    last  = rows[-1].get("price")
+    if first and last and first > 0:
+        return round((last / first - 1) * 100, 2)
+    result = 1.0
+    for r in rows:
+        chg = r.get("change_pct")
+        if chg is not None:
+            result *= (1 + chg / 100)
+    return round((result - 1) * 100, 2) if result != 1.0 else None
+
+
+class RelativeStrengthItem(BaseModel):
+    ticker:       str
+    stock_return: Optional[float]
+    index_return: Optional[float]
+    rs_pct:       Optional[float]
+    outperform:   Optional[bool]
+
+
+class RelativeStrengthResponse(BaseModel):
+    days:           int
+    index_ticker:   str
+    has_index_data: bool
+    items:          list[RelativeStrengthItem]
+
+
+@router.get("/relative-strength", response_model=RelativeStrengthResponse)
+def relative_strength(
+    days: int = Query(default=90, ge=10, le=365),
+    db:   Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """
+    Returns each active NGX holding's cumulative return vs the NGX All-Share
+    Index (NGXASI) over the last `days` calendar days.
+    Index data is stored in daily_price_history with ticker='NGXASI'.
+    """
+    try:
+        from app.services.history import refresh_ticker_history
+        try:
+            refresh_ticker_history(_INDEX_TICKER)
+        except Exception:
+            pass
+
+        index_rows = get_daily_price_history(db, _INDEX_TICKER, days)
+        index_ret  = _cumulative_return(index_rows)
+        has_index  = index_ret is not None
+
+        holdings = get_active_holdings(db, market="ngx", user_id=current_user.id)
+        items: list[RelativeStrengthItem] = []
+
+        for h in holdings:
+            rows      = get_daily_price_history(db, h.ticker, days)
+            stock_ret = _cumulative_return(rows)
+            rs = round(stock_ret - index_ret, 2) if (stock_ret is not None and index_ret is not None) else None
+            items.append(RelativeStrengthItem(
+                ticker       = h.ticker,
+                stock_return = stock_ret,
+                index_return = index_ret,
+                rs_pct       = rs,
+                outperform   = (rs > 0) if rs is not None else None,
+            ))
+
+        items.sort(key=lambda x: (x.rs_pct is None, -(x.rs_pct or 0)))
+
+        return RelativeStrengthResponse(
+            days           = days,
+            index_ticker   = _INDEX_TICKER,
+            has_index_data = has_index,
+            items          = items,
+        )
+    except Exception:
+        log.exception("Error computing relative strength")
+        raise HTTPException(status_code=500, detail="Failed to compute relative strength")

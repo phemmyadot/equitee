@@ -6,7 +6,7 @@ import { fmtNGN, fmtNGNFull } from '@/utils/formatters';
 import { sectorColor } from '@/utils/theme';
 import { usePortfolio } from '@/context/PortfolioContext';
 import type { DividendHolding } from '@/models';
-import { IconTrendingUp, IconCheck } from '@/components/atoms/icons';
+import { IconTrendingUp, IconCheck, IconChartLine } from '@/components/atoms/icons';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Helpers
@@ -56,6 +56,25 @@ function DateCell({ label, value }: { label: string; value: string | null }) {
         <span className="font-mono text-[11px] text-[var(--ink-4)]">—</span>
       )}
     </div>
+  );
+}
+
+/** Streak badge showing consecutive years of dividend payments */
+function StreakBadge({ streak, growing }: { streak: number | null; growing: boolean | null }) {
+  if (!streak || streak < 1) return null;
+  const isGrowing = growing === true;
+  return (
+    <span
+      className={`inline-flex items-center gap-1 text-[9px] font-bold px-2 py-0.5 rounded-full ${
+        isGrowing
+          ? 'bg-[var(--gain-light)] text-[var(--gain)]'
+          : 'bg-[var(--accent-light)] text-[var(--accent)]'
+      }`}
+      title={`${streak}-year dividend streak${isGrowing ? ' · growing' : ''}`}
+    >
+      <IconChartLine width={9} height={9} />
+      {streak}yr{isGrowing ? ' ↑' : ''}
+    </span>
   );
 }
 
@@ -119,13 +138,14 @@ function DividendCard({ h, sector }: { h: DividendHolding; sector?: string }) {
             <IconTrendingUp width={13} height={13} style={{ stroke: sCol }} />
           </div>
           <div>
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2 flex-wrap">
               <Link
                 href={`/ngx/profile?ticker=${h.ticker}`}
                 className="font-mono font-bold text-[13px] text-[var(--ink)] hover:text-[var(--accent)] transition-colors"
               >
                 {h.ticker}
               </Link>
+              <StreakBadge streak={h.dividend_streak} growing={h.dividend_growing} />
               {hasDividend && <CountdownPill payDate={div!.pay_date} />}
               {!hasDividend && (
                 <span className="text-[9px] font-semibold px-2 py-0.5 rounded-full bg-[var(--sidebar)] text-[var(--ink-4)]">
@@ -195,6 +215,19 @@ function DividendCard({ h, sector }: { h: DividendHolding; sector?: string }) {
                 </span>
                 <span className="font-mono font-semibold text-[12px] text-[var(--gain)]">
                   {h.yield_on_cost.toFixed(2)}%
+                </span>
+              </div>
+            )}
+            {h.years_with_dividend != null && h.years_with_dividend > 0 && (
+              <div className="flex flex-col gap-0.5">
+                <span className="text-[9px] font-semibold uppercase tracking-[0.07em] text-[var(--ink-4)]">
+                  History
+                </span>
+                <span className="font-mono text-[12px] text-[var(--ink-2)]">
+                  {h.years_with_dividend}yr data
+                  {h.dividend_growing && (
+                    <span className="ml-1 text-[var(--gain)] font-semibold">↑ Growing</span>
+                  )}
                 </span>
               </div>
             )}

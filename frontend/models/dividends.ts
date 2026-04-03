@@ -54,6 +54,9 @@ export interface DividendHolding {
   dividend: DividendInfo | null;
   projected_payout: number | null;
   yield_on_cost: number | null;
+  dividend_streak: number | null;
+  years_with_dividend: number | null;
+  dividend_growing: boolean | null;
 }
 
 export interface DividendsResponse {

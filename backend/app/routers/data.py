@@ -63,13 +63,16 @@ async def get_data(
 
 class DividendHolding(BaseModel):
     """DividendInfo enriched with position data for projected payout calculation."""
-    ticker:           str
-    name:             str
-    shares:           float
-    avg_cost:         float
-    dividend:         Optional[DividendInfo] = None
-    projected_payout: Optional[float] = None
-    yield_on_cost:    Optional[float] = None
+    ticker:              str
+    name:                str
+    shares:              float
+    avg_cost:            float
+    dividend:            Optional[DividendInfo] = None
+    projected_payout:    Optional[float] = None
+    yield_on_cost:       Optional[float] = None
+    dividend_streak:     Optional[int]   = None
+    years_with_dividend: Optional[int]   = None
+    dividend_growing:    Optional[bool]  = None
 
 
 class DividendsResponse(BaseModel):
@@ -105,14 +108,19 @@ async def get_dividends(
                 yoc           = round((div.cash_amount / avg_cost) * 100, 4) if avg_cost else None
                 total_payout += projected
 
+            hist = dividends_service.get_dividend_history(ticker)
+
             result.append(DividendHolding(
-                ticker           = ticker,
-                name             = h.get("name", ticker),
-                shares           = shares,
-                avg_cost         = avg_cost,
-                dividend         = div,
-                projected_payout = projected,
-                yield_on_cost    = yoc,
+                ticker               = ticker,
+                name                 = h.get("name", ticker),
+                shares               = shares,
+                avg_cost             = avg_cost,
+                dividend             = div,
+                projected_payout     = projected,
+                yield_on_cost        = yoc,
+                dividend_streak      = hist.get("streak") or None,
+                years_with_dividend  = hist.get("years_paid") or None,
+                dividend_growing     = hist.get("growing"),
             ))
 
         result.sort(key=lambda d: (
