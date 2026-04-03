@@ -27,10 +27,10 @@ async def get_ngx_prices(current_user: User = Depends(get_current_user)):
     try:
         prices = ngx_service.get_prices()
         return NGXPricesResponse(
-            count   = len(prices),
-            age_sec = ngx_service.cache_age() or 0,
-            source  = "doclib.ngxgroup.com",
-            prices  = prices,
+            count=len(prices),
+            age_sec=ngx_service.cache_age() or 0,
+            source="doclib.ngxgroup.com",
+            prices=prices,
         )
     except Exception:
         log.exception("Error fetching NGX prices")
@@ -44,13 +44,13 @@ async def get_us_prices(
 ):
     try:
         holdings = load_holdings_from_db(db, current_user.id)
-        tickers  = [h["ticker"] for h in holdings["us"]]
-        prices   = yahoo_service.get_prices(tickers)
+        tickers = [h["ticker"] for h in holdings["us"]]
+        prices = yahoo_service.get_prices(tickers)
         return USPricesResponse(
-            count   = len(prices),
-            age_sec = yahoo_service.cache_age() or 0,
-            source  = "Yahoo Finance",
-            prices  = prices,
+            count=len(prices),
+            age_sec=yahoo_service.cache_age() or 0,
+            source="Yahoo Finance",
+            prices=prices,
         )
     except Exception:
         log.exception("Error fetching US prices")

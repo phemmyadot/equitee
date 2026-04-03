@@ -21,19 +21,19 @@ router = APIRouter(prefix="/api", tags=["data"])
 @router.get("/data", response_model=PortfolioDataResponse)
 async def get_data():
     try:
-        fx         = fx_service.get_rate()
+        fx = fx_service.get_rate()
         ngx_prices = ngx_service.get_prices()
 
-        holdings   = load_holdings()
+        holdings = load_holdings()
         us_tickers = [h["ticker"] for h in holdings["us"]]
-        us_prices  = yahoo_service.get_prices(us_tickers)
+        us_prices = yahoo_service.get_prices(us_tickers)
 
         return build_portfolio_response(
-            ngx_prices    = ngx_prices,
-            us_prices     = us_prices,
-            fx            = fx,
-            ngx_price_age = ngx_service.cache_age(),
-            us_price_age  = yahoo_service.cache_age(),
+            ngx_prices=ngx_prices,
+            us_prices=us_prices,
+            fx=fx,
+            ngx_price_age=ngx_service.cache_age(),
+            us_price_age=yahoo_service.cache_age(),
         )
 
     except Exception as exc:

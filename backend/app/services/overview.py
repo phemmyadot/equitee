@@ -23,7 +23,6 @@ _performance_ts: Dict = {}
 USER_AGENT = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36"
 
 
-
 def _fetch_period_returns(ticker: str) -> Dict[str, Optional[float]]:
     """
     Extract period returns from the SvelteKit JSON payload on the quote page.
@@ -33,9 +32,13 @@ def _fetch_period_returns(ticker: str) -> Dict[str, Optional[float]]:
     """
     url = f"{settings.NGX_SOURCE_BASE_URL}/quote/ngx/{ticker.lower()}/"
     out: Dict[str, Optional[float]] = {
-        "return_1m": None, "return_3m": None, "return_6m": None,
-        "return_ytd": None, "return_1y": None,
-        "week_52_high": None, "week_52_low": None,
+        "return_1m": None,
+        "return_3m": None,
+        "return_6m": None,
+        "return_ytd": None,
+        "return_1y": None,
+        "week_52_high": None,
+        "week_52_low": None,
     }
     try:
         headers = {"User-Agent": USER_AGENT}
@@ -44,42 +47,44 @@ def _fetch_period_returns(ticker: str) -> Dict[str, Optional[float]]:
         text = resp.text
 
         # Extract quote block for current price and 52-week high/low
-        quote_m = re.search(r'quote:\{([^}]+)\}', text)
+        quote_m = re.search(r"quote:\{([^}]+)\}", text)
         if not quote_m:
             return out
         quote_block = quote_m.group(1)
 
-        price_m = re.search(r'\bp:([\d.]+)', quote_block)
+        price_m = re.search(r"\bp:([\d.]+)", quote_block)
         if not price_m:
             return out
         current = float(price_m.group(1))
 
-        h52_m = re.search(r'\bh52:([\d.]+)', quote_block)
-        l52_m = re.search(r'\bl52:([\d.]+)', quote_block)
+        h52_m = re.search(r"\bh52:([\d.]+)", quote_block)
+        l52_m = re.search(r"\bl52:([\d.]+)", quote_block)
         if h52_m:
             out["week_52_high"] = float(h52_m.group(1))
         if l52_m:
             out["week_52_low"] = float(l52_m.group(1))
 
         # Extract changes block: changes:{price1m:...,price3m:..., ...}
-        changes_m = re.search(r'changes:\{([^}]+)\}', text)
+        changes_m = re.search(r"changes:\{([^}]+)\}", text)
         if not changes_m:
             return out
-        pairs = dict(re.findall(r'(\w+):([\d.]+)', changes_m.group(1)))
+        pairs = dict(re.findall(r"(\w+):([\d.]+)", changes_m.group(1)))
 
         for field, key in (
-            ("return_1m",  "price1m"),
-            ("return_3m",  "price3m"),
-            ("return_6m",  "price6m"),
+            ("return_1m", "price1m"),
+            ("return_3m", "price3m"),
+            ("return_6m", "price6m"),
             ("return_ytd", "priceYTD"),
-            ("return_1y",  "price1y"),
+            ("return_1y", "price1y"),
         ):
             if key in pairs:
                 past = float(pairs[key])
                 if past:
                     out[field] = round((current - past) / past * 100, 2)
     except Exception as exc:
-        log.error("[Performance] Failed to fetch period returns for %s: %s", ticker, exc)
+        log.error(
+            "[Performance] Failed to fetch period returns for %s: %s", ticker, exc
+        )
     return out
 
 
@@ -89,6 +94,7 @@ def fetch_chart_history(ticker: str, days: int = 90) -> list[dict]:
     Returns list of {ts, price, change_pct} dicts filtered to the last `days` days.
     """
     from datetime import datetime, timezone, timedelta
+
     url = f"{settings.NGX_SOURCE_BASE_URL}/quote/ngx/{ticker.lower()}/"
     try:
         headers = {"User-Agent": USER_AGENT}
@@ -100,8 +106,8 @@ def fetch_chart_history(ticker: str, days: int = 90) -> list[dict]:
         chart_pos = text.find("chart:")
         if chart_pos == -1:
             return []
-        chunk = text[chart_pos: chart_pos + 800_000]
-        entries = re.findall(r'\{c:([\d.]+)(?:,o:[\d.]+)?,t:(\d+)\}', chunk)
+        chunk = text[chart_pos : chart_pos + 800_000]
+        entries = re.findall(r"\{c:([\d.]+)(?:,o:[\d.]+)?,t:(\d+)\}", chunk)
         if not entries:
             return []
 
@@ -109,12 +115,16 @@ def fetch_chart_history(ticker: str, days: int = 90) -> list[dict]:
         rows, prev = [], None
         for c_str, t_str in entries:
             price = float(c_str)
-            ts    = datetime.fromtimestamp(int(t_str), tz=timezone.utc)
-            change_pct = round((price - prev) / prev * 100, 4) if prev is not None else None
+            ts = datetime.fromtimestamp(int(t_str), tz=timezone.utc)
+            change_pct = (
+                round((price - prev) / prev * 100, 4) if prev is not None else None
+            )
             prev = price
             if ts < cutoff:
                 continue
-            rows.append({"ts": ts.date().isoformat(), "price": price, "change_pct": change_pct})
+            rows.append(
+                {"ts": ts.date().isoformat(), "price": price, "change_pct": change_pct}
+            )
 
         log.info("[Performance] Scraped %d chart points for %s", len(rows), ticker)
         return rows
@@ -126,32 +136,36 @@ def fetch_chart_history(ticker: str, days: int = 90) -> list[dict]:
 def _calculate_from_history(ticker: str) -> dict:
     """Derive volatility, Sharpe, max drawdown, RSI-14, MA-50, MA-200 from price history."""
     import math
+
     # Prefer the daily_price_history table (history page scraper, up to 400 days)
     try:
         from app.services.history import get_ticker_prices_from_db
+
         history = get_ticker_prices_from_db(ticker, days=400)
     except Exception:
         history = []
     # Fall back to live chart scrape if DB returned nothing
     if not history:
         history = fetch_chart_history(ticker, days=400)
-    prices  = [r["price"]      for r in history if r.get("price")]
+    prices = [r["price"] for r in history if r.get("price")]
     changes = [r["change_pct"] for r in history if r.get("change_pct") is not None]
     if len(changes) < 20:
         return {}
 
     daily_returns = [c / 100 for c in changes]
-    n_r     = len(daily_returns)
-    mean_r  = sum(daily_returns) / n_r
-    var     = sum((r - mean_r) ** 2 for r in daily_returns) / max(n_r - 1, 1)
+    n_r = len(daily_returns)
+    mean_r = sum(daily_returns) / n_r
+    var = sum((r - mean_r) ** 2 for r in daily_returns) / max(n_r - 1, 1)
     std_day = math.sqrt(var) if var > 0 else 0
     result: dict = {}
 
     if std_day > 0:
-        result["volatility"]   = round(std_day * math.sqrt(252) * 100, 2)
+        result["volatility"] = round(std_day * math.sqrt(252) * 100, 2)
         # Nigerian T-bill risk-free rate ≈ 18 % (2024-2025)
-        rf_daily               = 0.18 / 252
-        result["sharpe_ratio"] = round((mean_r - rf_daily) / std_day * math.sqrt(252), 3)
+        rf_daily = 0.18 / 252
+        result["sharpe_ratio"] = round(
+            (mean_r - rf_daily) / std_day * math.sqrt(252), 3
+        )
 
     if prices:
         peak, max_dd = prices[0], 0.0
@@ -161,12 +175,12 @@ def _calculate_from_history(ticker: str) -> dict:
             dd = (peak - p) / peak * 100 if peak > 0 else 0
             if dd > max_dd:
                 max_dd = dd
-        result["max_drawdown"] = round(-max_dd, 2)   # negative = drawdown
+        result["max_drawdown"] = round(-max_dd, 2)  # negative = drawdown
 
     # RSI-14 (Wilder's simple average over last 14 periods)
     if len(prices) >= 15:
-        deltas   = [prices[i] - prices[i - 1] for i in range(1, len(prices))]
-        last14   = deltas[-14:]
+        deltas = [prices[i] - prices[i - 1] for i in range(1, len(prices))]
+        last14 = deltas[-14:]
         avg_gain = sum(max(d, 0) for d in last14) / 14
         avg_loss = sum(max(-d, 0) for d in last14) / 14
         if avg_loss == 0:
@@ -189,27 +203,33 @@ def _calculate_from_history(ticker: str) -> dict:
 def _calculate_growth_metrics(ticker: str) -> dict:
     """Calculate YoY revenue, earnings and FCF growth from stored quarterly history."""
     from app.services.financials import get_earnings_history, get_cash_flows
+
     result: dict = {}
     try:
         earn = get_earnings_history(ticker)
         if earn and earn.get("periods"):
             rev = earn.get("revenue", [])
-            ni  = earn.get("net_income", [])
+            ni = earn.get("net_income", [])
 
             def _yoy(arr):
                 if len(arr) >= 8:
-                    ttm   = [v for v in arr[-4:] if v is not None]
+                    ttm = [v for v in arr[-4:] if v is not None]
                     prior = [v for v in arr[-8:-4] if v is not None]
                     if len(ttm) == 4 and len(prior) == 4:
                         t, p = sum(ttm), sum(prior)
                         if p != 0:
                             return round((t - p) / abs(p) * 100, 2)
-                if len(arr) >= 5 and arr[-1] is not None and arr[-5] is not None and arr[-5] != 0:
+                if (
+                    len(arr) >= 5
+                    and arr[-1] is not None
+                    and arr[-5] is not None
+                    and arr[-5] != 0
+                ):
                     return round((arr[-1] - arr[-5]) / abs(arr[-5]) * 100, 2)
                 return None
 
-            result["revenue_growth_yoy"]   = _yoy(rev)
-            result["earnings_growth_yoy"]  = _yoy(ni)
+            result["revenue_growth_yoy"] = _yoy(rev)
+            result["earnings_growth_yoy"] = _yoy(ni)
 
     except Exception as exc:
         log.warning("[Performance] growth calc failed for %s: %s", ticker, exc)
@@ -217,18 +237,26 @@ def _calculate_growth_metrics(ticker: str) -> dict:
     # FCF growth
     try:
         from app.services.financials import get_cash_flows
+
         cf = get_cash_flows(ticker)
         if cf and cf.get("periods"):
             fcf = cf.get("fcf", [])
             if len(fcf) >= 8:
-                ttm   = [v for v in fcf[-4:] if v is not None]
+                ttm = [v for v in fcf[-4:] if v is not None]
                 prior = [v for v in fcf[-8:-4] if v is not None]
                 if len(ttm) == 4 and len(prior) == 4:
                     t, p = sum(ttm), sum(prior)
                     if p != 0:
                         result["fcf_growth_yoy"] = round((t - p) / abs(p) * 100, 2)
-            elif len(fcf) >= 5 and fcf[-1] is not None and fcf[-5] is not None and fcf[-5] != 0:
-                result["fcf_growth_yoy"] = round((fcf[-1] - fcf[-5]) / abs(fcf[-5]) * 100, 2)
+            elif (
+                len(fcf) >= 5
+                and fcf[-1] is not None
+                and fcf[-5] is not None
+                and fcf[-5] != 0
+            ):
+                result["fcf_growth_yoy"] = round(
+                    (fcf[-1] - fcf[-5]) / abs(fcf[-5]) * 100, 2
+                )
     except Exception as exc:
         log.warning("[Performance] FCF growth calc failed for %s: %s", ticker, exc)
 
@@ -246,53 +274,56 @@ def _scrape_performance(ticker: str) -> Optional[Dict]:
     net_debt = -netcash if netcash is not None else None
 
     performance: Dict = {
-        "symbol":             ticker.upper(),
+        "symbol": ticker.upper(),
         # Risk
-        "beta":               raw.get("beta"),
-        "volatility":         None,   # not on statistics page
-        "sharpe_ratio":       None,   # not on statistics page
-        "max_drawdown":       None,   # not on statistics page
+        "beta": raw.get("beta"),
+        "volatility": None,  # not on statistics page
+        "sharpe_ratio": None,  # not on statistics page
+        "max_drawdown": None,  # not on statistics page
         # 52-week (high/low come from quote page via _fetch_period_returns)
-        "week_52_high":       None,
-        "week_52_low":        None,
-        "week_52_change":     raw.get("ch1y"),
+        "week_52_high": None,
+        "week_52_low": None,
+        "week_52_change": raw.get("ch1y"),
         # Margins
-        "operating_margin":   raw.get("operatingMargin"),
-        "ebitda_margin":      raw.get("ebitdaMargin"),
-        "fcf_margin":         raw.get("fcfMargin"),
-        "pretax_margin":      raw.get("pretaxMargin"),
+        "operating_margin": raw.get("operatingMargin"),
+        "ebitda_margin": raw.get("ebitdaMargin"),
+        "fcf_margin": raw.get("fcfMargin"),
+        "pretax_margin": raw.get("pretaxMargin"),
         # Returns on capital
-        "roa":                raw.get("roa"),
-        "roic":               raw.get("roic"),
-        "roce":               raw.get("roce"),
+        "roa": raw.get("roa"),
+        "roic": raw.get("roic"),
+        "roce": raw.get("roce"),
         # Cash flow
-        "free_cash_flow":     raw.get("fcf"),
-        "fcf_per_share":      raw.get("fcfps"),
-        "operating_cash_flow":raw.get("ncfo"),
-        "capex":              raw.get("capex"),
-        "fcf_yield":          raw.get("fcfYield"),
+        "free_cash_flow": raw.get("fcf"),
+        "fcf_per_share": raw.get("fcfps"),
+        "operating_cash_flow": raw.get("ncfo"),
+        "capex": raw.get("capex"),
+        "fcf_yield": raw.get("fcfYield"),
         # Valuation
-        "ev_ebitda":          raw.get("evEbitda"),
-        "ev_fcf":             raw.get("evFcf"),
-        "price_to_book":      raw.get("pb"),
-        "price_to_sales":     raw.get("ps"),
+        "ev_ebitda": raw.get("evEbitda"),
+        "ev_fcf": raw.get("evFcf"),
+        "price_to_book": raw.get("pb"),
+        "price_to_sales": raw.get("ps"),
         # Financial health
-        "interest_coverage":  raw.get("interestCoverage"),
-        "debt_ebitda":        raw.get("debtEbitda"),
-        "quick_ratio":        raw.get("quickRatio"),
-        "net_debt":           net_debt,
-        "asset_turnover":     raw.get("assetturnover"),
+        "interest_coverage": raw.get("interestCoverage"),
+        "debt_ebitda": raw.get("debtEbitda"),
+        "quick_ratio": raw.get("quickRatio"),
+        "net_debt": net_debt,
+        "asset_turnover": raw.get("assetturnover"),
         # Growth
-        "revenue_growth_yoy":   raw.get("revenueGrowth"),
-        "earnings_growth_yoy":  raw.get("epsGrowth"),
-        "fcf_growth_yoy":       raw.get("fcfGrowth"),
-        "dividend_growth_yoy":  raw.get("dividendGrowth"),
+        "revenue_growth_yoy": raw.get("revenueGrowth"),
+        "earnings_growth_yoy": raw.get("epsGrowth"),
+        "fcf_growth_yoy": raw.get("fcfGrowth"),
+        "dividend_growth_yoy": raw.get("dividendGrowth"),
         # Quality scores — use site values; fall back to calculated below
-        "piotroski_score":    raw.get("fScore"),
-        "altman_zscore":      raw.get("zScore"),
+        "piotroski_score": raw.get("fScore"),
+        "altman_zscore": raw.get("zScore"),
         # Period returns filled in by _fetch_period_returns
-        "return_1m": None, "return_3m": None, "return_6m": None,
-        "return_ytd": None, "return_1y": None,
+        "return_1m": None,
+        "return_3m": None,
+        "return_6m": None,
+        "return_ytd": None,
+        "return_1y": None,
     }
 
     # Enrich period returns + 52w high/low from the quote page
@@ -302,7 +333,10 @@ def _scrape_performance(ticker: str) -> Optional[Dict]:
             performance[field] = value
 
     # Fallback: 52-week price change as 1y return
-    if performance.get("week_52_change") is not None and performance.get("return_1y") is None:
+    if (
+        performance.get("week_52_change") is not None
+        and performance.get("return_1y") is None
+    ):
         performance["return_1y"] = performance["week_52_change"]
 
     # Calculated fallbacks when site doesn't provide scores
@@ -319,9 +353,13 @@ def _scrape_performance(ticker: str) -> Optional[Dict]:
         performance["ebitda_margin"] = performance["operating_margin"]
 
     # Enterprise Value components
-    market_cap   = raw.get("marketcap")
-    net_debt_val = performance.get("net_debt")   # negative = net cash
-    ev = (market_cap + net_debt_val) if (market_cap is not None and net_debt_val is not None) else None
+    market_cap = raw.get("marketcap")
+    net_debt_val = performance.get("net_debt")  # negative = net cash
+    ev = (
+        (market_cap + net_debt_val)
+        if (market_cap is not None and net_debt_val is not None)
+        else None
+    )
 
     # EV / FCF
     if performance.get("ev_fcf") is None and ev is not None:
@@ -331,7 +369,7 @@ def _scrape_performance(ticker: str) -> Optional[Dict]:
 
     # EV / EBITDA — use ebitda_margin (now filled if op_margin was available)
     if performance.get("ev_ebitda") is None and ev is not None:
-        revenue      = raw.get("revenue")
+        revenue = raw.get("revenue")
         ebitda_margin = performance.get("ebitda_margin")
         if revenue and ebitda_margin:
             ebitda = ebitda_margin / 100 * revenue
@@ -340,8 +378,8 @@ def _scrape_performance(ticker: str) -> Optional[Dict]:
 
     # Asset Turnover = Revenue / Total Assets;  Total Assets = Net Income / ROA
     if performance.get("asset_turnover") is None:
-        roa    = performance.get("roa")
-        rev    = raw.get("revenue")
+        roa = performance.get("roa")
+        rev = raw.get("revenue")
         netinc = raw.get("netinc")
         if roa and roa > 0 and rev and netinc and netinc > 0:
             total_assets = netinc / (roa / 100)
@@ -350,7 +388,7 @@ def _scrape_performance(ticker: str) -> Optional[Dict]:
     # ROIC = Net Income / Invested Capital;  IC = Equity + Net Debt
     # When net cash > equity (IC negative), fall back to equity alone (= ROE).
     if performance.get("roic") is None:
-        roe    = raw.get("roe")
+        roe = raw.get("roe")
         netinc = raw.get("netinc")
         if roe and roe > 0 and netinc:
             equity = netinc / (roe / 100)
@@ -365,11 +403,11 @@ def _scrape_performance(ticker: str) -> Optional[Dict]:
     # ROCE = EBIT / Capital Employed;  CE ≈ Equity for financials
     if performance.get("roce") is None:
         op_margin = performance.get("operating_margin")
-        rev       = raw.get("revenue")
-        roe       = raw.get("roe")
-        netinc    = raw.get("netinc")
+        rev = raw.get("revenue")
+        roe = raw.get("roe")
+        netinc = raw.get("netinc")
         if op_margin and rev and roe and roe > 0 and netinc:
-            ebit   = op_margin / 100 * rev
+            ebit = op_margin / 100 * rev
             equity = netinc / (roe / 100)
             if equity > 0:
                 performance["roce"] = round(ebit / equity * 100, 2)
@@ -525,7 +563,9 @@ def get_performance(ticker: str, force_refresh: bool = False) -> Optional[Dict]:
             performance.get(f) is None
             for f in ("revenue_growth_yoy", "earnings_growth_yoy", "rsi_14", "ma_50")
         )
-        _performance_ts[ticker] = now - (settings.NGX_PRICE_TTL - _RETRY_TTL) if incomplete else now
+        _performance_ts[ticker] = (
+            now - (settings.NGX_PRICE_TTL - _RETRY_TTL) if incomplete else now
+        )
 
     return performance
 

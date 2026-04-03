@@ -33,25 +33,25 @@ async def get_data(
     current_user: User = Depends(get_current_user),
 ):
     try:
-        fx         = fx_service.get_rate()
+        fx = fx_service.get_rate()
         ngx_prices = ngx_service.get_prices()
 
-        holdings    = load_holdings_from_db(db, current_user.id)
+        holdings = load_holdings_from_db(db, current_user.id)
         ngx_tickers = [h["ticker"] for h in holdings["ngx"]]
-        us_tickers  = [h["ticker"] for h in holdings["us"]]
-        us_prices   = yahoo_service.get_prices(us_tickers)
+        us_tickers = [h["ticker"] for h in holdings["us"]]
+        us_prices = yahoo_service.get_prices(us_tickers)
 
         # Enrich NGX holdings with intraday high/low/volume from per-ticker pages
         ngx_prices.update(ngx_service.enrich_with_volumes(ngx_tickers))
 
         return build_portfolio_response(
-            ngx_prices    = ngx_prices,
-            us_prices     = us_prices,
-            fx            = fx,
-            ngx_price_age = ngx_service.cache_age(),
-            us_price_age  = yahoo_service.cache_age(),
-            db            = db,
-            user_id       = current_user.id,
+            ngx_prices=ngx_prices,
+            us_prices=us_prices,
+            fx=fx,
+            ngx_price_age=ngx_service.cache_age(),
+            us_price_age=yahoo_service.cache_age(),
+            db=db,
+            user_id=current_user.id,
         )
 
     except Exception:
@@ -61,23 +61,25 @@ async def get_data(
 
 # ── Dividend response models ──────────────────────────────────────────────────
 
+
 class DividendHolding(BaseModel):
     """DividendInfo enriched with position data for projected payout calculation."""
-    ticker:              str
-    name:                str
-    shares:              float
-    avg_cost:            float
-    dividend:            Optional[DividendInfo] = None
-    projected_payout:    Optional[float] = None
-    yield_on_cost:       Optional[float] = None
-    dividend_streak:     Optional[int]   = None
-    years_with_dividend: Optional[int]   = None
-    dividend_growing:    Optional[bool]  = None
+
+    ticker: str
+    name: str
+    shares: float
+    avg_cost: float
+    dividend: Optional[DividendInfo] = None
+    projected_payout: Optional[float] = None
+    yield_on_cost: Optional[float] = None
+    dividend_streak: Optional[int] = None
+    years_with_dividend: Optional[int] = None
+    dividend_growing: Optional[bool] = None
 
 
 class DividendsResponse(BaseModel):
-    holdings:               list[DividendHolding]
-    cache_age_sec:          Optional[int]   = None
+    holdings: list[DividendHolding]
+    cache_age_sec: Optional[int] = None
     total_projected_payout: Optional[float] = None
 
 
@@ -88,50 +90,56 @@ async def get_dividends(
 ):
     try:
         holdings = load_holdings_from_db(db, current_user.id)
-        ngx      = holdings["ngx"]
-        tickers  = [h["ticker"] for h in ngx]
-        div_map  = dividends_service.get_dividends(tickers)
+        ngx = holdings["ngx"]
+        tickers = [h["ticker"] for h in ngx]
+        div_map = dividends_service.get_dividends(tickers)
 
-        result       : list[DividendHolding] = []
-        total_payout : float                 = 0.0
+        result: list[DividendHolding] = []
+        total_payout: float = 0.0
 
         for h in ngx:
-            ticker   = h["ticker"]
-            shares   = float(h["shares"])
+            ticker = h["ticker"]
+            shares = float(h["shares"])
             avg_cost = float(h["avg_cost"])
-            div      = div_map.get(ticker)
+            div = div_map.get(ticker)
 
             projected = None
-            yoc       = None
+            yoc = None
             if div and div.cash_amount:
-                projected     = round(shares * div.cash_amount, 2)
-                yoc           = round((div.cash_amount / avg_cost) * 100, 4) if avg_cost else None
+                projected = round(shares * div.cash_amount, 2)
+                yoc = round((div.cash_amount / avg_cost) * 100, 4) if avg_cost else None
                 total_payout += projected
 
             hist = dividends_service.get_dividend_history(ticker)
 
-            result.append(DividendHolding(
-                ticker               = ticker,
-                name                 = h.get("name", ticker),
-                shares               = shares,
-                avg_cost             = avg_cost,
-                dividend             = div,
-                projected_payout     = projected,
-                yield_on_cost        = yoc,
-                dividend_streak      = hist.get("streak") or None,
-                years_with_dividend  = hist.get("years_paid") or None,
-                dividend_growing     = hist.get("growing"),
-            ))
+            result.append(
+                DividendHolding(
+                    ticker=ticker,
+                    name=h.get("name", ticker),
+                    shares=shares,
+                    avg_cost=avg_cost,
+                    dividend=div,
+                    projected_payout=projected,
+                    yield_on_cost=yoc,
+                    dividend_streak=hist.get("streak") or None,
+                    years_with_dividend=hist.get("years_paid") or None,
+                    dividend_growing=hist.get("growing"),
+                )
+            )
 
-        result.sort(key=lambda d: (
-            0 if (d.dividend and d.dividend.pay_date) else 1,
-            d.dividend.pay_date if (d.dividend and d.dividend.pay_date) else d.ticker,
-        ))
+        result.sort(
+            key=lambda d: (
+                0 if (d.dividend and d.dividend.pay_date) else 1,
+                d.dividend.pay_date
+                if (d.dividend and d.dividend.pay_date)
+                else d.ticker,
+            )
+        )
 
         return DividendsResponse(
-            holdings               = result,
-            cache_age_sec          = dividends_service.cache_age(),
-            total_projected_payout = round(total_payout, 2) if total_payout else None,
+            holdings=result,
+            cache_age_sec=dividends_service.cache_age(),
+            total_projected_payout=round(total_payout, 2) if total_payout else None,
         )
 
     except Exception:

@@ -25,7 +25,7 @@ from app.db import crud
 
 log = logging.getLogger(__name__)
 
-_cache:    dict = {}
+_cache: dict = {}
 _cache_ts: dict = {}
 
 _HEADERS = {
@@ -39,6 +39,7 @@ _HEADERS = {
 
 
 # ── helpers ───────────────────────────────────────────────────────────────────
+
 
 def _fetch_text(url: str) -> Optional[str]:
     try:
@@ -60,15 +61,15 @@ def _extract_js_array(text: str, key: str) -> list:
       - leading-dot floats:  .840  →  0.840
       - negative leading-dot: -.5  → -0.5
     """
-    m = re.search(rf'\b{re.escape(key)}:\[([^\]]*)\]', text)
+    m = re.search(rf"\b{re.escape(key)}:\[([^\]]*)\]", text)
     if not m or not m.group(1).strip():
         return []
     raw = m.group(1)
     # Fix leading-dot floats (e.g. .84 → 0.84, -.84 → -0.84)
-    raw = re.sub(r'(?<![0-9])(\.)([0-9])', r'0.\2', raw)
-    raw = re.sub(r'(-)(0\.)([0-9])', r'-0.\3', raw)
+    raw = re.sub(r"(?<![0-9])(\.)([0-9])", r"0.\2", raw)
+    raw = re.sub(r"(-)(0\.)([0-9])", r"-0.\3", raw)
     try:
-        return json.loads(f'[{raw}]')
+        return json.loads(f"[{raw}]")
     except json.JSONDecodeError:
         return []
 
@@ -89,6 +90,7 @@ def _has_data(result: dict) -> bool:
 
 # ── Earnings history ──────────────────────────────────────────────────────────
 
+
 def get_earnings_history(ticker: str) -> Optional[dict]:
     """
     Returns dict (oldest → newest):
@@ -103,7 +105,10 @@ def get_earnings_history(ticker: str) -> Optional[dict]:
     now = time.time()
 
     # L1 — in-memory
-    if cache_key in _cache and (now - _cache_ts.get(cache_key, 0)) < settings.FINANCIALS_TTL:
+    if (
+        cache_key in _cache
+        and (now - _cache_ts.get(cache_key, 0)) < settings.FINANCIALS_TTL
+    ):
         return _cache[cache_key]
 
     # L2 — database
@@ -114,39 +119,41 @@ def get_earnings_history(ticker: str) -> Optional[dict]:
             age = (datetime.now(timezone.utc) - row.fetched_at).total_seconds()
             result = crud.financials_row_to_dict(row)
             if age < settings.FINANCIALS_TTL and _has_data(result):
-                _cache[cache_key]    = result
+                _cache[cache_key] = result
                 _cache_ts[cache_key] = now
                 log.debug("[Financials] earnings %s from DB (age %.0fs)", ticker, age)
                 return result
 
         # Scrape — extract JSON blob from embedded JS
-        url  = f"{settings.NGX_SOURCE_BASE_URL}/quote/ngx/{ticker.lower()}/financials/?p=quarterly"
+        url = f"{settings.NGX_SOURCE_BASE_URL}/quote/ngx/{ticker.lower()}/financials/?p=quarterly"
         text = _fetch_text(url)
         if not text:
             return None
 
-        fiscal_year    = _extract_js_array(text, "fiscalYear")
+        fiscal_year = _extract_js_array(text, "fiscalYear")
         fiscal_quarter = _extract_js_array(text, "fiscalQuarter")
-        revenue        = _extract_js_array(text, "revenue")
-        eps            = _extract_js_array(text, "epsBasic")
-        net_income     = _extract_js_array(text, "netinc")
+        revenue = _extract_js_array(text, "revenue")
+        eps = _extract_js_array(text, "epsBasic")
+        net_income = _extract_js_array(text, "netinc")
 
         if not fiscal_year:
-            log.warning("[Financials] earnings %s: financialData not found in page", ticker)
+            log.warning(
+                "[Financials] earnings %s: financialData not found in page", ticker
+            )
             return None
 
         periods = [f"{q} {y}" for q, y in zip(fiscal_quarter, fiscal_year)]
         n = min(8, len(periods))
 
         result = {
-            "periods":    _oldest_first(periods,    n),
-            "revenue":    _oldest_first(revenue,    n),
-            "eps":        _oldest_first(eps,        n),
+            "periods": _oldest_first(periods, n),
+            "revenue": _oldest_first(revenue, n),
+            "eps": _oldest_first(eps, n),
             "net_income": _oldest_first(net_income, n),
         }
 
         crud.upsert_financials_cache(db, ticker.upper(), "earnings", result)
-        _cache[cache_key]    = result
+        _cache[cache_key] = result
         _cache_ts[cache_key] = now
         log.info("[Financials] earnings %s → %d quarters", ticker, n)
         return result
@@ -156,6 +163,7 @@ def get_earnings_history(ticker: str) -> Optional[dict]:
 
 
 # ── Balance sheet ─────────────────────────────────────────────────────────────
+
 
 def get_balance_sheet(ticker: str) -> Optional[dict]:
     """
@@ -171,7 +179,10 @@ def get_balance_sheet(ticker: str) -> Optional[dict]:
     now = time.time()
 
     # L1 — in-memory
-    if cache_key in _cache and (now - _cache_ts.get(cache_key, 0)) < settings.FINANCIALS_TTL:
+    if (
+        cache_key in _cache
+        and (now - _cache_ts.get(cache_key, 0)) < settings.FINANCIALS_TTL
+    ):
         return _cache[cache_key]
 
     # L2 — database
@@ -182,25 +193,29 @@ def get_balance_sheet(ticker: str) -> Optional[dict]:
             age = (datetime.now(timezone.utc) - row.fetched_at).total_seconds()
             result = crud.financials_row_to_dict(row)
             if age < settings.FINANCIALS_TTL and _has_data(result):
-                _cache[cache_key]    = result
+                _cache[cache_key] = result
                 _cache_ts[cache_key] = now
-                log.debug("[Financials] balance sheet %s from DB (age %.0fs)", ticker, age)
+                log.debug(
+                    "[Financials] balance sheet %s from DB (age %.0fs)", ticker, age
+                )
                 return result
 
         # Scrape
-        url  = f"{settings.NGX_SOURCE_BASE_URL}/quote/ngx/{ticker.lower()}/financials/balance-sheet/"
+        url = f"{settings.NGX_SOURCE_BASE_URL}/quote/ngx/{ticker.lower()}/financials/balance-sheet/"
         text = _fetch_text(url)
         if not text:
             return None
 
-        fiscal_year   = _extract_js_array(text, "fiscalYear")
-        assets        = _extract_js_array(text, "assets")
-        liabilities   = _extract_js_array(text, "liabilitiesBank")
-        equity        = _extract_js_array(text, "equity")
-        net_cash      = _extract_js_array(text, "netcash")
+        fiscal_year = _extract_js_array(text, "fiscalYear")
+        assets = _extract_js_array(text, "assets")
+        liabilities = _extract_js_array(text, "liabilitiesBank")
+        equity = _extract_js_array(text, "equity")
+        net_cash = _extract_js_array(text, "netcash")
 
         if not fiscal_year:
-            log.warning("[Financials] balance sheet %s: financialData not found in page", ticker)
+            log.warning(
+                "[Financials] balance sheet %s: financialData not found in page", ticker
+            )
             return None
 
         # Annual periods only (balance sheet is yearly) — deduplicate by fiscal year
@@ -212,21 +227,21 @@ def get_balance_sheet(ticker: str) -> Optional[dict]:
                 idx.append(i)
 
         n = min(4, len(idx))
-        idx = idx[:n]   # newest first, then reverse
+        idx = idx[:n]  # newest first, then reverse
 
         def _pick(arr: list) -> list:
             return list(reversed([arr[i] for i in idx if i < len(arr)]))
 
         result = {
-            "periods":     list(reversed([fiscal_year[i] for i in idx])),
-            "assets":      _pick(assets),
+            "periods": list(reversed([fiscal_year[i] for i in idx])),
+            "assets": _pick(assets),
             "liabilities": _pick(liabilities),
-            "equity":      _pick(equity),
-            "net_cash":    _pick(net_cash),
+            "equity": _pick(equity),
+            "net_cash": _pick(net_cash),
         }
 
         crud.upsert_financials_cache(db, ticker.upper(), "balance", result)
-        _cache[cache_key]    = result
+        _cache[cache_key] = result
         _cache_ts[cache_key] = now
         log.info("[Financials] balance sheet %s → %d periods", ticker, n)
         return result
@@ -236,6 +251,7 @@ def get_balance_sheet(ticker: str) -> Optional[dict]:
 
 
 # ── Cash flows ────────────────────────────────────────────────────────────────
+
 
 def get_cash_flows(ticker: str) -> Optional[dict]:
     """
@@ -254,7 +270,10 @@ def get_cash_flows(ticker: str) -> Optional[dict]:
     now = time.time()
 
     # L1 — in-memory
-    if cache_key in _cache and (now - _cache_ts.get(cache_key, 0)) < settings.FINANCIALS_TTL:
+    if (
+        cache_key in _cache
+        and (now - _cache_ts.get(cache_key, 0)) < settings.FINANCIALS_TTL
+    ):
         return _cache[cache_key]
 
     # L2 — database
@@ -265,46 +284,50 @@ def get_cash_flows(ticker: str) -> Optional[dict]:
             age = (datetime.now(timezone.utc) - row.fetched_at).total_seconds()
             result = crud.financials_row_to_dict(row)
             if age < settings.FINANCIALS_TTL and _has_data(result):
-                _cache[cache_key]    = result
+                _cache[cache_key] = result
                 _cache_ts[cache_key] = now
                 log.debug("[Financials] cash flows %s from DB (age %.0fs)", ticker, age)
                 return result
 
         # Scrape cash flow statement
-        cf_url = (f"{settings.NGX_SOURCE_BASE_URL}/quote/ngx/{ticker.lower()}"
-                  f"/financials/cash-flow-statement/?p=quarterly")
+        cf_url = (
+            f"{settings.NGX_SOURCE_BASE_URL}/quote/ngx/{ticker.lower()}"
+            f"/financials/cash-flow-statement/?p=quarterly"
+        )
         cf_text = _fetch_text(cf_url)
         if not cf_text:
             return None
 
-        fiscal_year    = _extract_js_array(cf_text, "fiscalYear")
+        fiscal_year = _extract_js_array(cf_text, "fiscalYear")
         fiscal_quarter = _extract_js_array(cf_text, "fiscalQuarter")
-        capex          = _extract_js_array(cf_text, "capex")
-        fcf            = _extract_js_array(cf_text, "fcf")
+        capex = _extract_js_array(cf_text, "capex")
+        fcf = _extract_js_array(cf_text, "fcf")
 
         if not fiscal_year:
             log.warning("[Financials] cash flows %s: financialData not found", ticker)
             return None
 
         # Scrape quarterly balance sheet for net debt (netcash sign-inverted)
-        bs_url  = (f"{settings.NGX_SOURCE_BASE_URL}/quote/ngx/{ticker.lower()}"
-                   f"/financials/balance-sheet/?p=quarterly")
+        bs_url = (
+            f"{settings.NGX_SOURCE_BASE_URL}/quote/ngx/{ticker.lower()}"
+            f"/financials/balance-sheet/?p=quarterly"
+        )
         bs_text = _fetch_text(bs_url)
-        netcash  = _extract_js_array(bs_text, "netcash") if bs_text else []
+        netcash = _extract_js_array(bs_text, "netcash") if bs_text else []
         net_debt = [-v if v is not None else None for v in netcash]
 
         periods = [f"{q} {y}" for q, y in zip(fiscal_quarter, fiscal_year)]
         n = min(8, len(periods))
 
         result = {
-            "periods":  _oldest_first(periods,  n),
-            "capex":    _oldest_first(capex,    n),
-            "fcf":      _oldest_first(fcf,      n),
+            "periods": _oldest_first(periods, n),
+            "capex": _oldest_first(capex, n),
+            "fcf": _oldest_first(fcf, n),
             "net_debt": _oldest_first(net_debt, n),
         }
 
         crud.upsert_financials_cache(db, ticker.upper(), "cashflow", result)
-        _cache[cache_key]    = result
+        _cache[cache_key] = result
         _cache_ts[cache_key] = now
         log.info("[Financials] cash flows %s → %d quarters", ticker, n)
         return result

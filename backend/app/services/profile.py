@@ -37,7 +37,7 @@ def _get_soup(url: str) -> Optional[BeautifulSoup]:
 def _scrape_profile(ticker: str) -> Optional[Dict]:
     """Scrape profile data from the company page"""
     url = f"{settings.NGX_SOURCE_BASE_URL}/quote/ngx/{ticker.lower()}/company/"
-    
+
     soup = _get_soup(url)
     if not soup:
         return None
@@ -68,7 +68,7 @@ def _scrape_profile(ticker: str) -> Optional[Dict]:
             if len(cols) >= 2:
                 label = cols[0].get_text(strip=True).lower()
                 value = cols[1].get_text(strip=True)
-                
+
                 # Map table cells to profile fields
                 if "sector" in label:
                     profile["sector"] = value
@@ -95,30 +95,30 @@ def _scrape_profile(ticker: str) -> Optional[Dict]:
 def get_profile(ticker: str, force_refresh: bool = False) -> Optional[Dict]:
     """
     Get cached profile for a ticker, or fetch if cache is expired.
-    
+
     Args:
         ticker: Stock ticker symbol
         force_refresh: Skip cache and fetch fresh data
-    
+
     Returns:
         Dict with profile data or None if fetch fails
     """
     ticker = ticker.upper()
     now = time.time()
-    
+
     # Check cache
     if not force_refresh and ticker in _profile_cache:
         cache_time = _profile_ts.get(ticker, 0)
         if (now - cache_time) < settings.NGX_PRICE_TTL:
             log.info(f"[Profile] cache hit for {ticker}")
             return _profile_cache[ticker]
-    
+
     # Fetch fresh data
     profile = _scrape_profile(ticker)
     if profile:
         _profile_cache[ticker] = profile
         _profile_ts[ticker] = now
-    
+
     return profile
 
 

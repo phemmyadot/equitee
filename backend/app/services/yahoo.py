@@ -25,14 +25,18 @@ _cache: dict = {"data": {}, "ts": 0.0}
 
 def _fetch_ticker(ticker: str) -> Optional[USPrice]:
     url = settings.YAHOO_API.format(ticker=ticker)
-    req = urllib.request.Request(url, headers={
-        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)",
-        "Accept":     "application/json",
-    })
+    req = urllib.request.Request(
+        url,
+        headers={
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)",
+            "Accept": "application/json",
+        },
+    )
     try:
         with urllib.request.urlopen(req, timeout=8) as r:
-            meta = json.loads(r.read().decode("utf-8", errors="ignore")
-                              )["chart"]["result"][0]["meta"]
+            meta = json.loads(r.read().decode("utf-8", errors="ignore"))["chart"][
+                "result"
+            ][0]["meta"]
 
         price = meta.get("regularMarketPrice") or meta.get("currentPrice")
         close = meta.get("previousClose") or meta.get("chartPreviousClose")
@@ -43,20 +47,23 @@ def _fetch_ticker(ticker: str) -> Optional[USPrice]:
 
         price = float(price)
         close = float(close) if close else None
-        change     = round(price - close, 4)          if close                          else None
-        change_pct = round(change / close * 100, 4)   if (close and close != 0
-                                                          and change is not None)        else None
+        change = round(price - close, 4) if close else None
+        change_pct = (
+            round(change / close * 100, 4)
+            if (close and close != 0 and change is not None)
+            else None
+        )
 
         return USPrice(
-            symbol     = ticker,
-            price      = price,
-            close      = close,
-            change     = change,
-            change_pct = change_pct,
-            high       = meta.get("regularMarketDayHigh"),
-            low        = meta.get("regularMarketDayLow"),
-            volume     = meta.get("regularMarketVolume"),
-            currency   = meta.get("currency", "USD"),
+            symbol=ticker,
+            price=price,
+            close=close,
+            change=change,
+            change_pct=change_pct,
+            high=meta.get("regularMarketDayHigh"),
+            low=meta.get("regularMarketDayLow"),
+            volume=meta.get("regularMarketVolume"),
+            currency=meta.get("currency", "USD"),
         )
 
     except Exception as exc:
@@ -70,9 +77,10 @@ def get_prices(tickers: list[str]) -> dict[str, USPrice]:
     Only re-fetches tickers that are absent or whose cache is stale.
     """
     global _cache
-    now   = time.time()
+    now = time.time()
     stale = [
-        t for t in tickers
+        t
+        for t in tickers
         if t not in _cache["data"] or (now - _cache["ts"]) > settings.US_PRICE_TTL
     ]
 

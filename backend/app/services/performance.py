@@ -22,7 +22,7 @@ _overview_ts: Dict = {}
 # don't both fire an HTTP request to the same /statistics/ URL in one request.
 _blob_cache: Dict = {}
 _blob_ts: Dict = {}
-_BLOB_TTL = 300   # 5 minutes
+_BLOB_TTL = 300  # 5 minutes
 
 _HEADERS = {
     "User-Agent": (
@@ -73,7 +73,7 @@ def _scrape_stats_blob(ticker: str) -> Dict[str, Optional[float]]:
     result = {id_: _parse_hover(hover) for id_, hover in items}
     if result:
         _blob_cache[key] = result
-        _blob_ts[key]    = now
+        _blob_ts[key] = now
     return result
 
 
@@ -83,19 +83,19 @@ def _scrape_overview(ticker: str) -> Optional[Dict]:
         return None
 
     result = {
-        "symbol":        ticker.upper(),
-        "market_cap":    raw.get("marketcap"),
-        "pe_ratio":      raw.get("pe"),
-        "eps":           raw.get("eps"),
-        "book_value":    raw.get("bvps"),
-        "dividend_yield":raw.get("dividendYield"),
-        "roe":           raw.get("roe"),
-        "debt_to_equity":raw.get("debtEquity"),
+        "symbol": ticker.upper(),
+        "market_cap": raw.get("marketcap"),
+        "pe_ratio": raw.get("pe"),
+        "eps": raw.get("eps"),
+        "book_value": raw.get("bvps"),
+        "dividend_yield": raw.get("dividendYield"),
+        "roe": raw.get("roe"),
+        "debt_to_equity": raw.get("debtEquity"),
         "current_ratio": raw.get("currentRatio"),
-        "gross_margin":  raw.get("grossMargin"),
-        "net_margin":    raw.get("profitMargin"),
-        "revenue":       raw.get("revenue"),
-        "net_income":    raw.get("netinc"),
+        "gross_margin": raw.get("grossMargin"),
+        "net_margin": raw.get("profitMargin"),
+        "revenue": raw.get("revenue"),
+        "net_income": raw.get("netinc"),
     }
 
     # D/E fallback: equity multiplier = ROE / ROA;  D/E = multiplier - 1

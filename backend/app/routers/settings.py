@@ -40,15 +40,16 @@ router = APIRouter(prefix="/api/settings", tags=["settings"])
 
 # ── Pydantic schemas ───────────────────────────────────────────────────────────
 
+
 class HoldingOut(BaseModel):
-    id:         int
-    ticker:     str
-    name:       str
-    market:     str
-    shares:     float
-    avg_cost:   float
-    sector:     str
-    is_active:  bool
+    id: int
+    ticker: str
+    name: str
+    market: str
+    shares: float
+    avg_cost: float
+    sector: str
+    is_active: bool
     created_at: datetime
 
     class Config:
@@ -56,51 +57,52 @@ class HoldingOut(BaseModel):
 
 
 class ClosedOut(BaseModel):
-    id:          int
-    ticker:      str
-    name:        str
-    market:      str
+    id: int
+    ticker: str
+    name: str
+    market: str
     realized_pl: float
-    closed_at:   datetime
+    closed_at: datetime
 
     class Config:
         from_attributes = True
 
 
 class CreateHoldingBody(BaseModel):
-    ticker:   str   = Field(..., min_length=1, max_length=20)
-    name:     str   = Field(..., min_length=1, max_length=120)
-    market:   str   = Field(..., pattern="^(ngx|us)$")
-    shares:   float = Field(..., gt=0)
+    ticker: str = Field(..., min_length=1, max_length=20)
+    name: str = Field(..., min_length=1, max_length=120)
+    market: str = Field(..., pattern="^(ngx|us)$")
+    shares: float = Field(..., gt=0)
     avg_cost: float = Field(..., gt=0)
-    sector:   str   = Field(default="Other", max_length=60)
+    sector: str = Field(default="Other", max_length=60)
 
 
 class UpdateHoldingBody(BaseModel):
-    name:     Optional[str]   = Field(None, min_length=1, max_length=120)
-    sector:   Optional[str]   = Field(None, max_length=60)
+    name: Optional[str] = Field(None, min_length=1, max_length=120)
+    sector: Optional[str] = Field(None, max_length=60)
     avg_cost: Optional[float] = Field(None, gt=0)
-    shares:   Optional[float] = Field(None, ge=0)
+    shares: Optional[float] = Field(None, ge=0)
 
 
 class BuyBody(BaseModel):
-    shares:    float = Field(..., gt=0, description="Number of new shares to add")
+    shares: float = Field(..., gt=0, description="Number of new shares to add")
     buy_price: float = Field(..., gt=0, description="Price per share paid")
 
 
 class SellBody(BaseModel):
     shares_sold: float = Field(..., gt=0, description="Number of shares to sell")
-    sale_price:  float = Field(..., gt=0, description="Price per share received")
+    sale_price: float = Field(..., gt=0, description="Price per share received")
 
 
 class SellResponse(BaseModel):
-    holding:        HoldingOut
-    realized_pl:    float
-    fully_closed:   bool
+    holding: HoldingOut
+    realized_pl: float
+    fully_closed: bool
     closed_position: Optional[ClosedOut] = None
 
 
 # ── Endpoints ──────────────────────────────────────────────────────────────────
+
 
 @router.get("/holdings", response_model=list[HoldingOut])
 def list_holdings(
@@ -119,13 +121,13 @@ def add_holding(
     try:
         return create_holding(
             db,
-            ticker   = body.ticker,
-            name     = body.name,
-            market   = body.market,
-            shares   = body.shares,
-            avg_cost = body.avg_cost,
-            sector   = body.sector,
-            user_id  = current_user.id,
+            ticker=body.ticker,
+            name=body.name,
+            market=body.market,
+            shares=body.shares,
+            avg_cost=body.avg_cost,
+            sector=body.sector,
+            user_id=current_user.id,
         )
     except Exception:
         log.exception("Error creating holding")
@@ -140,11 +142,13 @@ def edit_holding(
     current_user: User = Depends(get_current_user),
 ):
     obj = update_holding(
-        db, holding_id, current_user.id,
-        name     = body.name,
-        sector   = body.sector,
-        avg_cost = body.avg_cost,
-        shares   = body.shares,
+        db,
+        holding_id,
+        current_user.id,
+        name=body.name,
+        sector=body.sector,
+        avg_cost=body.avg_cost,
+        shares=body.shares,
     )
     if obj is None:
         raise HTTPException(status_code=404, detail="Holding not found")
@@ -168,7 +172,13 @@ def buy_more(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    obj = add_shares(db, holding_id, current_user.id, new_shares=body.shares, buy_price=body.buy_price)
+    obj = add_shares(
+        db,
+        holding_id,
+        current_user.id,
+        new_shares=body.shares,
+        buy_price=body.buy_price,
+    )
     if obj is None:
         raise HTTPException(status_code=404, detail="Holding not found")
     return obj
@@ -187,20 +197,24 @@ def sell_shares(
     if body.shares_sold > holding.shares:
         raise HTTPException(
             status_code=400,
-            detail=f"Cannot sell {body.shares_sold} shares — only {holding.shares} held"
+            detail=f"Cannot sell {body.shares_sold} shares — only {holding.shares} held",
         )
 
-    realized_pl  = (body.sale_price - holding.avg_cost) * body.shares_sold
-    obj, closed  = record_sale(db, holding_id, current_user.id, body.shares_sold, body.sale_price)
+    realized_pl = (body.sale_price - holding.avg_cost) * body.shares_sold
+    obj, closed = record_sale(
+        db, holding_id, current_user.id, body.shares_sold, body.sale_price
+    )
 
     if obj is None:
         raise HTTPException(status_code=500, detail="Failed to process sale")
 
     return SellResponse(
-        holding          = HoldingOut.model_validate(obj),
-        realized_pl      = round(realized_pl, 4),
-        fully_closed     = not obj.is_active,
-        closed_position  = ClosedOut.model_validate(closed) if closed is not None else None,
+        holding=HoldingOut.model_validate(obj),
+        realized_pl=round(realized_pl, 4),
+        fully_closed=not obj.is_active,
+        closed_position=ClosedOut.model_validate(closed)
+        if closed is not None
+        else None,
     )
 
 

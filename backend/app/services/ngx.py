@@ -35,7 +35,7 @@ _cache: Dict = {
     "ts": 0.0,
 }
 _intraday_cache: Dict[str, Dict] = {}
-_intraday_ts:    Dict[str, float] = {}
+_intraday_ts: Dict[str, float] = {}
 
 NGX_LIST_URL = f"{settings.NGX_SOURCE_BASE_URL}/list/nigerian-stock-exchange/"
 
@@ -60,7 +60,9 @@ def _safe_float(text: str, default=None) -> Optional[float]:
         return default
     try:
         # Clean up: remove spaces, currency, commas, and percentage signs
-        cleaned = text.strip().replace(",", "").replace("₦", "").replace("%", "").split()[0]
+        cleaned = (
+            text.strip().replace(",", "").replace("₦", "").replace("%", "").split()[0]
+        )
         return float(cleaned)
     except (ValueError, IndexError, AttributeError):
         return default
@@ -74,30 +76,33 @@ def _get_quote_intraday(ticker: str) -> Dict[str, Optional[float]]:
     """
     out: Dict[str, Optional[float]] = {"high": None, "low": None, "volume": None}
     now = time.time()
-    if ticker in _intraday_cache and (now - _intraday_ts.get(ticker, 0)) < settings.NGX_PRICE_TTL:
+    if (
+        ticker in _intraday_cache
+        and (now - _intraday_ts.get(ticker, 0)) < settings.NGX_PRICE_TTL
+    ):
         return _intraday_cache[ticker]
     try:
-        url  = f"{settings.NGX_SOURCE_BASE_URL}/quote/ngx/{ticker.lower()}/"
+        url = f"{settings.NGX_SOURCE_BASE_URL}/quote/ngx/{ticker.lower()}/"
         headers = {"User-Agent": USER_AGENT}
         resp = requests.get(url, headers=headers, timeout=15)
         resp.raise_for_status()
         text = resp.text
 
-        m = re.search(r'quote:\{([^}]+)\}', text)
+        m = re.search(r"quote:\{([^}]+)\}", text)
         if not m:
             return out
         block = m.group(1)
 
         for key, dest in (("h", "high"), ("l", "low")):
-            vm = re.search(rf'\b{key}:([\d.]+)', block)
+            vm = re.search(rf"\b{key}:([\d.]+)", block)
             if vm:
                 out[dest] = float(vm.group(1))
 
-        vm = re.search(r'\bv:(\d+)', block)
+        vm = re.search(r"\bv:(\d+)", block)
         if vm:
             out["volume"] = float(vm.group(1))
         _intraday_cache[ticker] = out
-        _intraday_ts[ticker]    = now
+        _intraday_ts[ticker] = now
     except Exception as exc:
         log.debug("[NGX] Could not fetch intraday data for %s: %s", ticker, exc)
     return out
@@ -131,7 +136,7 @@ def _fetch_all_data():
         try:
             # Actual table structure from NGX_SOURCE_BASE_URL:
             # [0] No. [1] Symbol(link) [2] Company Name [3] Market Cap [4] Stock Price [5] % Change [6] Revenue
-            
+
             # Extract ticker from column 1 (contains link)
             ticker_cell = cells[1]
             ticker_link = ticker_cell.find("a")
@@ -143,25 +148,25 @@ def _fetch_all_data():
 
             # Direct column mapping (no "smart detection" needed - we know the structure)
             price = _safe_float(cells[4].text) if len(cells) > 4 else None
-            
+
             # % Change is in column 5
             change_pct = None
             if len(cells) > 5:
                 text = cells[5].text.strip()
                 if text and text != "-":  # Table uses "-" for no data
                     change_pct = _safe_float(text)
-            
+
             # Calculate change from price and change_pct if needed
             change = None
             if price and change_pct is not None:
                 change = (price * change_pct) / 100
-            
+
             # Volume comes from individual ticker pages (lazy loaded on first request)
             volume = None
 
             # Store price data with all available fields
             if ticker and price is not None:
-               prices[ticker] = NGXPrice(
+                prices[ticker] = NGXPrice(
                     symbol=ticker,
                     price=price,
                     close=None,  # Not available from list page
@@ -310,17 +315,17 @@ def enrich_with_volumes(tickers: List[str]) -> Dict[str, NGXPrice]:
     prices = {}
     for ticker in valid:
         price_obj = _cache["prices"][ticker]
-        intraday  = intraday_map.get(ticker, {})
+        intraday = intraday_map.get(ticker, {})
         prices[ticker] = NGXPrice(
-            symbol     = price_obj.symbol,
-            price      = price_obj.price,
-            close      = price_obj.close,
-            change     = price_obj.change,
-            change_pct = price_obj.change_pct,
-            high       = intraday.get("high")   or price_obj.high,
-            low        = intraday.get("low")    or price_obj.low,
-            volume     = intraday.get("volume") or price_obj.volume,
-            value      = price_obj.value,
+            symbol=price_obj.symbol,
+            price=price_obj.price,
+            close=price_obj.close,
+            change=price_obj.change,
+            change_pct=price_obj.change_pct,
+            high=intraday.get("high") or price_obj.high,
+            low=intraday.get("low") or price_obj.low,
+            volume=intraday.get("volume") or price_obj.volume,
+            value=price_obj.value,
         )
 
     return prices

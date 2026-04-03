@@ -8,7 +8,12 @@ import { ChartSkeleton } from '@/components/atoms/Feedback';
 import PlotlyChart from '@/components/molecules/PlotlyChart';
 import { plotlyLayout, COLORS, sectorColor } from '@/utils/theme';
 import { fmtNGN, fmtPct, isPositive } from '@/utils/formatters';
-import { fetchNGXTickerData, fetchCorrelation, fetchAnalytics, fetchRelativeStrength } from '@/services/api';
+import {
+  fetchNGXTickerData,
+  fetchCorrelation,
+  fetchAnalytics,
+  fetchRelativeStrength,
+} from '@/services/api';
 import type { TickerData, CorrelationData, AnalyticsData, RelativeStrengthData } from '@/models';
 
 export default function NGXAdvancedPage() {
@@ -207,42 +212,62 @@ export default function NGXAdvancedPage() {
   // ── Sector fundamentals (percentile rank within sector) ───────────────────────
   const sectorFundamentals = useMemo(() => {
     if (!Object.keys(tickerMap).length) return null;
-    const rows = active.map((s) => {
-      const td = tickerMap[s.Ticker];
-      if (!td) return null;
-      return {
-        ticker:    s.Ticker,
-        sector:    s.Sector || 'Other',
-        pe:        _n(td.overview?.pe_ratio),
-        roe:       _n(td.overview?.roe),
-        netMargin: _n(td.performance?.net_margin),
-        opMargin:  _n(td.performance?.operating_margin),
-      };
-    }).filter(Boolean) as { ticker: string; sector: string; pe: number|null; roe: number|null; netMargin: number|null; opMargin: number|null }[];
+    const rows = active
+      .map((s) => {
+        const td = tickerMap[s.Ticker];
+        if (!td) return null;
+        return {
+          ticker: s.Ticker,
+          sector: s.Sector || 'Other',
+          pe: _n(td.overview?.pe_ratio),
+          roe: _n(td.overview?.roe),
+          netMargin: _n(td.performance?.net_margin),
+          opMargin: _n(td.performance?.operating_margin),
+        };
+      })
+      .filter(Boolean) as {
+      ticker: string;
+      sector: string;
+      pe: number | null;
+      roe: number | null;
+      netMargin: number | null;
+      opMargin: number | null;
+    }[];
 
     const bySector: Record<string, typeof rows> = {};
-    rows.forEach((r) => { (bySector[r.sector] ??= []).push(r); });
+    rows.forEach((r) => {
+      (bySector[r.sector] ??= []).push(r);
+    });
 
-    const avg = (vals: (number|null)[]) => {
+    const avg = (vals: (number | null)[]) => {
       const v = vals.filter((x): x is number => x != null);
       return v.length ? v.reduce((a, b) => a + b, 0) / v.length : null;
     };
-    const pctRank = (val: number|null, all: (number|null)[], higherBetter = true) => {
+    const pctRank = (val: number | null, all: (number | null)[], higherBetter = true) => {
       if (val == null) return null;
       const valid = all.filter((x): x is number => x != null);
       if (!valid.length) return null;
-      const below = valid.filter((x) => higherBetter ? x < val : x > val).length;
+      const below = valid.filter((x) => (higherBetter ? x < val : x > val)).length;
       return Math.round((below / valid.length) * 100);
     };
 
-    const sectorAvgs: Record<string, { avg_pe: number|null; avg_roe: number|null; avg_net_margin: number|null; avg_op_margin: number|null; count: number }> = {};
+    const sectorAvgs: Record<
+      string,
+      {
+        avg_pe: number | null;
+        avg_roe: number | null;
+        avg_net_margin: number | null;
+        avg_op_margin: number | null;
+        count: number;
+      }
+    > = {};
     for (const [sector, items] of Object.entries(bySector)) {
       sectorAvgs[sector] = {
-        avg_pe:         avg(items.map((i) => i.pe)),
-        avg_roe:        avg(items.map((i) => i.roe)),
+        avg_pe: avg(items.map((i) => i.pe)),
+        avg_roe: avg(items.map((i) => i.roe)),
         avg_net_margin: avg(items.map((i) => i.netMargin)),
-        avg_op_margin:  avg(items.map((i) => i.opMargin)),
-        count:          items.length,
+        avg_op_margin: avg(items.map((i) => i.opMargin)),
+        count: items.length,
       };
     }
 
@@ -250,9 +275,21 @@ export default function NGXAdvancedPage() {
       const peers = bySector[r.sector];
       return {
         ...r,
-        pe_rank:  pctRank(r.pe,        peers.map((p) => p.pe),        false),
-        roe_rank: pctRank(r.roe,       peers.map((p) => p.roe),       true),
-        nm_rank:  pctRank(r.netMargin, peers.map((p) => p.netMargin), true),
+        pe_rank: pctRank(
+          r.pe,
+          peers.map((p) => p.pe),
+          false,
+        ),
+        roe_rank: pctRank(
+          r.roe,
+          peers.map((p) => p.roe),
+          true,
+        ),
+        nm_rank: pctRank(
+          r.netMargin,
+          peers.map((p) => p.netMargin),
+          true,
+        ),
       };
     });
 
@@ -262,13 +299,17 @@ export default function NGXAdvancedPage() {
   // ── Relative strength bar chart trace ─────────────────────────────────────────
   const rsBarTrace = relStrength?.items.length
     ? {
-        type:        'bar',
+        type: 'bar',
         orientation: 'h',
         y: relStrength.items.map((i) => i.ticker),
         x: relStrength.items.map((i) => i.rs_pct ?? i.stock_return ?? 0),
         marker: {
           color: relStrength.items.map((i) =>
-            i.outperform === true ? COLORS.gain : i.outperform === false ? COLORS.loss : COLORS['border-strong'],
+            i.outperform === true
+              ? COLORS.gain
+              : i.outperform === false
+                ? COLORS.loss
+                : COLORS['border-strong'],
           ),
           opacity: 0.85,
         },
@@ -542,8 +583,12 @@ export default function NGXAdvancedPage() {
             data={[rsBarTrace]}
             layout={plotlyLayout({
               margin: { t: 8, b: 40, l: 80, r: 24 },
-              xaxis:  { ticksuffix: '%', tickfont: { size: 9 }, zerolinecolor: COLORS['border-strong'] },
-              yaxis:  { tickfont: { size: 10 } },
+              xaxis: {
+                ticksuffix: '%',
+                tickfont: { size: 9 },
+                zerolinecolor: COLORS['border-strong'],
+              },
+              yaxis: { tickfont: { size: 10 } },
               bargap: 0.35,
             })}
             height={Math.max(240, (relStrength?.items.length ?? 0) * 36 + 60)}
@@ -581,7 +626,15 @@ export default function NGXAdvancedPage() {
                     return 'text-[var(--loss)]';
                   };
                   const fmt = (v: number | null, dec = 1) => (v != null ? v.toFixed(dec) : '—');
-                  const RankCell = ({ val, rank, dec = 1 }: { val: number | null; rank: number | null; dec?: number }) => (
+                  const RankCell = ({
+                    val,
+                    rank,
+                    dec = 1,
+                  }: {
+                    val: number | null;
+                    rank: number | null;
+                    dec?: number;
+                  }) => (
                     <td className="text-right py-2 px-3 font-mono">
                       <span className="text-[var(--ink-2)]">{fmt(val, dec)}</span>
                       {rank != null && (
@@ -596,22 +649,34 @@ export default function NGXAdvancedPage() {
                     lastSector = r.sector;
                     return [
                       showHeader && (
-                        <tr key={`hdr-${r.sector}`} className="bg-[var(--sidebar)] border-t border-[var(--border)]">
-                          <td colSpan={6} className="py-1.5 px-3 text-[9px] font-bold uppercase tracking-widest text-[var(--ink-3)]">
+                        <tr
+                          key={`hdr-${r.sector}`}
+                          className="bg-[var(--sidebar)] border-t border-[var(--border)]"
+                        >
+                          <td
+                            colSpan={6}
+                            className="py-1.5 px-3 text-[9px] font-bold uppercase tracking-widest text-[var(--ink-3)]"
+                          >
                             {r.sector}
                             <span className="ml-2 font-normal text-[var(--ink-4)]">
-                              avg P/E {fmt(sa.avg_pe)} · ROE {fmt(sa.avg_roe)}% · NM {fmt(sa.avg_net_margin)}% · OM {fmt(sa.avg_op_margin)}%
+                              avg P/E {fmt(sa.avg_pe)} · ROE {fmt(sa.avg_roe)}% · NM{' '}
+                              {fmt(sa.avg_net_margin)}% · OM {fmt(sa.avg_op_margin)}%
                             </span>
                           </td>
                         </tr>
                       ),
-                      <tr key={r.ticker} className="border-b border-[var(--border)] hover:bg-[var(--sidebar)] transition-colors">
-                        <td className="py-2 px-3 font-mono font-semibold text-[var(--ink)]">{r.ticker}</td>
+                      <tr
+                        key={r.ticker}
+                        className="border-b border-[var(--border)] hover:bg-[var(--sidebar)] transition-colors"
+                      >
+                        <td className="py-2 px-3 font-mono font-semibold text-[var(--ink)]">
+                          {r.ticker}
+                        </td>
                         <td className="py-2 px-3 text-[var(--ink-3)]" />
-                        <RankCell val={r.pe}        rank={r.pe_rank}  />
-                        <RankCell val={r.roe}       rank={r.roe_rank} />
-                        <RankCell val={r.netMargin} rank={r.nm_rank}  />
-                        <RankCell val={r.opMargin}  rank={null}       />
+                        <RankCell val={r.pe} rank={r.pe_rank} />
+                        <RankCell val={r.roe} rank={r.roe_rank} />
+                        <RankCell val={r.netMargin} rank={r.nm_rank} />
+                        <RankCell val={r.opMargin} rank={null} />
                       </tr>,
                     ];
                   });
@@ -619,7 +684,8 @@ export default function NGXAdvancedPage() {
               </tbody>
             </table>
             <p className="text-[9px] text-[var(--ink-4)] px-3 pb-2 mt-1">
-              p = percentile rank within sector (0 = lowest, 100 = highest). Lower P/E ranked higher.
+              p = percentile rank within sector (0 = lowest, 100 = highest). Lower P/E ranked
+              higher.
             </p>
           </div>
         </ChartCard>

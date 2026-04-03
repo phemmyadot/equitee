@@ -97,21 +97,23 @@ def _scrape_history_page(ticker: str) -> list[dict]:
     for body in full_objects:
         d = _parse_obj(body)
         date_s = d.get("t")
-        if not date_s or not re.match(r'\d{4}-\d{2}-\d{2}', date_s):
+        if not date_s or not re.match(r"\d{4}-\d{2}-\d{2}", date_s):
             continue
         close_val = _f(d, "c")
         if close_val is None:
             continue
-        rows.append({
-            "date":       date_s,
-            "close":      close_val,
-            "open":       _f(d, "o"),
-            "high":       _f(d, "h"),
-            "low":        _f(d, "l"),
-            "volume":     _f(d, "v"),
-            "change_pct": _f(d, "ch"),
-            "source":     "history",
-        })
+        rows.append(
+            {
+                "date": date_s,
+                "close": close_val,
+                "open": _f(d, "o"),
+                "high": _f(d, "h"),
+                "low": _f(d, "l"),
+                "volume": _f(d, "v"),
+                "change_pct": _f(d, "ch"),
+                "source": "history",
+            }
+        )
 
     rows.sort(key=lambda r: r["date"])
     log.info("[History] Scraped %d rows for %s from history page", len(rows), ticker)
@@ -121,19 +123,22 @@ def _scrape_history_page(ticker: str) -> list[dict]:
 def _fallback_chart_rows(ticker: str, days: int = 400) -> list[dict]:
     """Use fetch_chart_history as fallback and convert to daily_price_history format."""
     from app.services.overview import fetch_chart_history
+
     chart_rows = fetch_chart_history(ticker, days=days)
     result = []
     for r in chart_rows:
-        result.append({
-            "date":       r["ts"][:10],
-            "close":      r.get("price"),
-            "open":       None,
-            "high":       None,
-            "low":        None,
-            "volume":     None,
-            "change_pct": r.get("change_pct"),
-            "source":     "chart",
-        })
+        result.append(
+            {
+                "date": r["ts"][:10],
+                "close": r.get("price"),
+                "open": None,
+                "high": None,
+                "low": None,
+                "volume": None,
+                "change_pct": r.get("change_pct"),
+                "source": "chart",
+            }
+        )
     return result
 
 
@@ -152,9 +157,13 @@ def refresh_ticker_history(ticker: str, force: bool = False) -> int:
 
     Returns the total number of rows upserted.
     """
-    from app.db.crud import get_latest_daily_date, get_oldest_daily_date, upsert_daily_price_rows
+    from app.db.crud import (
+        get_latest_daily_date,
+        get_oldest_daily_date,
+        upsert_daily_price_rows,
+    )
 
-    t     = ticker.upper()
+    t = ticker.upper()
     today = date.today().isoformat()
 
     with SessionLocal() as db:
@@ -182,14 +191,18 @@ def refresh_ticker_history(ticker: str, force: bool = False) -> int:
                 chart_rows = _fallback_chart_rows(t, days=400)
                 older_rows = [r for r in chart_rows if r["date"] < oldest]
                 if older_rows:
-                    log.info("[History] Backfilling %d older rows for %s (oldest was %s)",
-                             len(older_rows), t, oldest)
+                    log.info(
+                        "[History] Backfilling %d older rows for %s (oldest was %s)",
+                        len(older_rows),
+                        t,
+                        oldest,
+                    )
                     total += upsert_daily_price_rows(db, t, older_rows)
 
         # ── Step 3: full fallback when history page returned nothing ───────
         if not history_rows:
             chart_rows = _fallback_chart_rows(t, days=400)
-            new_chart  = [r for r in chart_rows if not latest or r["date"] > latest]
+            new_chart = [r for r in chart_rows if not latest or r["date"] > latest]
             if new_chart:
                 total += upsert_daily_price_rows(db, t, new_chart)
 

@@ -23,14 +23,14 @@ from app.routers import data, prices, fx, history, profile, settings as settings
 from app.routers import auth as auth_router
 from app.routers import watchlist as watchlist_router
 from app.db.engine import engine, SessionLocal
-from app.db import models as db_models          # registers all ORM tables
+from app.db import models as db_models  # registers all ORM tables
 from app.db.seed import seed_from_json
 from app.auth.security import hash_password
 
 logging.basicConfig(
-    level   = logging.INFO,
-    format  = "%(asctime)s  %(levelname)-8s  %(name)s  %(message)s",
-    datefmt = "%H:%M:%S",
+    level=logging.INFO,
+    format="%(asctime)s  %(levelname)-8s  %(name)s  %(message)s",
+    datefmt="%H:%M:%S",
 )
 
 if not settings.SECRET_KEY and settings.ENVIRONMENT == "production":
@@ -43,14 +43,15 @@ def ensure_first_admin(db) -> None:
     """Create the first admin user from env vars if the users table is empty."""
     from sqlalchemy import select, func
     from app.db.models import User
+
     count = db.scalar(select(func.count()).select_from(User))
     if count == 0 and settings.FIRST_ADMIN_EMAIL and settings.FIRST_ADMIN_PASSWORD:
         admin = User(
-            email     = settings.FIRST_ADMIN_EMAIL,
-            username  = "admin",
-            hashed_pw = hash_password(settings.FIRST_ADMIN_PASSWORD),
-            is_admin  = True,
-            is_active = True,
+            email=settings.FIRST_ADMIN_EMAIL,
+            username="admin",
+            hashed_pw=hash_password(settings.FIRST_ADMIN_PASSWORD),
+            is_admin=True,
+            is_active=True,
         )
         db.add(admin)
         db.commit()
@@ -74,29 +75,32 @@ async def lifespan(app: FastAPI):
     yield
     # ── Shutdown (nothing to do) ──────────────────────────────────────────────
 
+
 _is_prod = settings.ENVIRONMENT == "production"
 
 app = FastAPI(
-    title       = "equitee API",
-    description = "NGX + US equity portfolio with live prices and FX conversion.",
-    version     = "2.0.0",
-    lifespan    = lifespan,
+    title="equitee API",
+    description="NGX + US equity portfolio with live prices and FX conversion.",
+    version="2.0.0",
+    lifespan=lifespan,
     # Disable interactive docs in production — they expose the full API schema
-    docs_url    = None if _is_prod else "/docs",
-    redoc_url   = None if _is_prod else "/redoc",
-    openapi_url = None if _is_prod else "/openapi.json",
+    docs_url=None if _is_prod else "/docs",
+    redoc_url=None if _is_prod else "/redoc",
+    openapi_url=None if _is_prod else "/openapi.json",
 )
 
 app.state.limiter = limiter
-app.add_exception_handler(RateLimitExceeded, cast(Callable[[Any, Any], Any], _rate_limit_exceeded_handler))
+app.add_exception_handler(
+    RateLimitExceeded, cast(Callable[[Any, Any], Any], _rate_limit_exceeded_handler)
+)
 
 # ── CORS ─────────────────────────────────────────────────────────────────────
 app.add_middleware(
     CORSMiddleware,
-    allow_origins     = settings.CORS_ORIGINS,
-    allow_credentials = True,
-    allow_methods     = ["GET", "POST", "PUT", "DELETE"],
-    allow_headers     = ["Content-Type", "Accept", "Authorization"],
+    allow_origins=settings.CORS_ORIGINS,
+    allow_credentials=True,
+    allow_methods=["GET", "POST", "PUT", "DELETE"],
+    allow_headers=["Content-Type", "Accept", "Authorization"],
 )
 
 # ── Routers ───────────────────────────────────────────────────────────────────
@@ -108,6 +112,7 @@ app.include_router(history.router)
 app.include_router(settings_router.router)
 app.include_router(profile.router)
 app.include_router(watchlist_router.router)
+
 
 # ── Health check ─────────────────────────────────────────────────────────────
 @app.get("/health", tags=["meta"])
@@ -124,5 +129,7 @@ async def chrome_devtools():
 # ── Dev runner ────────────────────────────────────────────────────────────────
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run("app.main:app", host=settings.HOST,
-                port=settings.PORT, reload=settings.RELOAD)
+
+    uvicorn.run(
+        "app.main:app", host=settings.HOST, port=settings.PORT, reload=settings.RELOAD
+    )

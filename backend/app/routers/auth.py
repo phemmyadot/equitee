@@ -28,7 +28,8 @@ def _set_auth_cookies(response: Response, user: User, db: Session) -> None:
     """Issue access token cookie and create+store a refresh token cookie."""
     access_token = create_access_token(user.id)
     response.set_cookie(
-        "access_token", access_token,
+        "access_token",
+        access_token,
         max_age=settings.ACCESS_TOKEN_EXPIRE_MINUTES * 60,
         httponly=True,
         samesite="lax",
@@ -37,11 +38,13 @@ def _set_auth_cookies(response: Response, user: User, db: Session) -> None:
     )
 
     refresh_token = str(uuid.uuid4())
-    expires_at = datetime.now(timezone.utc) + \
-        timedelta(days=settings.REFRESH_TOKEN_EXPIRE_DAYS)
+    expires_at = datetime.now(timezone.utc) + timedelta(
+        days=settings.REFRESH_TOKEN_EXPIRE_DAYS
+    )
     crud.create_refresh_token(db, user.id, refresh_token, expires_at)
     response.set_cookie(
-        "refresh_token", refresh_token,
+        "refresh_token",
+        refresh_token,
         max_age=settings.REFRESH_TOKEN_EXPIRE_DAYS * 86400,
         httponly=True,
         samesite="lax",
@@ -51,6 +54,7 @@ def _set_auth_cookies(response: Response, user: User, db: Session) -> None:
 
 
 # ── Schemas ───────────────────────────────────────────────────────────────────
+
 
 class RegisterRequest(BaseModel):
     email: EmailStr
@@ -95,37 +99,54 @@ class InviteResponse(BaseModel):
 
 # ── Endpoints ─────────────────────────────────────────────────────────────────
 
+
 @router.post("/register", response_model=UserResponse, status_code=201)
 @limiter.limit("5/minute")
-def register(request: Request, body: RegisterRequest, response: Response, db: Session = Depends(get_db)):
+def register(
+    request: Request,
+    body: RegisterRequest,
+    response: Response,
+    db: Session = Depends(get_db),
+):
     if settings.REGISTRATION_MODE == "invite":
         if not body.invite_code:
             raise HTTPException(status_code=400, detail="Invite code required")
         invite = crud.get_invite_code(db, body.invite_code)
         if invite is None or invite.used_by is not None:
             raise HTTPException(
-                status_code=400, detail="Invalid or already-used invite code")
+                status_code=400, detail="Invalid or already-used invite code"
+            )
 
     if crud.get_user_by_email(db, body.email):
         raise HTTPException(status_code=409, detail="Email already registered")
     if crud.get_user_by_username(db, body.username):
         raise HTTPException(status_code=409, detail="Username already taken")
 
-    user = crud.create_user(db, body.email, body.username,
-                            hash_password(body.password))
+    user = crud.create_user(db, body.email, body.username, hash_password(body.password))
 
     if settings.REGISTRATION_MODE == "invite" and body.invite_code:
         crud.use_invite_code(db, body.invite_code, user.id)
 
     _set_auth_cookies(response, user, db)
-    return UserResponse(user_id=user.id, username=user.username, email=user.email, is_admin=user.is_admin)
+    return UserResponse(
+        user_id=user.id,
+        username=user.username,
+        email=user.email,
+        is_admin=user.is_admin,
+    )
 
 
 @router.post("/login", response_model=UserResponse)
 @limiter.limit("10/minute")
-def login(request: Request, body: LoginRequest, response: Response, db: Session = Depends(get_db)):
-    user = crud.get_user_by_email(db, body.username_or_email) \
-        or crud.get_user_by_username(db, body.username_or_email)
+def login(
+    request: Request,
+    body: LoginRequest,
+    response: Response,
+    db: Session = Depends(get_db),
+):
+    user = crud.get_user_by_email(
+        db, body.username_or_email
+    ) or crud.get_user_by_username(db, body.username_or_email)
 
     if user is None or not verify_password(body.password, user.hashed_pw):
         raise HTTPException(status_code=401, detail="Invalid credentials")
@@ -134,7 +155,12 @@ def login(request: Request, body: LoginRequest, response: Response, db: Session 
 
     _set_auth_cookies(response, user, db)
     log.info("User %r logged in", user.username)
-    return UserResponse(user_id=user.id, username=user.username, email=user.email, is_admin=user.is_admin)
+    return UserResponse(
+        user_id=user.id,
+        username=user.username,
+        email=user.email,
+        is_admin=user.is_admin,
+    )
 
 
 @router.post("/logout", status_code=204)
@@ -166,12 +192,12 @@ def refresh(request: Request, response: Response, db: Session = Depends(get_db))
 
     user = db.get(User, stored.user_id)
     if user is None or not user.is_active:
-        raise HTTPException(
-            status_code=401, detail="User not found or disabled")
+        raise HTTPException(status_code=401, detail="User not found or disabled")
 
     access_token = create_access_token(user.id)
     response.set_cookie(
-        "access_token", access_token,
+        "access_token",
+        access_token,
         max_age=settings.ACCESS_TOKEN_EXPIRE_MINUTES * 60,
         httponly=True,
         samesite="lax",
@@ -192,26 +218,30 @@ def me(current_user: User = Depends(get_current_user)):
 
 
 @router.post("/invite")
-def create_invite(admin: User = Depends(get_current_admin), db: Session = Depends(get_db)):
+def create_invite(
+    admin: User = Depends(get_current_admin), db: Session = Depends(get_db)
+):
     code = str(uuid.uuid4())[:8].upper()
     inv = crud.create_invite_code(db, code, admin.id)
     log.info("Admin %r created invite code %r", admin.username, code)
     return {
-        "code":       inv.code,
-        "used":       False,
-        "used_at":    None,
+        "code": inv.code,
+        "used": False,
+        "used_at": None,
         "created_at": inv.created_at.isoformat(),
     }
 
 
 @router.get("/invites")
-def list_invites(admin: User = Depends(get_current_admin), db: Session = Depends(get_db)):
+def list_invites(
+    admin: User = Depends(get_current_admin), db: Session = Depends(get_db)
+):
     codes = crud.list_invite_codes(db, admin.id)
     return [
         {
-            "code":       c.code,
-            "used":       c.used_by is not None,
-            "used_at":    c.used_at.isoformat() if c.used_at else None,
+            "code": c.code,
+            "used": c.used_by is not None,
+            "used_at": c.used_at.isoformat() if c.used_at else None,
             "created_at": c.created_at.isoformat(),
         }
         for c in codes

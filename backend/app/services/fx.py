@@ -29,11 +29,14 @@ _RATE_MAX = 5000
 
 
 def _http_get(url: str, timeout: int = 8) -> str:
-    req = urllib.request.Request(url, headers={
-        "User-Agent":      "Mozilla/5.0 (Windows NT 10.0; Win64; x64)",
-        "Accept":          "application/json, text/html, */*",
-        "Accept-Language": "en-US,en;q=0.9",
-    })
+    req = urllib.request.Request(
+        url,
+        headers={
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)",
+            "Accept": "application/json, text/html, */*",
+            "Accept-Language": "en-US,en;q=0.9",
+        },
+    )
     with urllib.request.urlopen(req, timeout=timeout) as r:
         return r.read().decode("utf-8", errors="ignore")
 
@@ -56,7 +59,7 @@ def _try_er_api() -> Optional[float]:
 
 def _try_google_finance() -> Optional[float]:
     try:
-        q    = urllib.parse.quote("USD to NGN exchange rate")
+        q = urllib.parse.quote("USD to NGN exchange rate")
         html = _http_get(f"https://www.google.com/search?q={q}&hl=en&gl=us", timeout=10)
         for pat in [
             r"([\d,]+\.?\d*)\s*Nigerian Naira",
@@ -75,7 +78,9 @@ def _try_google_finance() -> Optional[float]:
 
 def _try_wise() -> Optional[float]:
     try:
-        data = json.loads(_http_get("https://wise.com/rates/live?source=USD&target=NGN"))
+        data = json.loads(
+            _http_get("https://wise.com/rates/live?source=USD&target=NGN")
+        )
         rate = float(data["value"])
         if _valid(rate):
             log.info(f"[FX] wise → {rate}")
@@ -87,8 +92,8 @@ def _try_wise() -> Optional[float]:
 
 _SOURCES = [
     ("exchangerate-api", _try_er_api),
-    ("google-finance",   _try_google_finance),
-    ("wise",             _try_wise),
+    ("google-finance", _try_google_finance),
+    ("wise", _try_wise),
 ]
 
 

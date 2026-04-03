@@ -14,7 +14,9 @@ from app.db.engine import Base, _normalise_url
 import app.db.models  # noqa: F401 — registers all ORM models with Base
 
 config = context.config
-config.set_main_option("sqlalchemy.url", _normalise_url(settings.DATABASE_URL).replace("%", "%%"))
+config.set_main_option(
+    "sqlalchemy.url", _normalise_url(settings.DATABASE_URL).replace("%", "%%")
+)
 
 if config.config_file_name is not None:
     fileConfig(config.config_file_name)
@@ -24,8 +26,12 @@ target_metadata = Base.metadata
 
 def run_migrations_offline() -> None:
     url = config.get_main_option("sqlalchemy.url")
-    context.configure(url=url, target_metadata=target_metadata, literal_binds=True,
-                      dialect_opts={"paramstyle": "named"})
+    context.configure(
+        url=url,
+        target_metadata=target_metadata,
+        literal_binds=True,
+        dialect_opts={"paramstyle": "named"},
+    )
     with context.begin_transaction():
         context.run_migrations()
 
@@ -38,8 +44,11 @@ def run_migrations_online() -> None:
     )
     with connectable.connect() as connection:
         is_sqlite = connection.engine.url.drivername.startswith("sqlite")
-        context.configure(connection=connection, target_metadata=target_metadata,
-                          render_as_batch=is_sqlite)
+        context.configure(
+            connection=connection,
+            target_metadata=target_metadata,
+            render_as_batch=is_sqlite,
+        )
         with context.begin_transaction():
             context.run_migrations()
 

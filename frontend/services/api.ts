@@ -37,7 +37,12 @@ export type {
   DividendsResponse,
 } from '@/models/dividends';
 
-export type { CorrelationData, AnalyticsData, RelativeStrengthItem, RelativeStrengthData } from '@/models/analytics';
+export type {
+  CorrelationData,
+  AnalyticsData,
+  RelativeStrengthItem,
+  RelativeStrengthData,
+} from '@/models/analytics';
 
 export type { WatchlistItem, WatchlistResponse } from '@/models/watchlist';
 

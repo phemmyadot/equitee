@@ -14,9 +14,17 @@ from sqlalchemy import select, desc
 from sqlalchemy.orm import Session
 
 from app.db.models import (
-    Holding, ClosedPosition, PortfolioSnapshot, PriceHistory,
-    User, RefreshToken, InviteCode,
-    DividendCache, FinancialsCache, DailyPriceHistory, Watchlist,
+    Holding,
+    ClosedPosition,
+    PortfolioSnapshot,
+    PriceHistory,
+    User,
+    RefreshToken,
+    InviteCode,
+    DividendCache,
+    FinancialsCache,
+    DailyPriceHistory,
+    Watchlist,
 )
 
 log = logging.getLogger(__name__)
@@ -24,27 +32,38 @@ log = logging.getLogger(__name__)
 
 # ── Holdings ──────────────────────────────────────────────────────────────────
 
+
 def get_active_holdings(db: Session, market: str, user_id: int) -> list[Holding]:
     """Return all active holdings for a given market ('ngx' or 'us') scoped to user."""
     stmt = (
         select(Holding)
-        .where(Holding.user_id == user_id, Holding.market == market, Holding.is_active == True)
+        .where(
+            Holding.user_id == user_id,
+            Holding.market == market,
+            Holding.is_active == True,
+        )
         .order_by(Holding.ticker)
     )
     return list(db.scalars(stmt).all())
 
 
 def get_all_active_holdings(db: Session, user_id: int) -> list[Holding]:
-    stmt = (select(Holding)
-            .where(Holding.user_id == user_id, Holding.is_active == True)
-            .order_by(Holding.market, Holding.ticker))
+    stmt = (
+        select(Holding)
+        .where(Holding.user_id == user_id, Holding.is_active == True)
+        .order_by(Holding.market, Holding.ticker)
+    )
     return list(db.scalars(stmt).all())
 
 
-def upsert_holding(db: Session, ticker: str, market: str, user_id: int, **kwargs) -> Holding:
+def upsert_holding(
+    db: Session, ticker: str, market: str, user_id: int, **kwargs
+) -> Holding:
     """Update existing holding or insert a new one, scoped to user."""
-    stmt = select(Holding).where(Holding.ticker == ticker, Holding.market == market, Holding.user_id == user_id)
-    obj  = db.scalars(stmt).first()
+    stmt = select(Holding).where(
+        Holding.ticker == ticker, Holding.market == market, Holding.user_id == user_id
+    )
+    obj = db.scalars(stmt).first()
     if obj is None:
         obj = Holding(ticker=ticker, market=market, user_id=user_id, **kwargs)
         db.add(obj)
@@ -58,6 +77,7 @@ def upsert_holding(db: Session, ticker: str, market: str, user_id: int, **kwargs
 
 # ── Holdings — settings CRUD ──────────────────────────────────────────────────
 
+
 def get_holding_by_id(db: Session, holding_id: int, user_id: int) -> Optional[Holding]:
     obj = db.get(Holding, holding_id)
     if obj is None or obj.user_id != user_id:
@@ -66,18 +86,24 @@ def get_holding_by_id(db: Session, holding_id: int, user_id: int) -> Optional[Ho
 
 
 def create_holding(
-    db: Session, ticker: str, name: str, market: str,
-    shares: float, avg_cost: float, sector: str, user_id: int,
+    db: Session,
+    ticker: str,
+    name: str,
+    market: str,
+    shares: float,
+    avg_cost: float,
+    sector: str,
+    user_id: int,
 ) -> Holding:
     obj = Holding(
-        user_id   = user_id,
-        ticker    = ticker.upper(),
-        name      = name,
-        market    = market.lower(),
-        shares    = shares,
-        avg_cost  = avg_cost,
-        sector    = sector,
-        is_active = True,
+        user_id=user_id,
+        ticker=ticker.upper(),
+        name=name,
+        market=market.lower(),
+        shares=shares,
+        avg_cost=avg_cost,
+        sector=sector,
+        is_active=True,
     )
     db.add(obj)
     db.commit()
@@ -87,19 +113,25 @@ def create_holding(
 
 
 def update_holding(
-    db: Session, holding_id: int, user_id: int,
-    name: Optional[str]       = None,
-    sector: Optional[str]     = None,
+    db: Session,
+    holding_id: int,
+    user_id: int,
+    name: Optional[str] = None,
+    sector: Optional[str] = None,
     avg_cost: Optional[float] = None,
-    shares: Optional[float]   = None,
+    shares: Optional[float] = None,
 ) -> Optional[Holding]:
     obj = get_holding_by_id(db, holding_id, user_id)
     if obj is None:
         return None
-    if name     is not None: obj.name     = name
-    if sector   is not None: obj.sector   = sector
-    if avg_cost is not None: obj.avg_cost = avg_cost
-    if shares   is not None: obj.shares   = shares
+    if name is not None:
+        obj.name = name
+    if sector is not None:
+        obj.sector = sector
+    if avg_cost is not None:
+        obj.avg_cost = avg_cost
+    if shares is not None:
+        obj.shares = shares
     db.commit()
     db.refresh(obj)
     return obj
@@ -117,29 +149,40 @@ def delete_holding(db: Session, holding_id: int, user_id: int) -> bool:
 
 
 def add_shares(
-    db: Session, holding_id: int, user_id: int,
-    new_shares: float, buy_price: float,
+    db: Session,
+    holding_id: int,
+    user_id: int,
+    new_shares: float,
+    buy_price: float,
 ) -> Optional[Holding]:
     """Buy more of an existing position, scoped to user."""
     obj = get_holding_by_id(db, holding_id, user_id)
     if obj is None:
         return None
-    old_cost_basis  = obj.shares * obj.avg_cost
-    new_cost_basis  = new_shares * buy_price
-    total_shares    = obj.shares + new_shares
-    obj.avg_cost    = (old_cost_basis + new_cost_basis) / total_shares
-    obj.shares      = total_shares
-    obj.is_active   = True
+    old_cost_basis = obj.shares * obj.avg_cost
+    new_cost_basis = new_shares * buy_price
+    total_shares = obj.shares + new_shares
+    obj.avg_cost = (old_cost_basis + new_cost_basis) / total_shares
+    obj.shares = total_shares
+    obj.is_active = True
     db.commit()
     db.refresh(obj)
-    log.info("Added %.4f shares to %s @ %.4f → new avg %.4f",
-             new_shares, obj.ticker, buy_price, obj.avg_cost)
+    log.info(
+        "Added %.4f shares to %s @ %.4f → new avg %.4f",
+        new_shares,
+        obj.ticker,
+        buy_price,
+        obj.avg_cost,
+    )
     return obj
 
 
 def record_sale(
-    db: Session, holding_id: int, user_id: int,
-    shares_sold: float, sale_price: float,
+    db: Session,
+    holding_id: int,
+    user_id: int,
+    shares_sold: float,
+    sale_price: float,
 ) -> tuple[Optional[Holding], Optional[ClosedPosition]]:
     """
     Sell shares_sold units at sale_price, scoped to user.
@@ -149,26 +192,31 @@ def record_sale(
     if obj is None:
         return None, None
 
-    shares_sold  = min(shares_sold, obj.shares)
-    realized_pl  = (sale_price - obj.avg_cost) * shares_sold
-    obj.shares   = round(obj.shares - shares_sold, 8)
+    shares_sold = min(shares_sold, obj.shares)
+    realized_pl = (sale_price - obj.avg_cost) * shares_sold
+    obj.shares = round(obj.shares - shares_sold, 8)
 
     closed = None
     if obj.shares <= 1e-8:
-        obj.shares    = 0.0
+        obj.shares = 0.0
         obj.is_active = False
         closed = ClosedPosition(
-            user_id     = user_id,
-            ticker      = obj.ticker,
-            name        = obj.name,
-            market      = obj.market,
-            realized_pl = round(realized_pl, 4),
+            user_id=user_id,
+            ticker=obj.ticker,
+            name=obj.name,
+            market=obj.market,
+            realized_pl=round(realized_pl, 4),
         )
         db.add(closed)
         log.info("Full sale: %s → realized P/L %.4f", obj.ticker, realized_pl)
     else:
-        log.info("Partial sale: %s sold %.4f shares → %.4f remaining, P/L %.4f",
-                 obj.ticker, shares_sold, obj.shares, realized_pl)
+        log.info(
+            "Partial sale: %s sold %.4f shares → %.4f remaining, P/L %.4f",
+            obj.ticker,
+            shares_sold,
+            obj.shares,
+            realized_pl,
+        )
 
     db.commit()
     if closed:
@@ -179,24 +227,36 @@ def record_sale(
 
 # ── Closed positions — settings read ─────────────────────────────────────────
 
+
 def get_all_holdings(db: Session, user_id: int) -> list[Holding]:
     """Return ALL holdings (active + inactive) for the settings page, scoped to user."""
-    stmt = (select(Holding)
-            .where(Holding.user_id == user_id)
-            .order_by(Holding.market, Holding.ticker))
+    stmt = (
+        select(Holding)
+        .where(Holding.user_id == user_id)
+        .order_by(Holding.market, Holding.ticker)
+    )
     return list(db.scalars(stmt).all())
 
 
 def get_closed_positions(db: Session, user_id: int) -> list[ClosedPosition]:
-    stmt = (select(ClosedPosition)
-            .where(ClosedPosition.user_id == user_id)
-            .order_by(desc(ClosedPosition.closed_at)))
+    stmt = (
+        select(ClosedPosition)
+        .where(ClosedPosition.user_id == user_id)
+        .order_by(desc(ClosedPosition.closed_at))
+    )
     return list(db.scalars(stmt).all())
 
 
-def insert_closed_position(db: Session, ticker: str, name: str,
-                            market: str, realized_pl: float, user_id: int) -> ClosedPosition:
-    obj = ClosedPosition(user_id=user_id, ticker=ticker, name=name, market=market, realized_pl=realized_pl)
+def insert_closed_position(
+    db: Session, ticker: str, name: str, market: str, realized_pl: float, user_id: int
+) -> ClosedPosition:
+    obj = ClosedPosition(
+        user_id=user_id,
+        ticker=ticker,
+        name=name,
+        market=market,
+        realized_pl=realized_pl,
+    )
     db.add(obj)
     db.commit()
     db.refresh(obj)
@@ -205,11 +265,15 @@ def insert_closed_position(db: Session, ticker: str, name: str,
 
 # ── Snapshots ─────────────────────────────────────────────────────────────────
 
+
 def get_latest_snapshot_ts(db: Session, user_id: int) -> Optional[datetime]:
     """Return timestamp of the most recent snapshot for a user, or None."""
-    stmt = (select(PortfolioSnapshot.ts)
-            .where(PortfolioSnapshot.user_id == user_id)
-            .order_by(desc(PortfolioSnapshot.ts)).limit(1))
+    stmt = (
+        select(PortfolioSnapshot.ts)
+        .where(PortfolioSnapshot.user_id == user_id)
+        .order_by(desc(PortfolioSnapshot.ts))
+        .limit(1)
+    )
     return db.scalars(stmt).first()
 
 
@@ -225,50 +289,60 @@ def should_write_snapshot(db: Session, ttl_seconds: int, user_id: int) -> bool:
 
 
 def write_snapshot(
-    db:            Session,
-    user_id:       int,
-    ngx_equity:    float,
-    ngx_cost:      float,
-    us_equity:     float,
-    us_cost:       float,
-    usdngn:        float,
-    total_usd:     float,
-    price_rows:    list[dict],
+    db: Session,
+    user_id: int,
+    ngx_equity: float,
+    ngx_cost: float,
+    us_equity: float,
+    us_cost: float,
+    usdngn: float,
+    total_usd: float,
+    price_rows: list[dict],
 ) -> PortfolioSnapshot:
     """Insert a new portfolio snapshot and all per-ticker price rows atomically."""
     snap = PortfolioSnapshot(
-        user_id        = user_id,
-        ts             = datetime.now(timezone.utc),
-        ngx_equity_ngn = round(ngx_equity, 2),
-        ngx_cost_ngn   = round(ngx_cost,   2),
-        us_equity_usd  = round(us_equity,  4),
-        us_cost_usd    = round(us_cost,    4),
-        usdngn         = round(usdngn,     4),
-        total_usd      = round(total_usd,  4),
+        user_id=user_id,
+        ts=datetime.now(timezone.utc),
+        ngx_equity_ngn=round(ngx_equity, 2),
+        ngx_cost_ngn=round(ngx_cost, 2),
+        us_equity_usd=round(us_equity, 4),
+        us_cost_usd=round(us_cost, 4),
+        usdngn=round(usdngn, 4),
+        total_usd=round(total_usd, 4),
     )
     db.add(snap)
     db.flush()
 
     for row in price_rows:
-        db.add(PriceHistory(
-            snapshot_id = snap.id,
-            ticker      = row["ticker"],
-            market      = row["market"],
-            price       = row.get("price"),
-            change_pct  = row.get("change_pct"),
-        ))
+        db.add(
+            PriceHistory(
+                snapshot_id=snap.id,
+                ticker=row["ticker"],
+                market=row["market"],
+                price=row.get("price"),
+                change_pct=row.get("change_pct"),
+            )
+        )
 
     db.commit()
-    log.info("Snapshot #%d written for user_id=%d (%d prices)", snap.id, user_id, len(price_rows))
+    log.info(
+        "Snapshot #%d written for user_id=%d (%d prices)",
+        snap.id,
+        user_id,
+        len(price_rows),
+    )
     return snap
 
 
 # ── History queries ───────────────────────────────────────────────────────────
 
-def get_portfolio_history(db: Session, days: int, user_id: int) -> list[PortfolioSnapshot]:
+
+def get_portfolio_history(
+    db: Session, days: int, user_id: int
+) -> list[PortfolioSnapshot]:
     """Return snapshots for the last N days for a user, oldest first."""
     since = datetime.now(timezone.utc) - timedelta(days=days)
-    stmt  = (
+    stmt = (
         select(PortfolioSnapshot)
         .where(PortfolioSnapshot.user_id == user_id, PortfolioSnapshot.ts >= since)
         .order_by(PortfolioSnapshot.ts)
@@ -279,7 +353,7 @@ def get_portfolio_history(db: Session, days: int, user_id: int) -> list[Portfoli
 def get_price_history(db: Session, ticker: str, days: int, user_id: int) -> list[dict]:
     """Return price history for a single ticker for a user, oldest first."""
     since = datetime.now(timezone.utc) - timedelta(days=days)
-    stmt  = (
+    stmt = (
         select(PriceHistory, PortfolioSnapshot.ts)
         .join(PortfolioSnapshot, PriceHistory.snapshot_id == PortfolioSnapshot.id)
         .where(
@@ -291,8 +365,8 @@ def get_price_history(db: Session, ticker: str, days: int, user_id: int) -> list
     )
     return [
         {
-            "ts":         row.ts.isoformat(),
-            "price":      row.PriceHistory.price,
+            "ts": row.ts.isoformat(),
+            "price": row.PriceHistory.price,
             "change_pct": row.PriceHistory.change_pct,
         }
         for row in db.execute(stmt).all()
@@ -301,9 +375,13 @@ def get_price_history(db: Session, ticker: str, days: int, user_id: int) -> list
 
 # ── Users ─────────────────────────────────────────────────────────────────────
 
+
 def create_user(
-    db: Session, email: str, username: str,
-    hashed_pw: str, is_admin: bool = False,
+    db: Session,
+    email: str,
+    username: str,
+    hashed_pw: str,
+    is_admin: bool = False,
 ) -> User:
     user = User(email=email, username=username, hashed_pw=hashed_pw, is_admin=is_admin)
     db.add(user)
@@ -327,7 +405,10 @@ def get_user_by_username(db: Session, username: str) -> Optional[User]:
 
 # ── Refresh tokens ────────────────────────────────────────────────────────────
 
-def create_refresh_token(db: Session, user_id: int, token: str, expires_at: datetime) -> RefreshToken:
+
+def create_refresh_token(
+    db: Session, user_id: int, token: str, expires_at: datetime
+) -> RefreshToken:
     obj = RefreshToken(user_id=user_id, token=token, expires_at=expires_at)
     db.add(obj)
     db.commit()
@@ -349,6 +430,7 @@ def delete_refresh_token(db: Session, token: str) -> bool:
 
 
 # ── Invite codes ──────────────────────────────────────────────────────────────
+
 
 def create_invite_code(db: Session, code: str, created_by: int) -> InviteCode:
     obj = InviteCode(code=code, created_by=created_by)
@@ -374,11 +456,16 @@ def use_invite_code(db: Session, code: str, user_id: int) -> Optional[InviteCode
 
 
 def list_invite_codes(db: Session, created_by: int) -> list[InviteCode]:
-    stmt = select(InviteCode).where(InviteCode.created_by == created_by).order_by(desc(InviteCode.created_at))
+    stmt = (
+        select(InviteCode)
+        .where(InviteCode.created_by == created_by)
+        .order_by(desc(InviteCode.created_at))
+    )
     return list(db.scalars(stmt).all())
 
 
 # ── Dividend cache ─────────────────────────────────────────────────────────────
+
 
 def get_dividend_cache(db: Session, ticker: str) -> Optional[DividendCache]:
     return db.scalars(
@@ -395,32 +482,41 @@ def upsert_dividend_cache(db: Session, ticker: str, info) -> DividendCache:
     obj = get_dividend_cache(db, ticker)
     now = datetime.now(timezone.utc)
     if obj is None:
-        obj = DividendCache(ticker=ticker.upper(), symbol=ticker.upper(), currency="NGN")
+        obj = DividendCache(
+            ticker=ticker.upper(), symbol=ticker.upper(), currency="NGN"
+        )
         db.add(obj)
 
-    obj.fetched_at = now   # always refresh so we don't re-scrape next cycle
+    obj.fetched_at = now  # always refresh so we don't re-scrape next cycle
 
     if info is not None:
         changed = (
             obj.ex_dividend_date != info.ex_dividend_date
-            or obj.cash_amount   != info.cash_amount
-            or obj.pay_date      != info.pay_date
-            or obj.record_date   != info.record_date
+            or obj.cash_amount != info.cash_amount
+            or obj.pay_date != info.pay_date
+            or obj.record_date != info.record_date
         )
         if changed:
-            obj.symbol           = info.symbol
+            obj.symbol = info.symbol
             obj.ex_dividend_date = info.ex_dividend_date
-            obj.record_date      = info.record_date
-            obj.pay_date         = info.pay_date
-            obj.cash_amount      = info.cash_amount
-            obj.currency         = info.currency
-            obj.dividend_ts      = info.timestamp
-            log.info("[DividendCache] %s updated: %.4f %s ex=%s",
-                     ticker.upper(), info.cash_amount, info.currency, info.ex_dividend_date)
+            obj.record_date = info.record_date
+            obj.pay_date = info.pay_date
+            obj.cash_amount = info.cash_amount
+            obj.currency = info.currency
+            obj.dividend_ts = info.timestamp
+            log.info(
+                "[DividendCache] %s updated: %.4f %s ex=%s",
+                ticker.upper(),
+                info.cash_amount,
+                info.currency,
+                info.ex_dividend_date,
+            )
         else:
-            log.debug("[DividendCache] %s unchanged, refreshed fetched_at", ticker.upper())
+            log.debug(
+                "[DividendCache] %s unchanged, refreshed fetched_at", ticker.upper()
+            )
     else:
-        obj.cash_amount = None   # sentinel: scraped but not found
+        obj.cash_amount = None  # sentinel: scraped but not found
 
     db.commit()
     db.refresh(obj)
@@ -429,16 +525,21 @@ def upsert_dividend_cache(db: Session, ticker: str, info) -> DividendCache:
 
 # ── Financials cache ───────────────────────────────────────────────────────────
 
-def get_financials_cache(db: Session, ticker: str, cache_type: str) -> Optional[FinancialsCache]:
+
+def get_financials_cache(
+    db: Session, ticker: str, cache_type: str
+) -> Optional[FinancialsCache]:
     return db.scalars(
         select(FinancialsCache).where(
-            FinancialsCache.ticker     == ticker.upper(),
+            FinancialsCache.ticker == ticker.upper(),
             FinancialsCache.cache_type == cache_type,
         )
     ).first()
 
 
-def upsert_financials_cache(db: Session, ticker: str, cache_type: str, data: dict) -> FinancialsCache:
+def upsert_financials_cache(
+    db: Session, ticker: str, cache_type: str, data: dict
+) -> FinancialsCache:
     """
     Insert or update a financials cache row.
     Data columns are only overwritten when the content has actually changed.
@@ -452,14 +553,14 @@ def upsert_financials_cache(db: Session, ticker: str, cache_type: str, data: dic
     obj.fetched_at = datetime.now(timezone.utc)
 
     if cache_type == "earnings":
-        new_a = data.get("revenue",    [])
-        new_b = data.get("eps",        [])
+        new_a = data.get("revenue", [])
+        new_b = data.get("eps", [])
         new_c = data.get("net_income", [])
         new_d = []
     elif cache_type == "cashflow":
-        new_a = data.get("capex",     [])
-        new_b = data.get("fcf",       [])
-        new_c = data.get("net_debt",  [])
+        new_a = data.get("capex", [])
+        new_b = data.get("fcf", [])
+        new_c = data.get("net_debt", [])
         new_d = []
     elif cache_type == "dividends":
         new_a = data.get("amounts", [])
@@ -467,10 +568,10 @@ def upsert_financials_cache(db: Session, ticker: str, cache_type: str, data: dic
         new_c = []
         new_d = []
     else:
-        new_a = data.get("assets",      [])
+        new_a = data.get("assets", [])
         new_b = data.get("liabilities", [])
-        new_c = data.get("equity",      [])
-        new_d = data.get("net_cash",    [])
+        new_c = data.get("equity", [])
+        new_d = data.get("net_cash", [])
 
     new_periods = data.get("periods", [])
     changed = (
@@ -482,15 +583,22 @@ def upsert_financials_cache(db: Session, ticker: str, cache_type: str, data: dic
     )
     if changed:
         obj.periods = new_periods
-        obj.col_a   = new_a
-        obj.col_b   = new_b
-        obj.col_c   = new_c
-        obj.col_d   = new_d
-        log.info("[FinancialsCache] %s %s updated (%d periods)",
-                 ticker.upper(), cache_type, len(new_periods))
+        obj.col_a = new_a
+        obj.col_b = new_b
+        obj.col_c = new_c
+        obj.col_d = new_d
+        log.info(
+            "[FinancialsCache] %s %s updated (%d periods)",
+            ticker.upper(),
+            cache_type,
+            len(new_periods),
+        )
     else:
-        log.debug("[FinancialsCache] %s %s unchanged, refreshed fetched_at",
-                  ticker.upper(), cache_type)
+        log.debug(
+            "[FinancialsCache] %s %s unchanged, refreshed fetched_at",
+            ticker.upper(),
+            cache_type,
+        )
 
     db.commit()
     db.refresh(obj)
@@ -500,16 +608,16 @@ def upsert_financials_cache(db: Session, ticker: str, cache_type: str, data: dic
 def financials_row_to_dict(obj: FinancialsCache) -> dict:
     if obj.cache_type == "earnings":
         return {
-            "periods":    obj.periods,
-            "revenue":    obj.col_a,
-            "eps":        obj.col_b,
+            "periods": obj.periods,
+            "revenue": obj.col_a,
+            "eps": obj.col_b,
             "net_income": obj.col_c,
         }
     if obj.cache_type == "cashflow":
         return {
-            "periods":  obj.periods,
-            "capex":    obj.col_a,
-            "fcf":      obj.col_b,
+            "periods": obj.periods,
+            "capex": obj.col_a,
+            "fcf": obj.col_b,
             "net_debt": obj.col_c,
         }
     if obj.cache_type == "dividends":
@@ -518,15 +626,16 @@ def financials_row_to_dict(obj: FinancialsCache) -> dict:
             "amounts": obj.col_a,
         }
     return {
-        "periods":     obj.periods,
-        "assets":      obj.col_a,
+        "periods": obj.periods,
+        "assets": obj.col_a,
         "liabilities": obj.col_b,
-        "equity":      obj.col_c,
-        "net_cash":    obj.col_d or [],
+        "equity": obj.col_c,
+        "net_cash": obj.col_d or [],
     }
 
 
 # ── Daily price history ────────────────────────────────────────────────────────
+
 
 def get_latest_daily_date(db: Session, ticker: str) -> Optional[str]:
     """Return the most recent date string stored for a ticker, or None."""
@@ -557,6 +666,7 @@ def upsert_daily_price_rows(db: Session, ticker: str, rows: list[dict]) -> int:
     Returns the number of rows inserted/updated.
     """
     from sqlalchemy.dialects.postgresql import insert as pg_insert
+
     if not rows:
         return 0
     t = ticker.upper()
@@ -565,26 +675,26 @@ def upsert_daily_price_rows(db: Session, ticker: str, rows: list[dict]) -> int:
         stmt = (
             pg_insert(DailyPriceHistory)
             .values(
-                ticker     = t,
-                date       = row["date"],
-                close      = row.get("close"),
-                open       = row.get("open"),
-                high       = row.get("high"),
-                low        = row.get("low"),
-                volume     = row.get("volume"),
-                change_pct = row.get("change_pct"),
-                source     = row.get("source", "history"),
+                ticker=t,
+                date=row["date"],
+                close=row.get("close"),
+                open=row.get("open"),
+                high=row.get("high"),
+                low=row.get("low"),
+                volume=row.get("volume"),
+                change_pct=row.get("change_pct"),
+                source=row.get("source", "history"),
             )
             .on_conflict_do_update(
                 constraint="uq_daily_price_history_ticker_date",
                 set_={
-                    "close":      row.get("close"),
-                    "open":       row.get("open"),
-                    "high":       row.get("high"),
-                    "low":        row.get("low"),
-                    "volume":     row.get("volume"),
+                    "close": row.get("close"),
+                    "open": row.get("open"),
+                    "high": row.get("high"),
+                    "low": row.get("low"),
+                    "volume": row.get("volume"),
                     "change_pct": row.get("change_pct"),
-                    "source":     row.get("source", "history"),
+                    "source": row.get("source", "history"),
                 },
             )
         )
@@ -598,23 +708,25 @@ def upsert_daily_price_rows(db: Session, ticker: str, rows: list[dict]) -> int:
 def get_daily_price_history(db: Session, ticker: str, days: int) -> list[dict]:
     """Return daily price rows for a ticker for the last N days, oldest first."""
     from datetime import date, timedelta
+
     since = (date.today() - timedelta(days=days)).isoformat()
-    stmt  = (
+    stmt = (
         select(DailyPriceHistory)
         .where(
             DailyPriceHistory.ticker == ticker.upper(),
-            DailyPriceHistory.date   >= since,
+            DailyPriceHistory.date >= since,
         )
         .order_by(DailyPriceHistory.date)
     )
     return [
         {
-            "ts":         r.date,
-            "price":      r.close,
+            "ts": r.date,
+            "price": r.close,
             "change_pct": r.change_pct,
         }
         for r in db.scalars(stmt).all()
     ]
+
 
 def get_correlation_matrix(db: Session, tickers: list[str], days: int) -> dict:
     """
@@ -623,11 +735,16 @@ def get_correlation_matrix(db: Session, tickers: list[str], days: int) -> dict:
     Returns { tickers: [...], matrix: [[...], ...] }.
     """
     from datetime import date, timedelta
+
     since = (date.today() - timedelta(days=days)).isoformat()
     upper = [t.upper() for t in tickers]
 
     stmt = (
-        select(DailyPriceHistory.ticker, DailyPriceHistory.date, DailyPriceHistory.change_pct)
+        select(
+            DailyPriceHistory.ticker,
+            DailyPriceHistory.date,
+            DailyPriceHistory.change_pct,
+        )
         .where(
             DailyPriceHistory.ticker.in_(upper),
             DailyPriceHistory.date >= since,
@@ -639,6 +756,7 @@ def get_correlation_matrix(db: Session, tickers: list[str], days: int) -> dict:
 
     # Build {ticker: {date: return}} mapping
     from collections import defaultdict
+
     series: dict[str, dict[str, float]] = defaultdict(dict)
     all_dates: set[str] = set()
     for ticker, date_str, chg in rows:
@@ -652,6 +770,7 @@ def get_correlation_matrix(db: Session, tickers: list[str], days: int) -> dict:
 
     # Build returns matrix — fill missing with 0
     import math
+
     mat = [[series[t].get(d, 0.0) for d in sorted_dates] for t in present]
 
     def pearson(a: list[float], b: list[float]) -> float:
@@ -660,7 +779,7 @@ def get_correlation_matrix(db: Session, tickers: list[str], days: int) -> dict:
             return 0.0
         ma = sum(a) / n
         mb = sum(b) / n
-        num  = sum((a[i] - ma) * (b[i] - mb) for i in range(n))
+        num = sum((a[i] - ma) * (b[i] - mb) for i in range(n))
         dena = math.sqrt(sum((x - ma) ** 2 for x in a))
         denb = math.sqrt(sum((x - mb) ** 2 for x in b))
         if dena == 0 or denb == 0:
@@ -680,6 +799,7 @@ def get_portfolio_analytics(db: Session, user_id: int, days: int) -> dict:
     Returns { max_drawdown_pct, sharpe, data_points }.
     """
     import math
+
     snaps = get_portfolio_history(db, days=days, user_id=user_id)
     values = [s.ngx_equity_ngn for s in snaps if s.ngx_equity_ngn > 0]
 
@@ -695,23 +815,31 @@ def get_portfolio_analytics(db: Session, user_id: int, days: int) -> dict:
         max_dd = max(max_dd, dd)
 
     # Daily returns
-    returns = [(values[i] - values[i - 1]) / values[i - 1] for i in range(1, len(values))]
+    returns = [
+        (values[i] - values[i - 1]) / values[i - 1] for i in range(1, len(values))
+    ]
     mean_r = sum(returns) / len(returns)
-    std_r  = math.sqrt(sum((r - mean_r) ** 2 for r in returns) / len(returns))
+    std_r = math.sqrt(sum((r - mean_r) ** 2 for r in returns) / len(returns))
     sharpe = round((mean_r / std_r) * math.sqrt(252), 3) if std_r > 0 else None
 
     return {
         "max_drawdown_pct": round(max_dd * 100, 2),
-        "sharpe":           sharpe,
-        "data_points":      len(values),
+        "sharpe": sharpe,
+        "data_points": len(values),
     }
 
 
 # ── Watchlist ──────────────────────────────────────────────────────────────────
 
+
 def get_watchlist(db: Session, user_id: int) -> list[Watchlist]:
-    stmt = select(Watchlist).where(Watchlist.user_id == user_id).order_by(Watchlist.added_at)
+    stmt = (
+        select(Watchlist)
+        .where(Watchlist.user_id == user_id)
+        .order_by(Watchlist.added_at)
+    )
     return list(db.scalars(stmt).all())
+
 
 def set_watchlist_added_price(db: Session, watchlist_id: int, price: float) -> None:
     stmt = select(Watchlist).where(Watchlist.id == watchlist_id)
@@ -720,24 +848,35 @@ def set_watchlist_added_price(db: Session, watchlist_id: int, price: float) -> N
         row.added_price = price
         db.commit()
 
+
 def watchlist_has(db: Session, user_id: int, ticker: str) -> bool:
     stmt = select(Watchlist.id).where(
         Watchlist.user_id == user_id,
-        Watchlist.ticker  == ticker.upper(),
+        Watchlist.ticker == ticker.upper(),
     )
     return db.scalar(stmt) is not None
 
-def add_to_watchlist(db: Session, user_id: int, ticker: str, market: str = "NGX", added_price: float | None = None) -> Watchlist:
-    row = Watchlist(user_id=user_id, ticker=ticker.upper(), market=market, added_price=added_price)
+
+def add_to_watchlist(
+    db: Session,
+    user_id: int,
+    ticker: str,
+    market: str = "NGX",
+    added_price: float | None = None,
+) -> Watchlist:
+    row = Watchlist(
+        user_id=user_id, ticker=ticker.upper(), market=market, added_price=added_price
+    )
     db.add(row)
     db.commit()
     db.refresh(row)
     return row
 
+
 def remove_from_watchlist(db: Session, user_id: int, ticker: str) -> bool:
     stmt = select(Watchlist).where(
         Watchlist.user_id == user_id,
-        Watchlist.ticker  == ticker.upper(),
+        Watchlist.ticker == ticker.upper(),
     )
     row = db.scalar(stmt)
     if not row:
