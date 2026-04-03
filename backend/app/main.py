@@ -22,6 +22,7 @@ from app.config import settings
 from app.routers import data, prices, fx, history, profile, settings as settings_router
 from app.routers import auth as auth_router
 from app.routers import watchlist as watchlist_router
+from app.routers import analysis as analysis_router
 from app.db.engine import engine, SessionLocal
 from app.db import models as db_models  # registers all ORM tables
 from app.db.seed import seed_from_json
@@ -112,6 +113,7 @@ app.include_router(history.router)
 app.include_router(settings_router.router)
 app.include_router(profile.router)
 app.include_router(watchlist_router.router)
+app.include_router(analysis_router.router)
 
 
 # ── Health check ─────────────────────────────────────────────────────────────

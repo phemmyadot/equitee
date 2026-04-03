@@ -46,6 +46,15 @@ export type {
 
 export type { WatchlistItem, WatchlistResponse } from '@/models/watchlist';
 
+export type {
+  AnalysisContext,
+  AnalysisContextResponse,
+  AnalysisSummary,
+  AnalysisDetail,
+  AnalysisScope,
+  AnalysisDepth,
+} from '@/models/analysis';
+
 // ── Fetch helpers ─────────────────────────────────────────────────────────────
 
 async function tryRefresh(): Promise<boolean> {
@@ -65,6 +74,33 @@ async function get<T>(path: string): Promise<T> {
     res = await fetch(`${BASE}${path}`, { cache: 'no-store' });
   }
 
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error((err as { detail?: string }).detail ?? res.statusText);
+  }
+  return res.json() as Promise<T>;
+}
+
+async function postJson<T>(path: string, body: unknown): Promise<T> {
+  let res = await fetch(`${BASE}${path}`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+    cache: 'no-store',
+  });
+  if (res.status === 401) {
+    const refreshed = await tryRefresh();
+    if (!refreshed) {
+      window.location.href = '/login';
+      throw new Error('Session expired');
+    }
+    res = await fetch(`${BASE}${path}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+      cache: 'no-store',
+    });
+  }
   if (!res.ok) {
     const err = await res.json().catch(() => ({}));
     throw new Error((err as { detail?: string }).detail ?? res.statusText);
@@ -126,6 +162,9 @@ import type {
   AnalyticsData,
   RelativeStrengthData,
   WatchlistResponse,
+  AnalysisContextResponse,
+  AnalysisSummary,
+  AnalysisDetail,
 } from '@/models';
 
 export const fetchPortfolioData = () => get<PortfolioData>('/data');
@@ -162,3 +201,118 @@ export const addToWatchlist = (ticker: string) =>
   post<{ ticker: string; market: string; added_at: string }>(`/watchlist/${ticker}`);
 export const removeFromWatchlist = (ticker: string) =>
   del<{ ticker: string; removed: boolean }>(`/watchlist/${ticker}`);
+
+// ── Analysis ──────────────────────────────────────────────────────────────────
+
+export const fetchAnalysisContext = () =>
+  get<AnalysisContextResponse>('/analysis/context');
+
+export const fetchAnalysisHistory = () =>
+  get<AnalysisSummary[]>('/analysis/history');
+
+export const fetchAnalysisById = (id: number) =>
+  get<AnalysisDetail>(`/analysis/${id}`);
+
+export const clearAnalysisHistory = () =>
+  del<{ deleted: number }>('/analysis/history');
+
+/**
+ * Opens an SSE stream to POST /analysis/run.
+ * Calls onChunk for each text token, onDone when complete, onError on failure.
+ * Returns an AbortController — call controller.abort() to cancel.
+ */
+export function streamAnalysis(
+  scope: string,
+  depth: string,
+  onChunk: (text: string) => void,
+  onDone: (id: number, tokens: number, cached: boolean) => void,
+  onError: (msg: string) => void,
+): AbortController {
+  const controller = new AbortController();
+
+  (async () => {
+    let res: Response;
+    try {
+      res = await fetch(`${BASE}/analysis/run`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ scope, depth }),
+        cache: 'no-store',
+        signal: controller.signal,
+      });
+
+      if (res.status === 401) {
+        const refreshed = await tryRefresh();
+        if (!refreshed) {
+          window.location.href = '/login';
+          return;
+        }
+        res = await fetch(`${BASE}/analysis/run`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ scope, depth }),
+          cache: 'no-store',
+          signal: controller.signal,
+        });
+      }
+
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        onError((err as { detail?: string }).detail ?? res.statusText);
+        return;
+      }
+    } catch (e: unknown) {
+      if ((e as { name?: string }).name !== 'AbortError') {
+        onError(String(e));
+      }
+      return;
+    }
+
+    if (!res.body) {
+      onError('No response body');
+      return;
+    }
+
+    const reader = res.body.getReader();
+    const decoder = new TextDecoder();
+    let buffer = '';
+
+    try {
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        buffer += decoder.decode(value, { stream: true });
+        const parts = buffer.split('\n\n');
+        buffer = parts.pop() ?? '';
+        for (const part of parts) {
+          const line = part.trim();
+          if (!line.startsWith('data: ')) continue;
+          try {
+            const data = JSON.parse(line.slice(6)) as {
+              text?: string;
+              done?: boolean;
+              id?: number;
+              tokens?: number;
+              cached?: boolean;
+              error?: string;
+            };
+            if (data.error) {
+              onError(data.error);
+              return;
+            }
+            if (data.text) onChunk(data.text);
+            if (data.done) onDone(data.id ?? 0, data.tokens ?? 0, data.cached ?? false);
+          } catch {
+            // malformed chunk, skip
+          }
+        }
+      }
+    } catch (e: unknown) {
+      if ((e as { name?: string }).name !== 'AbortError') {
+        onError(String(e));
+      }
+    }
+  })();
+
+  return controller;
+}

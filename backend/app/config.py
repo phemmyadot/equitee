@@ -73,5 +73,9 @@ class Settings:
     FIRST_ADMIN_EMAIL: str = os.getenv("FIRST_ADMIN_EMAIL", "")
     FIRST_ADMIN_PASSWORD: str = os.getenv("FIRST_ADMIN_PASSWORD", "")
 
+    # ── Claude AI ─────────────────────────────────────────────────────────────
+    ANTHROPIC_API_KEY: str = os.getenv("ANTHROPIC_API_KEY", "")
+    ANALYSIS_DAILY_DEEP_LIMIT: int = int(os.getenv("ANALYSIS_DAILY_DEEP_LIMIT", "5"))
+
 
 settings = Settings()

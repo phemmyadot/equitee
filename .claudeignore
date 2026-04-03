@@ -1,0 +1,35 @@
+# Node
+/node_modules
+/*/node_modules
+**/.next
+**/out
+**/dist
+**/build
+
+# Python
+**/__pycache__
+**/*.pyc
+**/*.pyo
+**/*.pyd
+backend/.venv
+**/*.egg-info
+**/.pytest_cache
+**/.ruff_cache
+**/.mypy_cache
+
+# Secrets and data
+**/.env
+**/.env.*
+**/*.sql
+**/portfolio.json
+
+# Logs and coverage
+**/*.log
+**/coverage
+**/.coverage
+**/htmlcov
+
+# OS and editor noise
+**/.DS_Store
+**/Thumbs.db
+**/*.swp

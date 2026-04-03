@@ -11,6 +11,7 @@ import {
   IconChartHistory,
   IconSettings,
   IconBookmark,
+  IconSparkles,
 } from '@/components/atoms/icons';
 
 const MOBILE_ITEMS = [
@@ -44,6 +45,11 @@ const MOBILE_ITEMS = [
     href: '/watchlist',
     label: 'Watch',
     icon: <IconBookmark width={18} height={18} />,
+  },
+  {
+    href: '/analysis',
+    label: 'AI',
+    icon: <IconSparkles width={18} height={18} />,
   },
   {
     href: '/settings',

@@ -25,6 +25,7 @@ from app.db.models import (
     FinancialsCache,
     DailyPriceHistory,
     Watchlist,
+    AnalysisHistory,
 )
 
 log = logging.getLogger(__name__)
@@ -884,3 +885,91 @@ def remove_from_watchlist(db: Session, user_id: int, ticker: str) -> bool:
     db.delete(row)
     db.commit()
     return True
+
+
+# ── Analysis History ───────────────────────────────────────────────────────────
+
+
+def save_analysis(
+    db: Session,
+    user_id: int,
+    scope: str,
+    depth: str,
+    model_used: str,
+    summary: str,
+    full_response: str,
+    context_hash: str,
+    tokens_used: int,
+) -> AnalysisHistory:
+    row = AnalysisHistory(
+        user_id=user_id,
+        scope=scope,
+        depth=depth,
+        model_used=model_used,
+        summary=summary,
+        full_response=full_response,
+        context_hash=context_hash,
+        tokens_used=tokens_used,
+    )
+    db.add(row)
+    db.commit()
+    db.refresh(row)
+    return row
+
+
+def get_analysis_history(
+    db: Session, user_id: int, limit: int = 50
+) -> list[AnalysisHistory]:
+    stmt = (
+        select(AnalysisHistory)
+        .where(AnalysisHistory.user_id == user_id)
+        .order_by(desc(AnalysisHistory.created_at))
+        .limit(limit)
+    )
+    return list(db.scalars(stmt).all())
+
+
+def get_analysis_by_id(
+    db: Session, analysis_id: int, user_id: int
+) -> Optional[AnalysisHistory]:
+    stmt = select(AnalysisHistory).where(
+        AnalysisHistory.id == analysis_id,
+        AnalysisHistory.user_id == user_id,
+    )
+    return db.scalar(stmt)
+
+
+def get_latest_analysis(
+    db: Session, user_id: int, scope: str
+) -> Optional[AnalysisHistory]:
+    stmt = (
+        select(AnalysisHistory)
+        .where(
+            AnalysisHistory.user_id == user_id,
+            AnalysisHistory.scope == scope,
+        )
+        .order_by(desc(AnalysisHistory.created_at))
+        .limit(1)
+    )
+    return db.scalar(stmt)
+
+
+def count_deep_analyses_today(db: Session, user_id: int) -> int:
+    today_start = datetime.now(timezone.utc).replace(
+        hour=0, minute=0, second=0, microsecond=0
+    )
+    stmt = select(AnalysisHistory).where(
+        AnalysisHistory.user_id == user_id,
+        AnalysisHistory.depth == "deep",
+        AnalysisHistory.created_at >= today_start,
+    )
+    return len(list(db.scalars(stmt).all()))
+
+
+def delete_analysis_history(db: Session, user_id: int) -> int:
+    stmt = select(AnalysisHistory).where(AnalysisHistory.user_id == user_id)
+    rows = list(db.scalars(stmt).all())
+    for row in rows:
+        db.delete(row)
+    db.commit()
+    return len(rows)

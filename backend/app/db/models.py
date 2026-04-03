@@ -9,6 +9,7 @@ from typing import Optional
 from sqlalchemy import (
     Integer,
     String,
+    Text,
     Float,
     Boolean,
     DateTime,
@@ -329,3 +330,29 @@ class Watchlist(Base):
         UniqueConstraint("user_id", "ticker", name="uq_watchlist_user_ticker"),
         Index("ix_watchlist_user_id", "user_id"),
     )
+
+
+# ── analysis_history ──────────────────────────────────────────────────────────
+
+
+class AnalysisHistory(Base):
+    """Stored Claude AI portfolio analyses, one row per run."""
+
+    __tablename__ = "analysis_history"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    user_id: Mapped[int] = mapped_column(
+        Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=_now, nullable=False
+    )
+    scope: Mapped[str] = mapped_column(String, nullable=False)  # portfolio|watchlist|combined
+    depth: Mapped[str] = mapped_column(String, nullable=False)  # quick|deep
+    model_used: Mapped[str] = mapped_column(String, nullable=False)
+    summary: Mapped[str] = mapped_column(String, nullable=True)
+    full_response: Mapped[str] = mapped_column(Text, nullable=True)
+    context_hash: Mapped[str] = mapped_column(String, nullable=True)
+    tokens_used: Mapped[int] = mapped_column(Integer, nullable=True)
+
+    __table_args__ = (Index("ix_analysis_history_user_id", "user_id"),)
