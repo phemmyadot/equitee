@@ -85,6 +85,7 @@ class DividendsResponse(BaseModel):
 
 @router.get("/dividends", response_model=DividendsResponse)
 async def get_dividends(
+    force: bool = False,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
@@ -92,7 +93,7 @@ async def get_dividends(
         holdings = load_holdings_from_db(db, current_user.id)
         ngx = holdings["ngx"]
         tickers = [h["ticker"] for h in ngx]
-        div_map = dividends_service.get_dividends(tickers)
+        div_map = dividends_service.get_dividends(tickers, force=force)
 
         result: list[DividendHolding] = []
         total_payout: float = 0.0

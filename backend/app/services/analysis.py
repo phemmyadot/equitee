@@ -31,20 +31,79 @@ log = logging.getLogger(__name__)
 MODEL_QUICK = "claude-haiku-4-5-20251001"
 MODEL_DEEP = "claude-sonnet-4-6"
 
-SYSTEM_PROMPT = (
+_ANALYST_PERSONA = (
     "You are a seasoned equity analyst with 20+ years specialising in frontier and "
     "emerging markets, Nigerian Exchange (NGX) equities, and US growth stocks. "
     "Be direct, specific, and actionable. "
-    "Always structure your response with exactly these seven sections:\n"
-    "1. **Portfolio Health Score** (0-100) with 2-line rationale\n"
-    "2. **Top 3 Action Items** — specific buy/sell/hold with price levels and one-line reason\n"
-    "3. **Risk Flags** — concentration, currency exposure (NGN vs USD), high-beta names\n"
-    "4. **Watchlist Picks** — top 2 watchlist names worth buying now with entry rationale\n"
-    "5. **Rebalancing Nudge** — which sectors are over/underweight vs a neutral 5-sector split\n"
-    "6. **Income Outlook** — projected annual dividend income and yield improvement levers\n"
-    "7. **One Contrarian Thought** — something the data suggests that goes against the obvious read\n"
-    "Keep total response under 600 words. Use bullet points. No disclaimers."
+    "Always respond in well-structured Markdown. Use ## for section headings, "
+    "**bold** for tickers and key figures, bullet lists (- item) for action points. "
+    "No disclaimers. No plain prose — Markdown only. Keep total response under 600 words."
 )
+
+_PORTFOLIO_SECTIONS = (
+    "Structure your response with exactly these seven sections:\n"
+    "## 1. Portfolio Health Score\n"
+    "Score X/100 — then 2 bullet points of rationale.\n"
+    "## 2. Top 3 Action Items\n"
+    "- **TICKER** — Buy/Sell/Hold at ₦X | one-line reason\n"
+    "## 3. Risk Flags\n"
+    "Bullet list: concentration, currency exposure (NGN vs USD), high-beta names.\n"
+    "## 4. Watchlist Picks\n"
+    "- **TICKER** | Entry: ₦X–Y | Rationale: ...\n"
+    "## 5. Rebalancing Nudge\n"
+    "Bullet list of over/underweight sectors vs neutral 5-sector split.\n"
+    "## 6. Income Outlook\n"
+    "Projected annual dividend income and yield levers.\n"
+    "## 7. One Contrarian Thought\n"
+    "> Contrarian insight here."
+)
+
+_WATCHLIST_SECTIONS = (
+    "The user has provided their watchlist — tickers they are considering buying but do NOT yet own. "
+    "Do NOT treat these as current holdings. Analyse each ticker as a prospective investment.\n"
+    "Structure your response with exactly these five sections:\n"
+    "## 1. Watchlist Ranking\n"
+    "Rank all tickers best-to-worst opportunity. One line per ticker with score /10 and key reason.\n"
+    "## 2. Top Buy Now\n"
+    "- **TICKER** | Entry: ₦X–Y | Target: ₦X | Stop-loss: ₦X | Rationale: ...\n"
+    "Pick the single best entry for immediate action and explain why now.\n"
+    "## 3. Wait / Avoid\n"
+    "Bullet list of tickers to avoid or wait on, with a one-line reason each.\n"
+    "## 4. Risk Snapshot\n"
+    "Key risks across the watchlist: sector concentration, liquidity, macro exposure.\n"
+    "## 5. One Contrarian Thought\n"
+    "> Something the data suggests that goes against the obvious read on this watchlist."
+)
+
+_COMBINED_SECTIONS = (
+    "The user has provided both their current holdings AND their watchlist. "
+    "Analyse the full picture — how the watchlist complements or overlaps the portfolio.\n"
+    "Structure your response with exactly these seven sections:\n"
+    "## 1. Portfolio Health Score\n"
+    "Score X/100 — then 2 bullet points of rationale.\n"
+    "## 2. Top 3 Action Items\n"
+    "- **TICKER** — Buy/Sell/Hold at ₦X | one-line reason (can include watchlist names)\n"
+    "## 3. Best Watchlist Additions\n"
+    "Top 2 watchlist tickers that best complement the existing portfolio, with entry levels.\n"
+    "## 4. Risk Flags\n"
+    "Concentration, currency exposure, overlap between holdings and watchlist.\n"
+    "## 5. Rebalancing Nudge\n"
+    "Over/underweight sectors including what watchlist buys would change.\n"
+    "## 6. Income Outlook\n"
+    "Current dividend income + potential uplift if watchlist picks are added.\n"
+    "## 7. One Contrarian Thought\n"
+    "> Contrarian insight here."
+)
+
+
+def build_system_prompt(scope: str) -> str:
+    if scope == "watchlist":
+        sections = _WATCHLIST_SECTIONS
+    elif scope == "combined":
+        sections = _COMBINED_SECTIONS
+    else:
+        sections = _PORTFOLIO_SECTIONS
+    return f"{_ANALYST_PERSONA}\n\n{sections}"
 
 
 # ── Context builder ────────────────────────────────────────────────────────────
@@ -267,7 +326,7 @@ def stream_analysis_sse(
         with client.messages.stream(
             model=model,
             max_tokens=900,
-            system=SYSTEM_PROMPT,
+            system=build_system_prompt(scope),
             messages=[{"role": "user", "content": prompt}],
         ) as stream:
             for text in stream.text_stream:
@@ -280,11 +339,21 @@ def stream_analysis_sse(
             )
 
         full_response = "".join(full_chunks)
-        # Summary = first non-empty line, capped at 200 chars
-        summary = next(
-            (line.strip() for line in full_response.splitlines() if line.strip()),
-            full_response[:200],
-        )[:200]
+        # Summary = first substantive line (skip headings), markdown stripped
+        _md_strip = re.compile(r"^#+\s*|^\s*[-*>]\s*|\*{1,2}|_{1,2}|`")
+        summary = ""
+        for _line in full_response.splitlines():
+            _line = _line.strip()
+            if not _line:
+                continue
+            # Skip pure heading lines (## 1. Portfolio Health Score etc.)
+            if re.match(r"^#+\s", _line):
+                continue
+            summary = _md_strip.sub("", _line).strip()[:200]
+            if summary:
+                break
+        if not summary:
+            summary = _md_strip.sub("", full_response[:200]).strip()
 
         with SessionLocal() as db:
             record = save_analysis(

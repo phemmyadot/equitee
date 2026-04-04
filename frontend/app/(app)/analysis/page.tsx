@@ -1,8 +1,7 @@
 'use client';
 
 import { useEffect, useRef, useState, useCallback } from 'react';
-import ReactMarkdown from 'react-markdown';
-import remarkGfm from 'remark-gfm';
+import MarkdownViewer from '@/components/MarkdownViewer';
 import {
   streamAnalysis,
   fetchAnalysisHistory,
@@ -58,6 +57,17 @@ function Cursor() {
 }
 
 // ── History entry ─────────────────────────────────────────────────────────────
+/** Strip residual markdown syntax so card text is always plain. */
+function stripMd(text: string): string {
+  return text
+    .replace(/^#{1,6}\s+/gm, '')
+    .replace(/\*{1,2}([^*]+)\*{1,2}/g, '$1')
+    .replace(/_{1,2}([^_]+)_{1,2}/g, '$1')
+    .replace(/`([^`]+)`/g, '$1')
+    .replace(/^[-*>]\s+/gm, '')
+    .trim();
+}
+
 function HistoryItem({
   item,
   active,
@@ -70,6 +80,8 @@ function HistoryItem({
   const d = new Date(item.created_at);
   const dateStr = d.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
   const timeStr = d.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' });
+  const scopeLabel = SCOPE_LABELS[item.scope] ?? item.scope;
+  const summary = item.summary ? stripMd(item.summary) : null;
 
   return (
     <button
@@ -80,19 +92,26 @@ function HistoryItem({
           : 'border-[var(--border)] bg-white hover:border-[var(--accent-light)]'
       }`}
     >
-      <div className="flex items-center gap-1.5 mb-0.5">
-        <span className="text-[10px] text-[var(--ink-4)]">
-          {dateStr} {timeStr}
+      {/* Heading row */}
+      <div className="flex items-center justify-between gap-2 mb-1">
+        <span className={`text-xs font-semibold ${active ? 'text-[var(--accent)]' : 'text-[var(--ink-1)]'}`}>
+          {scopeLabel} Analysis
         </span>
-        <ScopeBadge scope={item.scope} />
-        <DepthBadge depth={item.depth} />
+        <div className="flex items-center gap-1 shrink-0">
+          <DepthBadge depth={item.depth} />
+        </div>
       </div>
-      <p className="text-xs text-[var(--ink-2)] line-clamp-2 leading-relaxed">
-        {item.summary ?? '—'}
+      {/* Subheading — summary text */}
+      <p className="text-[11px] text-[var(--ink-3)] line-clamp-2 leading-relaxed mb-1">
+        {summary ?? 'No summary available'}
       </p>
-      {item.tokens_used ? (
-        <p className="text-[10px] text-[var(--ink-5)] mt-0.5">~{item.tokens_used} tokens</p>
-      ) : null}
+      {/* Footer */}
+      <div className="flex items-center gap-2">
+        <span className="text-[10px] text-[var(--ink-5)]">{dateStr} · {timeStr}</span>
+        {item.tokens_used ? (
+          <span className="text-[10px] text-[var(--ink-5)]">~{item.tokens_used} tokens</span>
+        ) : null}
+      </div>
     </button>
   );
 }
@@ -372,53 +391,7 @@ export default function AnalysisPage() {
             )}
 
             {displayText && (
-              <div className="text-sm leading-relaxed text-[var(--ink-2)] space-y-2">
-                <ReactMarkdown
-                  remarkPlugins={[remarkGfm]}
-                  components={{
-                    h1: ({ children }) => (
-                      <h2 className="text-base font-bold mt-5 mb-2 text-[var(--ink-1)]">{children}</h2>
-                    ),
-                    h2: ({ children }) => (
-                      <h3 className="text-sm font-bold mt-4 mb-1.5 text-[var(--ink-1)]">{children}</h3>
-                    ),
-                    h3: ({ children }) => (
-                      <h4 className="text-sm font-semibold mt-3 mb-1 text-[var(--ink-1)]">{children}</h4>
-                    ),
-                    p: ({ children }) => (
-                      <p className="mb-2 text-[var(--ink-2)]">{children}</p>
-                    ),
-                    ul: ({ children }) => (
-                      <ul className="list-disc pl-5 mb-2 space-y-1 text-[var(--ink-2)]">{children}</ul>
-                    ),
-                    ol: ({ children }) => (
-                      <ol className="list-decimal pl-5 mb-2 space-y-1 text-[var(--ink-2)]">{children}</ol>
-                    ),
-                    li: ({ children }) => (
-                      <li className="leading-relaxed">{children}</li>
-                    ),
-                    strong: ({ children }) => (
-                      <strong className="font-semibold text-[var(--ink-1)]">{children}</strong>
-                    ),
-                    em: ({ children }) => (
-                      <em className="italic text-[var(--ink-3)]">{children}</em>
-                    ),
-                    hr: () => <hr className="border-[var(--border)] my-3" />,
-                    blockquote: ({ children }) => (
-                      <blockquote className="border-l-2 border-[var(--accent)] pl-3 text-[var(--ink-3)] italic my-2">
-                        {children}
-                      </blockquote>
-                    ),
-                    code: ({ children }) => (
-                      <code className="bg-[var(--canvas)] text-[var(--accent)] px-1 py-0.5 rounded text-xs font-mono">
-                        {children}
-                      </code>
-                    ),
-                  }}
-                >
-                  {displayText}
-                </ReactMarkdown>
-              </div>
+              <MarkdownViewer>{displayText}</MarkdownViewer>
             )}
 
             {streaming && <Cursor />}

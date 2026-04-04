@@ -81,33 +81,6 @@ async function get<T>(path: string): Promise<T> {
   return res.json() as Promise<T>;
 }
 
-async function postJson<T>(path: string, body: unknown): Promise<T> {
-  let res = await fetch(`${BASE}${path}`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(body),
-    cache: 'no-store',
-  });
-  if (res.status === 401) {
-    const refreshed = await tryRefresh();
-    if (!refreshed) {
-      window.location.href = '/login';
-      throw new Error('Session expired');
-    }
-    res = await fetch(`${BASE}${path}`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(body),
-      cache: 'no-store',
-    });
-  }
-  if (!res.ok) {
-    const err = await res.json().catch(() => ({}));
-    throw new Error((err as { detail?: string }).detail ?? res.statusText);
-  }
-  return res.json() as Promise<T>;
-}
-
 async function post<T>(path: string): Promise<T> {
   let res = await fetch(`${BASE}${path}`, { method: 'POST', cache: 'no-store' });
   if (res.status === 401) {
@@ -182,7 +155,8 @@ export const fetchNGXTickerData = (ticker: string) =>
   get<TickerData>(`/profile/ngx/${ticker}/full`);
 export const fetchNGXDividend = (ticker: string) =>
   get<DividendInfo>(`/profile/ngx/${ticker}/dividend`);
-export const fetchDividends = () => get<DividendsResponse>('/dividends');
+export const fetchDividends = (force = false) =>
+  get<DividendsResponse>(`/dividends${force ? '?force=true' : ''}`);
 export const fetchNGXEarnings = (ticker: string) =>
   get<EarningsHistory>(`/profile/ngx/${ticker}/earnings`);
 export const fetchNGXBalanceSheet = (ticker: string) =>
