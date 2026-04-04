@@ -1,6 +1,8 @@
 'use client';
 
 import { useEffect, useRef, useState, useCallback } from 'react';
+import ReactMarkdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
 import {
   streamAnalysis,
   fetchAnalysisHistory,
@@ -16,23 +18,6 @@ import {
   IconCheck,
   IconX,
 } from '@/components/atoms/icons';
-
-// ── Tiny markdown renderer ────────────────────────────────────────────────────
-function renderMarkdown(text: string): string {
-  return text
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/^### (.+)$/gm, '<h4 class="text-sm font-bold mt-3 mb-1 text-[var(--ink-1)]">$1</h4>')
-    .replace(/^## (.+)$/gm, '<h3 class="text-sm font-bold mt-4 mb-1 text-[var(--ink-1)]">$1</h3>')
-    .replace(/^# (.+)$/gm, '<h2 class="text-base font-bold mt-4 mb-1 text-[var(--ink-1)]">$1</h2>')
-    .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
-    .replace(/\*(.+?)\*/g, '<em>$1</em>')
-    .replace(/^[-•] (.+)$/gm, '<li class="ml-4 list-disc text-[var(--ink-2)]">$1</li>')
-    .replace(/^(\d+)\. (.+)$/gm, '<li class="ml-4 list-decimal text-[var(--ink-2)]"><strong>$1.</strong> $2</li>')
-    .replace(/\n\n/g, '</p><p class="mb-2">')
-    .replace(/\n/g, '<br/>');
-}
 
 // ── Scope / Depth badge ───────────────────────────────────────────────────────
 const SCOPE_LABELS: Record<string, string> = {
@@ -143,10 +128,10 @@ export default function AnalysisPage() {
     loadHistory();
   }, [loadHistory]);
 
-  // Auto-scroll viewer during stream
+  // Auto-scroll page to bottom of viewer during stream
   useEffect(() => {
     if (streaming && viewerRef.current) {
-      viewerRef.current.scrollTop = viewerRef.current.scrollHeight;
+      viewerRef.current.scrollIntoView({ behavior: 'smooth', block: 'end' });
     }
   }, [streamText, streaming]);
 
@@ -364,7 +349,7 @@ export default function AnalysisPage() {
             </div>
           )}
 
-          <div ref={viewerRef} className="max-h-[55vh] overflow-y-auto px-4 py-4">
+          <div ref={viewerRef} className="px-4 py-4">
             {displayEmpty && (
               <div className="flex flex-col items-center justify-center py-12 text-center">
                 <IconSparkles
@@ -387,12 +372,53 @@ export default function AnalysisPage() {
             )}
 
             {displayText && (
-              <div
-                className="prose prose-sm max-w-none text-[var(--ink-2)] text-sm leading-relaxed"
-                dangerouslySetInnerHTML={{
-                  __html: `<p class="mb-2">${renderMarkdown(displayText)}</p>`,
-                }}
-              />
+              <div className="text-sm leading-relaxed text-[var(--ink-2)] space-y-2">
+                <ReactMarkdown
+                  remarkPlugins={[remarkGfm]}
+                  components={{
+                    h1: ({ children }) => (
+                      <h2 className="text-base font-bold mt-5 mb-2 text-[var(--ink-1)]">{children}</h2>
+                    ),
+                    h2: ({ children }) => (
+                      <h3 className="text-sm font-bold mt-4 mb-1.5 text-[var(--ink-1)]">{children}</h3>
+                    ),
+                    h3: ({ children }) => (
+                      <h4 className="text-sm font-semibold mt-3 mb-1 text-[var(--ink-1)]">{children}</h4>
+                    ),
+                    p: ({ children }) => (
+                      <p className="mb-2 text-[var(--ink-2)]">{children}</p>
+                    ),
+                    ul: ({ children }) => (
+                      <ul className="list-disc pl-5 mb-2 space-y-1 text-[var(--ink-2)]">{children}</ul>
+                    ),
+                    ol: ({ children }) => (
+                      <ol className="list-decimal pl-5 mb-2 space-y-1 text-[var(--ink-2)]">{children}</ol>
+                    ),
+                    li: ({ children }) => (
+                      <li className="leading-relaxed">{children}</li>
+                    ),
+                    strong: ({ children }) => (
+                      <strong className="font-semibold text-[var(--ink-1)]">{children}</strong>
+                    ),
+                    em: ({ children }) => (
+                      <em className="italic text-[var(--ink-3)]">{children}</em>
+                    ),
+                    hr: () => <hr className="border-[var(--border)] my-3" />,
+                    blockquote: ({ children }) => (
+                      <blockquote className="border-l-2 border-[var(--accent)] pl-3 text-[var(--ink-3)] italic my-2">
+                        {children}
+                      </blockquote>
+                    ),
+                    code: ({ children }) => (
+                      <code className="bg-[var(--canvas)] text-[var(--accent)] px-1 py-0.5 rounded text-xs font-mono">
+                        {children}
+                      </code>
+                    ),
+                  }}
+                >
+                  {displayText}
+                </ReactMarkdown>
+              </div>
             )}
 
             {streaming && <Cursor />}

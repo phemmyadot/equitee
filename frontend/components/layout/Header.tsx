@@ -16,6 +16,7 @@ import {
   IconSettings,
   IconLogOut,
   IconBookmark,
+  IconSparkles,
 } from '@/components/atoms/icons';
 
 interface HeaderProps {
@@ -57,6 +58,11 @@ const NAV_ITEMS = [
     href: '/watchlist',
     label: 'Watchlist',
     icon: <IconBookmark width={14} height={14} />,
+  },
+  {
+    href: '/analysis',
+    label: 'AI Analyst',
+    icon: <IconSparkles width={14} height={14} />,
   },
 ] as const;
 

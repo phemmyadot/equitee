@@ -16,7 +16,9 @@
     "plotly.js-dist-min": "^2.27.0",
     "react": "19.2.3",
     "react-dom": "19.2.3",
-    "react-plotly.js": "^2.6.0"
+    "react-markdown": "^10.1.0",
+    "react-plotly.js": "^2.6.0",
+    "remark-gfm": "^4.0.1"
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4.2.1",

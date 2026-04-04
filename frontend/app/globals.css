@@ -89,6 +89,12 @@ body {
 ::-webkit-scrollbar-thumb:hover {
   background: var(--ink-4);
 }
+.scrollbar-none {
+  scrollbar-width: none;
+}
+.scrollbar-none::-webkit-scrollbar {
+  display: none;
+}
 
 /* ─────────────────────────────────────────────────────────────────
    TYPOGRAPHY UTILITIES
