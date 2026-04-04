@@ -221,7 +221,7 @@ export default function NGXAdvancedPage() {
           sector: s.Sector || 'Other',
           pe: _n(td.overview?.pe_ratio),
           roe: _n(td.overview?.roe),
-          netMargin: _n(td.performance?.net_margin),
+          netMargin: _n(td.overview?.net_margin),
           opMargin: _n(td.performance?.operating_margin),
         };
       })
