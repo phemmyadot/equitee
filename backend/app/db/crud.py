@@ -95,6 +95,7 @@ def create_holding(
     avg_cost: float,
     sector: str,
     user_id: int,
+    purchase_date=None,
 ) -> Holding:
     obj = Holding(
         user_id=user_id,
@@ -105,6 +106,7 @@ def create_holding(
         avg_cost=avg_cost,
         sector=sector,
         is_active=True,
+        purchase_date=purchase_date,
     )
     db.add(obj)
     db.commit()
@@ -121,6 +123,7 @@ def update_holding(
     sector: Optional[str] = None,
     avg_cost: Optional[float] = None,
     shares: Optional[float] = None,
+    purchase_date=None,
 ) -> Optional[Holding]:
     obj = get_holding_by_id(db, holding_id, user_id)
     if obj is None:
@@ -133,6 +136,8 @@ def update_holding(
         obj.avg_cost = avg_cost
     if shares is not None:
         obj.shares = shares
+    if purchase_date is not None:
+        obj.purchase_date = purchase_date
     db.commit()
     db.refresh(obj)
     return obj

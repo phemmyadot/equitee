@@ -45,6 +45,7 @@ export const createHolding = (body: {
   shares: number;
   avg_cost: number;
   sector: string;
+  purchase_date?: string;
 }) => request<HoldingRecord>('/holdings', 'POST', body);
 
 export const updateHolding = (
@@ -54,6 +55,7 @@ export const updateHolding = (
     sector?: string;
     avg_cost?: number;
     shares?: number;
+    purchase_date?: string;
   },
 ) => request<HoldingRecord>(`/holdings/${id}`, 'PUT', body);
 

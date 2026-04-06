@@ -708,6 +708,7 @@ function AddModal({ onClose, onDone }: { onClose: () => void; onDone: () => void
     shares: '',
     avg_cost: '',
     sector: 'Other',
+    purchase_date: '',
   });
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [busy, setBusy] = useState(false);
@@ -737,6 +738,7 @@ function AddModal({ onClose, onDone }: { onClose: () => void; onDone: () => void
         shares: Number(form.shares),
         avg_cost: Number(form.avg_cost),
         sector: form.sector,
+        ...(form.purchase_date ? { purchase_date: form.purchase_date } : {}),
       });
       onDone();
     } catch (e: any) {
@@ -800,6 +802,14 @@ function AddModal({ onClose, onDone }: { onClose: () => void; onDone: () => void
             placeholder="0.00"
           />
         </Field>
+        <Field label="Purchase Date (optional)">
+          <Input
+            type="date"
+            value={form.purchase_date}
+            onChange={(e) => set('purchase_date', e.target.value)}
+            max={new Date().toISOString().slice(0, 10)}
+          />
+        </Field>
       </div>
       {errors._ && <p className="text-[11px] text-[var(--loss)]">{errors._}</p>}
       <div className="flex justify-end gap-2 pt-1">
@@ -832,6 +842,7 @@ function EditModal({
     sector: holding.sector,
     avg_cost: String(holding.avg_cost),
     shares: String(holding.shares),
+    purchase_date: holding.purchase_date ?? '',
   });
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
@@ -845,6 +856,7 @@ function EditModal({
         sector: form.sector,
         avg_cost: Number(form.avg_cost),
         shares: Number(form.shares),
+        ...(form.purchase_date ? { purchase_date: form.purchase_date } : {}),
       });
       onDone();
     } catch (e: any) {
@@ -883,6 +895,14 @@ function EditModal({
             step="any"
             value={form.avg_cost}
             onChange={(e) => set('avg_cost', e.target.value)}
+          />
+        </Field>
+        <Field label="Purchase Date">
+          <Input
+            type="date"
+            value={form.purchase_date}
+            onChange={(e) => set('purchase_date', e.target.value)}
+            max={new Date().toISOString().slice(0, 10)}
           />
         </Field>
       </div>

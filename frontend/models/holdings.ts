@@ -8,6 +8,7 @@ export interface HoldingRecord {
   sector: string;
   is_active: boolean;
   created_at: string;
+  purchase_date: string | null;
 }
 
 export interface ClosedRecord {

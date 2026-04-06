@@ -18,7 +18,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 from pydantic import BaseModel, Field
 from typing import Optional
-from datetime import datetime
+from datetime import datetime, date
 
 from app.db.engine import get_db
 from app.db.models import User
@@ -51,6 +51,7 @@ class HoldingOut(BaseModel):
     sector: str
     is_active: bool
     created_at: datetime
+    purchase_date: Optional[date] = None
 
     class Config:
         from_attributes = True
@@ -75,6 +76,7 @@ class CreateHoldingBody(BaseModel):
     shares: float = Field(..., gt=0)
     avg_cost: float = Field(..., gt=0)
     sector: str = Field(default="Other", max_length=60)
+    purchase_date: Optional[date] = None
 
 
 class UpdateHoldingBody(BaseModel):
@@ -82,6 +84,7 @@ class UpdateHoldingBody(BaseModel):
     sector: Optional[str] = Field(None, max_length=60)
     avg_cost: Optional[float] = Field(None, gt=0)
     shares: Optional[float] = Field(None, ge=0)
+    purchase_date: Optional[date] = None
 
 
 class BuyBody(BaseModel):
@@ -128,6 +131,7 @@ def add_holding(
             avg_cost=body.avg_cost,
             sector=body.sector,
             user_id=current_user.id,
+            purchase_date=body.purchase_date,
         )
     except Exception:
         log.exception("Error creating holding")
@@ -149,6 +153,7 @@ def edit_holding(
         sector=body.sector,
         avg_cost=body.avg_cost,
         shares=body.shares,
+        purchase_date=body.purchase_date,
     )
     if obj is None:
         raise HTTPException(status_code=404, detail="Holding not found")
