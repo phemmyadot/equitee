@@ -62,6 +62,12 @@ async def get_data(
 # ── Dividend response models ──────────────────────────────────────────────────
 
 
+class DripProjection(BaseModel):
+    yr1: float
+    yr3: float
+    yr5: float
+
+
 class DividendHolding(BaseModel):
     """DividendInfo enriched with position data for projected payout calculation."""
 
@@ -72,15 +78,26 @@ class DividendHolding(BaseModel):
     dividend: Optional[DividendInfo] = None
     projected_payout: Optional[float] = None
     yield_on_cost: Optional[float] = None
+    annual_yield_pct: Optional[float] = None
+    drip: Optional[DripProjection] = None
     dividend_streak: Optional[int] = None
     years_with_dividend: Optional[int] = None
     dividend_growing: Optional[bool] = None
+
+
+class PortfolioDrip(BaseModel):
+    annual_income: float
+    yr1: float
+    yr3: float
+    yr5: float
+    blended_yield_pct: float
 
 
 class DividendsResponse(BaseModel):
     holdings: list[DividendHolding]
     cache_age_sec: Optional[int] = None
     total_projected_payout: Optional[float] = None
+    portfolio_drip: Optional[PortfolioDrip] = None
 
 
 @router.get("/dividends", response_model=DividendsResponse)
@@ -102,14 +119,29 @@ async def get_dividends(
             ticker = h["ticker"]
             shares = float(h["shares"])
             avg_cost = float(h["avg_cost"])
+            cost_basis = shares * avg_cost
             div = div_map.get(ticker)
 
             projected = None
             yoc = None
+            annual_yield = None
+            drip = None
+
             if div and div.cash_amount:
                 projected = round(shares * div.cash_amount, 2)
                 yoc = round((div.cash_amount / avg_cost) * 100, 4) if avg_cost else None
                 total_payout += projected
+
+                # Annual yield: assume one declared dividend = one payout per year
+                if cost_basis > 0:
+                    annual_yield = round((projected / cost_basis) * 100, 4)
+                    y = annual_yield / 100
+                    # DRIP compounding: FV = cost_basis × (1 + y)^n
+                    drip = DripProjection(
+                        yr1=round(cost_basis * (1 + y) ** 1 - cost_basis, 2),
+                        yr3=round(cost_basis * (1 + y) ** 3 - cost_basis, 2),
+                        yr5=round(cost_basis * (1 + y) ** 5 - cost_basis, 2),
+                    )
 
             hist = dividends_service.get_dividend_history(ticker)
 
@@ -122,6 +154,8 @@ async def get_dividends(
                     dividend=div,
                     projected_payout=projected,
                     yield_on_cost=yoc,
+                    annual_yield_pct=annual_yield,
+                    drip=drip,
                     dividend_streak=hist.get("streak") or None,
                     years_with_dividend=hist.get("years_paid") or None,
                     dividend_growing=hist.get("growing"),
@@ -137,10 +171,25 @@ async def get_dividends(
             )
         )
 
+        # Portfolio-level DRIP
+        portfolio_drip = None
+        total_cost = sum(float(h["shares"]) * float(h["avg_cost"]) for h in ngx)
+        if total_payout > 0 and total_cost > 0:
+            py = total_payout / total_cost
+            blended_yield = round(py * 100, 4)
+            portfolio_drip = PortfolioDrip(
+                annual_income=round(total_payout, 2),
+                yr1=round(total_cost * (1 + py) ** 1 - total_cost, 2),
+                yr3=round(total_cost * (1 + py) ** 3 - total_cost, 2),
+                yr5=round(total_cost * (1 + py) ** 5 - total_cost, 2),
+                blended_yield_pct=blended_yield,
+            )
+
         return DividendsResponse(
             holdings=result,
             cache_age_sec=dividends_service.cache_age(),
             total_projected_payout=round(total_payout, 2) if total_payout else None,
+            portfolio_drip=portfolio_drip,
         )
 
     except Exception:

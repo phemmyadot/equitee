@@ -16,8 +16,17 @@ import {
 } from '@/services/api';
 import type { TickerData, CorrelationData, AnalyticsData, RelativeStrengthData } from '@/models';
 
+// ── P/E benchmarks (global reference points) ─────────────────────────────────
+const PE_BENCHMARKS = [
+  { label: 'NGX', value: 11, color: '#6366F1' },
+  { label: 'Africa', value: 14.4, color: '#F59E0B' },
+  { label: 'EM', value: 17, color: '#0EA5E9' },
+  { label: 'S&P 500', value: 27, color: '#EF4444' },
+];
+const PE_MAX = 32;
+
 export default function NGXAdvancedPage() {
-  const { data, loading } = usePortfolio();
+  const { data, loading, dividendsData } = usePortfolio();
   const isFirstLoad = loading && !data;
 
   const [tickerMap, setTickerMap] = useState<Record<string, TickerData>>({});
@@ -81,13 +90,27 @@ export default function NGXAdvancedPage() {
   const wROE = weightedAvg((td) => _n(td.overview?.roe));
   const wBeta = weightedAvg((td) => _n(td.performance?.beta));
   const wDivY = weightedAvg((td) => _n(td.overview?.dividend_yield));
-  const annualDivIncome =
-    Object.keys(tickerMap).length > 0
-      ? active.reduce((sum, s) => {
-          const dy = _n(tickerMap[s.Ticker]?.overview?.dividend_yield);
-          return sum + (dy != null ? ((s.CurrentEquity ?? 0) * dy) / 100 : 0);
-        }, 0)
-      : null;
+  const annualDivIncome = dividendsData?.total_projected_payout ?? null;
+
+  // ── Momentum vs Value classification ─────────────────────────────────────────
+  const mvSplit = useMemo(() => {
+    if (!Object.keys(tickerMap).length) return null;
+    const rows = active.map((s) => {
+      const td = tickerMap[s.Ticker];
+      const pe = td ? _n(td.overview?.pe_ratio) : null;
+      const roe = td ? _n(td.overview?.roe) : null;
+      const ret = s.ReturnPct ?? 0;
+      // Momentum: strong ROE (>15%) + positive return
+      const isMomentum = roe != null && roe > 15 && ret > 0;
+      // Value: low P/E (<12) + return not yet strongly positive
+      const isValue = pe != null && pe < 12 && pe > 0;
+      const label = isMomentum && isValue ? 'Quality' : isMomentum ? 'Momentum' : isValue ? 'Value' : 'Neutral';
+      return { ticker: s.Ticker, name: s.Stock, sector: s.Sector, ret, pe, roe, label, equity: s.CurrentEquity ?? 0 };
+    });
+    const counts: Record<string, number> = {};
+    rows.forEach((r) => { counts[r.label] = (counts[r.label] ?? 0) + 1; });
+    return { rows, counts };
+  }, [active, tickerMap]);
 
   const costTrace = {
     name: 'Cost',
@@ -422,15 +445,113 @@ export default function NGXAdvancedPage() {
               delay={150}
             />
             <KPICard
-              label="Annual Div Income"
+              label="Div Payout"
               value={annualDivIncome != null ? fmtNGN(annualDivIncome) : '—'}
-              sub="projected"
+              sub="from announced divs"
               accent="accent"
               delay={200}
             />
           </>
         )}
       </div>
+
+      {/* ── P/E Benchmark Widget ──────────────────────────────────────────────── */}
+      <div className="bg-white rounded-2xl border border-[var(--border)] px-5 py-4">
+        <div className="flex items-center justify-between mb-3">
+          <div>
+            <p className="text-[10px] font-bold uppercase tracking-widest text-[var(--ink-4)]">P/E vs Global Markets</p>
+            <p className="text-[11px] text-[var(--ink-3)] mt-0.5">
+              Portfolio weighted P/E:{' '}
+              <span className="font-mono font-semibold text-[var(--ink)]">
+                {wPE != null ? `${wPE.toFixed(1)}×` : '—'}
+              </span>
+            </p>
+          </div>
+          {wPE != null && (() => {
+            const below = PE_BENCHMARKS.filter(b => wPE < b.value);
+            const msg = below.length === PE_BENCHMARKS.length
+              ? 'Cheaper than all benchmarks'
+              : below.length === 0
+                ? 'Pricier than all benchmarks'
+                : `Cheaper than ${below.map(b => b.label).join(', ')}`;
+            const accent = below.length >= 2 ? 'var(--gain)' : below.length === 0 ? 'var(--loss)' : 'var(--warn)';
+            return <span className="text-[10px] font-semibold px-2 py-1 rounded-lg" style={{ color: accent, background: accent + '18' }}>{msg}</span>;
+          })()}
+        </div>
+
+        {/* Number line */}
+        <div className="relative h-8 mt-4 mb-6">
+          {/* Track */}
+          <div className="absolute left-0 right-0 top-3 h-1.5 rounded-full bg-[var(--border)]" />
+          {/* Benchmark markers */}
+          {PE_BENCHMARKS.map((b) => {
+            const pct = (b.value / PE_MAX) * 100;
+            return (
+              <div key={b.label} className="absolute top-0 flex flex-col items-center" style={{ left: `${pct}%`, transform: 'translateX(-50%)' }}>
+                <div className="w-0.5 h-3 rounded-full mt-1.5" style={{ background: b.color }} />
+                <span className="text-[8px] font-bold mt-1 whitespace-nowrap" style={{ color: b.color }}>{b.label} {b.value}×</span>
+              </div>
+            );
+          })}
+          {/* Portfolio pointer */}
+          {wPE != null && wPE > 0 && wPE <= PE_MAX && (
+            <div className="absolute top-0 flex flex-col items-center z-10" style={{ left: `${(wPE / PE_MAX) * 100}%`, transform: 'translateX(-50%)' }}>
+              <div className="w-3 h-3 rounded-full border-2 border-white shadow-md" style={{ background: 'var(--accent)', marginTop: '0px' }} />
+              <span className="text-[8px] font-bold text-[var(--accent)] mt-1 whitespace-nowrap">You {wPE.toFixed(1)}×</span>
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* ── Momentum vs Value Split ───────────────────────────────────────────── */}
+      {mvSplit && (
+        <div className="bg-white rounded-2xl border border-[var(--border)] px-5 py-4">
+          <p className="text-[10px] font-bold uppercase tracking-widest text-[var(--ink-4)] mb-3">Momentum vs Value</p>
+          <div className="flex gap-4 flex-wrap mb-3">
+            {([ ['Momentum', '#10B981', 'ROE>15% + Return>0%'], ['Value', '#6366F1', 'P/E<12 + undervalued'], ['Quality', '#F59E0B', 'High ROE + Low P/E'], ['Neutral', '#9CA3AF', 'No clear signal'] ] as [string, string, string][]).map(([label, color, desc]) => {
+              const count = mvSplit.counts[label] ?? 0;
+              return (
+                <div key={label} className="flex items-center gap-2">
+                  <span className="w-2 h-2 rounded-full shrink-0" style={{ background: color }} />
+                  <div>
+                    <span className="text-[11px] font-semibold text-[var(--ink)]">{count} {label}</span>
+                    <p className="text-[9px] text-[var(--ink-4)]">{desc}</p>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+          <div className="overflow-x-auto">
+            <table className="w-full text-[11px] border-collapse">
+              <thead>
+                <tr className="border-b border-[var(--border)]">
+                  {['Ticker', 'Type', 'Return', 'P/E', 'ROE %'].map((h) => (
+                    <th key={h} className={`py-1.5 px-2 text-[9px] font-semibold uppercase tracking-wide text-[var(--ink-4)] ${h === 'Ticker' || h === 'Type' ? 'text-left' : 'text-right'}`}>{h}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {mvSplit.rows.map((r) => {
+                  const colorMap: Record<string, string> = { Momentum: '#10B981', Value: '#6366F1', Quality: '#F59E0B', Neutral: '#9CA3AF' };
+                  const c = colorMap[r.label];
+                  return (
+                    <tr key={r.ticker} className="border-b border-[var(--border)] hover:bg-[var(--sidebar)]">
+                      <td className="py-1.5 px-2 font-mono font-semibold text-[var(--ink)]">{r.ticker}</td>
+                      <td className="py-1.5 px-2">
+                        <span className="text-[9px] font-bold px-1.5 py-0.5 rounded-full" style={{ color: c, background: c + '20' }}>{r.label}</span>
+                      </td>
+                      <td className={`py-1.5 px-2 font-mono text-right text-[11px] ${r.ret >= 0 ? 'text-[var(--gain)]' : 'text-[var(--loss)]'}`}>{r.ret >= 0 ? '+' : ''}{r.ret.toFixed(1)}%</td>
+                      <td className="py-1.5 px-2 font-mono text-right text-[var(--ink-2)]">{r.pe != null ? `${r.pe.toFixed(1)}×` : '—'}</td>
+                      <td className="py-1.5 px-2 font-mono text-right text-[var(--ink-2)]">{r.roe != null ? `${r.roe.toFixed(1)}%` : '—'}</td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+            <p className="text-[9px] text-[var(--ink-4)] px-2 pt-1.5">Momentum = ROE &gt;15% + positive return · Value = P/E &lt;12 · Quality = both · Neutral = neither</p>
+          </div>
+        </div>
+      )}
 
       <ChartCard
         title="Cost Basis vs Current Value"

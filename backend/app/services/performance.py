@@ -12,6 +12,7 @@ import time
 import requests
 from typing import Optional, Dict
 from app.config import settings
+from app.services.listing_resolver import resolve_quote_base
 
 log = logging.getLogger(__name__)
 
@@ -58,7 +59,7 @@ def _scrape_stats_blob(ticker: str) -> Dict[str, Optional[float]]:
     if key in _blob_cache and (now - _blob_ts.get(key, 0)) < _BLOB_TTL:
         return _blob_cache[key]
 
-    url = f"{settings.NGX_SOURCE_BASE_URL}/quote/ngx/{ticker.lower()}/statistics/"
+    url = resolve_quote_base(ticker) + "statistics/"
     try:
         resp = requests.get(url, headers=_HEADERS, timeout=15)
         resp.raise_for_status()

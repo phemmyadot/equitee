@@ -46,6 +46,20 @@ export interface DividendInfo {
   timestamp: string | null;
 }
 
+export interface DripProjection {
+  yr1: number;
+  yr3: number;
+  yr5: number;
+}
+
+export interface PortfolioDrip {
+  annual_income: number;
+  yr1: number;
+  yr3: number;
+  yr5: number;
+  blended_yield_pct: number;
+}
+
 export interface DividendHolding {
   ticker: string;
   name: string;
@@ -54,6 +68,8 @@ export interface DividendHolding {
   dividend: DividendInfo | null;
   projected_payout: number | null;
   yield_on_cost: number | null;
+  annual_yield_pct: number | null;
+  drip: DripProjection | null;
   dividend_streak: number | null;
   years_with_dividend: number | null;
   dividend_growing: boolean | null;
@@ -63,4 +79,5 @@ export interface DividendsResponse {
   holdings: DividendHolding[];
   cache_age_sec: number | null;
   total_projected_payout: number | null;
+  portfolio_drip: PortfolioDrip | null;
 }

@@ -26,6 +26,7 @@ from app.db.crud import (
     get_latest_analysis,
 )
 from app.db.models import DailyPriceHistory
+from app.services import dividends as _dividends_svc
 
 log = logging.getLogger(__name__)
 
@@ -219,6 +220,15 @@ def build_context(db: Session, user_id: int) -> dict:
         else 0.0
     )
 
+    # Dividend income from cache (non-blocking — empty if not yet fetched)
+    ngx_tickers = [h.ticker for h in ngx_holdings]
+    div_map = _dividends_svc.get_dividends(ngx_tickers)
+    annual_div_income = 0.0
+    for h in ngx_holdings:
+        div = div_map.get(h.ticker)
+        if div and div.cash_amount:
+            annual_div_income += (h.shares or 0) * div.cash_amount
+
     return {
         "date": date.today().isoformat(),
         "ngx": ngx_rows,
@@ -234,6 +244,7 @@ def build_context(db: Session, user_id: int) -> dict:
             "ngx_positions": len(ngx_holdings),
             "us_positions": len(us_holdings),
             "watchlist_count": len(wl_rows),
+            "dividend_income_ngn": round(annual_div_income, 2),
         },
     }
 
@@ -287,6 +298,11 @@ def build_user_prompt(ctx: dict, scope: str) -> str:
         for w in ctx["watchlist"]:
             added = f" (added @ {w['market']} {w['added_price']})" if w["added_price"] else ""
             lines.append(f"  {w['ticker']} [{w['market']}]{added}")
+        lines.append("")
+
+    div_income = k.get("dividend_income_ngn", 0)
+    if div_income and div_income > 0 and scope in ("portfolio", "combined"):
+        lines.append(f"Projected annual dividend income: ₦{div_income:,.0f}")
         lines.append("")
 
     lines.append("Provide your analysis now.")

@@ -512,6 +512,46 @@ export default function DividendsPage() {
         </div>
       )}
 
+      {/* ── DRIP Projection ── */}
+      {!loading && resp?.portfolio_drip && (() => {
+        const d = resp.portfolio_drip;
+        return (
+          <div className="bg-white rounded-2xl border border-[var(--border)] px-5 py-4">
+            <div className="flex items-center justify-between mb-3 flex-wrap gap-2">
+              <div>
+                <p className="text-[10px] font-bold uppercase tracking-widest text-[var(--ink-4)]">
+                  Dividend Reinvestment Projection
+                </p>
+                <p className="text-[11px] text-[var(--ink-3)] mt-0.5">
+                  If all dividends are reinvested at current yield ·{' '}
+                  <span className="font-mono font-semibold text-[var(--accent)]">
+                    {d.blended_yield_pct.toFixed(2)}% blended yield
+                  </span>
+                </p>
+              </div>
+              <span className="text-[10px] text-[var(--ink-4)] font-mono">
+                Annual income: <span className="text-[var(--gain)] font-semibold">{fmtNGN(d.annual_income)}</span>
+              </span>
+            </div>
+            <div className="grid grid-cols-3 gap-3">
+              {([
+                { label: '1 Year', value: d.yr1, sub: 'additional gain' },
+                { label: '3 Years', value: d.yr3, sub: 'compounded gain' },
+                { label: '5 Years', value: d.yr5, sub: 'compounded gain' },
+              ] as { label: string; value: number; sub: string }[]).map(({ label, value, sub }) => (
+                <div key={label} className="bg-[var(--sidebar)] rounded-xl px-4 py-3">
+                  <p className="text-[9px] font-bold uppercase tracking-widest text-[var(--ink-4)]">{label}</p>
+                  <p className="font-mono font-bold text-[16px] text-[var(--gain)] mt-1 leading-none">
+                    +{fmtNGN(value)}
+                  </p>
+                  <p className="text-[9px] text-[var(--ink-4)] mt-0.5">{sub}</p>
+                </div>
+              ))}
+            </div>
+          </div>
+        );
+      })()}
+
       {/* ── Timeline ── */}
       {!loading && <Timeline holdings={holdings} />}
 

@@ -22,6 +22,7 @@ import requests
 from app.config import settings
 from app.db.engine import SessionLocal
 from app.db import crud
+from app.services.listing_resolver import resolve_quote_base
 
 log = logging.getLogger(__name__)
 
@@ -125,7 +126,7 @@ def get_earnings_history(ticker: str) -> Optional[dict]:
                 return result
 
         # Scrape — extract JSON blob from embedded JS
-        url = f"{settings.NGX_SOURCE_BASE_URL}/quote/ngx/{ticker.lower()}/financials/?p=quarterly"
+        url = resolve_quote_base(ticker) + "financials/?p=quarterly"
         text = _fetch_text(url)
         if not text:
             return None
@@ -201,7 +202,7 @@ def get_balance_sheet(ticker: str) -> Optional[dict]:
                 return result
 
         # Scrape
-        url = f"{settings.NGX_SOURCE_BASE_URL}/quote/ngx/{ticker.lower()}/financials/balance-sheet/"
+        url = resolve_quote_base(ticker) + "financials/balance-sheet/"
         text = _fetch_text(url)
         if not text:
             return None
@@ -290,10 +291,7 @@ def get_cash_flows(ticker: str) -> Optional[dict]:
                 return result
 
         # Scrape cash flow statement
-        cf_url = (
-            f"{settings.NGX_SOURCE_BASE_URL}/quote/ngx/{ticker.lower()}"
-            f"/financials/cash-flow-statement/?p=quarterly"
-        )
+        cf_url = resolve_quote_base(ticker) + "financials/cash-flow-statement/?p=quarterly"
         cf_text = _fetch_text(cf_url)
         if not cf_text:
             return None
@@ -308,10 +306,7 @@ def get_cash_flows(ticker: str) -> Optional[dict]:
             return None
 
         # Scrape quarterly balance sheet for net debt (netcash sign-inverted)
-        bs_url = (
-            f"{settings.NGX_SOURCE_BASE_URL}/quote/ngx/{ticker.lower()}"
-            f"/financials/balance-sheet/?p=quarterly"
-        )
+        bs_url = resolve_quote_base(ticker) + "financials/balance-sheet/?p=quarterly"
         bs_text = _fetch_text(bs_url)
         netcash = _extract_js_array(bs_text, "netcash") if bs_text else []
         net_debt = [-v if v is not None else None for v in netcash]
