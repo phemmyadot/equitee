@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useRef, useState, useCallback } from 'react';
+import { useEffect, useRef, useState, useCallback, useMemo } from 'react';
 import MarkdownViewer from '@/components/MarkdownViewer';
 import {
   streamAnalysis,
@@ -9,6 +9,7 @@ import {
   clearAnalysisHistory,
 } from '@/services/api';
 import type { AnalysisSummary, AnalysisDetail, AnalysisScope, AnalysisDepth } from '@/models/analysis';
+import { usePortfolio } from '@/context/PortfolioContext';
 import {
   IconSparkles,
   IconRefresh,
@@ -17,6 +18,126 @@ import {
   IconCheck,
   IconX,
 } from '@/components/atoms/icons';
+
+// ── Collapsible section renderer ─────────────────────────────────────────────
+function CollapsibleSections({ markdown }: { markdown: string }) {
+  // Split on ## headings — each becomes a collapsible block
+  const sections = useMemo(() => {
+    const lines = markdown.split('\n');
+    const result: { heading: string; body: string; defaultOpen: boolean }[] = [];
+    let current: { heading: string; lines: string[] } | null = null;
+
+    for (const line of lines) {
+      if (/^## /.test(line)) {
+        if (current) result.push({ heading: current.heading, body: current.lines.join('\n').trim(), defaultOpen: result.length === 0 });
+        current = { heading: line.replace(/^## /, ''), lines: [] };
+      } else if (current) {
+        current.lines.push(line);
+      }
+    }
+    if (current) result.push({ heading: current.heading, body: current.lines.join('\n').trim(), defaultOpen: result.length === 0 });
+    return result;
+  }, [markdown]);
+
+  const [open, setOpen] = useState<Record<number, boolean>>({});
+
+  // Initialise first section open on first render
+  useEffect(() => {
+    setOpen(sections.reduce((acc, _, i) => ({ ...acc, [i]: i === 0 }), {} as Record<number, boolean>));
+  }, [sections.length]);
+
+  if (!sections.length) return <MarkdownViewer>{markdown}</MarkdownViewer>;
+
+  return (
+    <div className="space-y-2">
+      {sections.map((s, i) => {
+        const isOpen = open[i] ?? false;
+        return (
+          <div key={i} className="border border-[var(--border)] rounded-xl overflow-hidden">
+            <button
+              onClick={() => setOpen((prev) => ({ ...prev, [i]: !prev[i] }))}
+              className="w-full flex items-center justify-between px-4 py-2.5 bg-[var(--sidebar)] hover:bg-[var(--accent-light)] transition-colors text-left"
+            >
+              <span className="text-sm font-semibold text-[var(--ink-1)]">{s.heading}</span>
+              <span className={`text-[var(--ink-4)] transition-transform duration-200 ${isOpen ? 'rotate-180' : ''}`}>
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="m6 9 6 6 6-6"/></svg>
+              </span>
+            </button>
+            {isOpen && (
+              <div className="px-4 py-3 border-t border-[var(--border)]">
+                <MarkdownViewer>{s.body}</MarkdownViewer>
+              </div>
+            )}
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+// ── Rebalancing calculator ────────────────────────────────────────────────────
+/** Parses "suggested weight" lines like "- **TICKER** — suggested: 15%" or "TICKER: 15%" from response */
+function RebalancingCalc({ markdown, holdings }: { markdown: string; holdings?: { ticker: string; equity: number }[] }) {
+  const suggestions = useMemo(() => {
+    if (!holdings?.length) return null;
+    // Extract suggested weights from lines like: TICKER.*(\d+)%
+    const lines = markdown.split('\n');
+    const found: Record<string, number> = {};
+    for (const line of lines) {
+      const m = line.match(/\*{0,2}([A-Z]{2,10})\*{0,2}[^%\n]*?(\d+(?:\.\d+)?)\s*%/);
+      if (m) {
+        const ticker = m[1];
+        const pct = parseFloat(m[2]);
+        if (pct > 0 && pct <= 100 && holdings.some(h => h.ticker === ticker)) {
+          found[ticker] = pct;
+        }
+      }
+    }
+    if (!Object.keys(found).length) return null;
+
+    const totalEquity = holdings.reduce((s, h) => s + h.equity, 0) || 1;
+    return holdings
+      .filter(h => found[h.ticker] != null)
+      .map(h => ({
+        ticker: h.ticker,
+        current: parseFloat(((h.equity / totalEquity) * 100).toFixed(1)),
+        suggested: found[h.ticker],
+        delta: parseFloat((found[h.ticker] - (h.equity / totalEquity) * 100).toFixed(1)),
+      }));
+  }, [markdown, holdings]);
+
+  if (!suggestions?.length) return null;
+
+  return (
+    <div className="mt-4 border border-[var(--border)] rounded-xl overflow-hidden">
+      <div className="px-4 py-2.5 bg-[var(--sidebar)] border-b border-[var(--border)]">
+        <p className="text-[10px] font-bold uppercase tracking-widest text-[var(--ink-4)]">Rebalancing Guide</p>
+        <p className="text-[10px] text-[var(--ink-4)] mt-0.5">Weights mentioned in analysis</p>
+      </div>
+      <table className="w-full text-[11px]">
+        <thead>
+          <tr className="border-b border-[var(--border)]">
+            {['Ticker', 'Current %', 'Suggested %', 'Delta'].map(h => (
+              <th key={h} className={`py-1.5 px-3 text-[9px] font-semibold uppercase text-[var(--ink-4)] ${h === 'Ticker' ? 'text-left' : 'text-right'}`}>{h}</th>
+            ))}
+          </tr>
+        </thead>
+        <tbody>
+          {suggestions.map(r => (
+            <tr key={r.ticker} className="border-b border-[var(--border)] last:border-0 hover:bg-[var(--sidebar)]">
+              <td className="py-2 px-3 font-mono font-semibold text-[var(--ink)]">{r.ticker}</td>
+              <td className="py-2 px-3 font-mono text-right text-[var(--ink-2)]">{r.current}%</td>
+              <td className="py-2 px-3 font-mono text-right text-[var(--ink-2)]">{r.suggested}%</td>
+              <td className={`py-2 px-3 font-mono font-semibold text-right ${r.delta > 0 ? 'text-[var(--gain)]' : r.delta < 0 ? 'text-[var(--loss)]' : 'text-[var(--ink-4)]'}`}>
+                {r.delta > 0 ? '+' : ''}{r.delta}%
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}
 
 // ── Scope / Depth badge ───────────────────────────────────────────────────────
 const SCOPE_LABELS: Record<string, string> = {
@@ -118,6 +239,7 @@ function HistoryItem({
 
 // ── Main Page ─────────────────────────────────────────────────────────────────
 export default function AnalysisPage() {
+  const { data: portfolioData } = usePortfolio();
   const [scope, setScope] = useState<AnalysisScope>('portfolio');
   const [depth, setDepth] = useState<AnalysisDepth>('quick');
 
@@ -390,8 +512,21 @@ export default function AnalysisPage() {
               </div>
             )}
 
-            {displayText && (
-              <MarkdownViewer>{displayText}</MarkdownViewer>
+            {/* During streaming: plain markdown. After: collapsible sections */}
+            {streaming && streamText && (
+              <MarkdownViewer>{streamText}</MarkdownViewer>
+            )}
+
+            {!streaming && displayText && (
+              <>
+                <CollapsibleSections markdown={displayText} />
+                <RebalancingCalc
+                  markdown={displayText}
+                  holdings={(portfolioData?.ngx_stocks ?? [])
+                    .filter(s => s.CurrentEquity != null)
+                    .map(s => ({ ticker: s.Ticker, equity: s.CurrentEquity! }))}
+                />
+              </>
             )}
 
             {streaming && <Cursor />}

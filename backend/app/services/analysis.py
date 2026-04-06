@@ -25,8 +25,9 @@ from app.db.crud import (
     get_watchlist,
     get_latest_analysis,
 )
-from app.db.models import DailyPriceHistory
+from app.db.models import DailyPriceHistory, PortfolioSnapshot
 from app.services import dividends as _dividends_svc
+from app.services import performance as _perf_svc
 
 log = logging.getLogger(__name__)
 
@@ -39,7 +40,7 @@ _ANALYST_PERSONA = (
     "Be direct, specific, and actionable. "
     "Always respond in well-structured Markdown. Use ## for section headings, "
     "**bold** for tickers and key figures, bullet lists (- item) for action points. "
-    "No disclaimers. No plain prose — Markdown only. Keep total response under 600 words."
+    "No disclaimers. No plain prose — Markdown only. Keep total response under 1000 words."
 )
 
 _PORTFOLIO_SECTIONS = (
@@ -229,6 +230,36 @@ def build_context(db: Session, user_id: int) -> dict:
         if div and div.cash_amount:
             annual_div_income += (h.shares or 0) * div.cash_amount
 
+    # Earnings watch: tickers with no P/E in cached overview (cache-only, no scrape)
+    no_pe_tickers: list[str] = []
+    for h in ngx_holdings:
+        ov = _perf_svc._overview_cache.get(h.ticker.upper())
+        if ov is not None and not ov.get("pe_ratio"):
+            no_pe_tickers.append(h.ticker)
+
+    # Market direction: NGX portfolio return over last 30 days from snapshots
+    ngx_market_direction: Optional[str] = None
+    try:
+        from sqlalchemy import desc as _desc
+        snaps = (
+            db.execute(
+                select(PortfolioSnapshot)
+                .where(PortfolioSnapshot.user_id == user_id)
+                .order_by(_desc(PortfolioSnapshot.ts))
+                .limit(35)
+            )
+            .scalars()
+            .all()
+        )
+        if len(snaps) >= 2:
+            latest_eq = snaps[0].ngx_equity_ngn or 0
+            oldest_eq = snaps[-1].ngx_equity_ngn or 0
+            if oldest_eq > 0:
+                chg = (latest_eq / oldest_eq - 1) * 100
+                ngx_market_direction = f"{chg:+.1f}% over last ~30 days (portfolio NGX equity)"
+    except Exception:
+        pass
+
     return {
         "date": date.today().isoformat(),
         "ngx": ngx_rows,
@@ -245,6 +276,8 @@ def build_context(db: Session, user_id: int) -> dict:
             "us_positions": len(us_holdings),
             "watchlist_count": len(wl_rows),
             "dividend_income_ngn": round(annual_div_income, 2),
+            "no_pe_tickers": no_pe_tickers,
+            "ngx_market_direction": ngx_market_direction,
         },
     }
 
@@ -305,6 +338,16 @@ def build_user_prompt(ctx: dict, scope: str) -> str:
         lines.append(f"Projected annual dividend income: ₦{div_income:,.0f}")
         lines.append("")
 
+    no_pe = k.get("no_pe_tickers", [])
+    if no_pe and scope in ("portfolio", "combined"):
+        lines.append(f"⚠ Earnings not filed (no P/E available): {', '.join(no_pe)}")
+        lines.append("")
+
+    mkt = k.get("ngx_market_direction")
+    if mkt:
+        lines.append(f"NGX portfolio direction: {mkt}")
+        lines.append("")
+
     lines.append("Provide your analysis now.")
     return "\n".join(lines)
 
@@ -342,7 +385,7 @@ def stream_analysis_sse(
     try:
         with client.messages.stream(
             model=model,
-            max_tokens=900,
+            max_tokens=2048,
             system=build_system_prompt(scope),
             messages=[{"role": "user", "content": prompt}],
         ) as stream:
