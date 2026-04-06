@@ -10,6 +10,7 @@ After that the DB is the sole source of truth for tickers.
 
 import math
 import logging
+from datetime import datetime, timezone
 from typing import Any, Optional
 
 from sqlalchemy.orm import Session
@@ -35,6 +36,10 @@ from app.config import settings
 
 log = logging.getLogger(__name__)
 
+# ── Real-return constants ─────────────────────────────────────────────────────
+_NGX_AVG_CPI = 0.162   # Nigeria average annual CPI (~16.2%)
+_US_AVG_CPI  = 0.035   # US average annual CPI (~3.5%)
+
 
 # ══════════════════════════════════════════════════════════════════════════════
 # Helpers
@@ -54,6 +59,27 @@ def _safe(v: Any) -> Optional[float]:
 
 def _sum(rows: list[StockRow], key: str) -> float:
     return sum(getattr(r, key) or 0 for r in rows)
+
+
+def _real_return(nominal_pct: Optional[float], h: dict, avg_cpi: float) -> Optional[float]:
+    """CPI-deflated real return: ((1+nominal)/(1+cpi)^years - 1)*100.
+    Uses purchase_date if set, falls back to created_at."""
+    if nominal_pct is None or avg_cpi <= 0:
+        return None
+    date_str = h.get("purchase_date") or h.get("created_at")
+    if not date_str:
+        return None
+    try:
+        ref = datetime.fromisoformat(date_str)
+        if ref.tzinfo is None:
+            ref = ref.replace(tzinfo=timezone.utc)
+        years = (datetime.now(timezone.utc) - ref).days / 365.25
+        if years <= 0:
+            return None
+        real = ((1 + nominal_pct / 100) / (1 + avg_cpi) ** years - 1) * 100
+        return round(real, 2)
+    except Exception:
+        return None
 
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -86,7 +112,11 @@ def load_holdings_from_db(db: Session, user_id: int) -> dict:
 
 
 def build_stock_rows(
-    holdings: list[dict], prices: dict, price_source_label: str
+    holdings: list[dict],
+    prices: dict,
+    price_source_label: str,
+    usdngn: float = 0.0,
+    avg_cpi: float = 0.0,
 ) -> list[StockRow]:
     rows = []
     for h in holdings:
@@ -104,6 +134,14 @@ def build_stock_rows(
             if (unreal is not None and total_cost)
             else None
         )
+
+        # USD conversion (NGX only, when usdngn provided)
+        usd_equity = _safe(equity / usdngn) if (equity is not None and usdngn > 0) else None
+        usd_cost   = _safe(total_cost / usdngn) if usdngn > 0 else None
+        usd_return = _safe(usd_equity - usd_cost) if (usd_equity is not None and usd_cost is not None) else None
+
+        # CPI-deflated real return
+        real_ret = _real_return(ret_pct, h, avg_cpi) if avg_cpi > 0 else None
 
         rows.append(
             StockRow(
@@ -126,6 +164,10 @@ def build_stock_rows(
                 DayLow=_safe(p.low) if p else None,
                 Volume=_safe(p.volume) if p else None,
                 PriceSource=price_source_label if price is not None else "no-data",
+                UsdEquity=usd_equity,
+                UsdCost=usd_cost,
+                UsdReturn=usd_return,
+                RealReturnPct=real_ret,
             )
         )
     return rows
@@ -192,8 +234,8 @@ def build_portfolio_response(
     usdngn = fx["rate"]
     holdings = load_holdings_from_db(db, user_id)
 
-    ngx_stocks = build_stock_rows(holdings["ngx"], ngx_prices, "ngx")
-    us_stocks = build_stock_rows(holdings["us"], us_prices, "yahoo")
+    ngx_stocks = build_stock_rows(holdings["ngx"], ngx_prices, "ngx", usdngn=usdngn, avg_cpi=_NGX_AVG_CPI)
+    us_stocks = build_stock_rows(holdings["us"], us_prices, "yahoo", avg_cpi=_US_AVG_CPI)
 
     sold = [
         SoldRow(
@@ -219,6 +261,14 @@ def build_portfolio_response(
 
     ngx_usd = ngx_equity / usdngn if usdngn else 0
     total_usd = ngx_usd + us_equity
+    ngx_cost_usd = ngx_cost / usdngn if usdngn else 0
+    ngx_usd_return_pct = (ngx_usd / ngx_cost_usd - 1) * 100 if ngx_cost_usd else 0
+    # Currency split: prefer equity-based, fall back to cost-based when no live prices
+    _ngx_base = ngx_usd if ngx_usd > 0 else ngx_cost_usd
+    _us_base  = us_equity if us_equity > 0 else us_cost
+    _total_base = _ngx_base + _us_base
+    ngx_pct = _ngx_base / _total_base * 100 if _total_base else None
+    us_pct  = _us_base  / _total_base * 100 if _total_base else None
 
     # ── Snapshot (write at most once per NGX_PRICE_TTL seconds per user) ─────
     if should_write_snapshot(db, settings.NGX_PRICE_TTL, user_id):
@@ -290,6 +340,10 @@ def build_portfolio_response(
             ngx_usd=round(ngx_usd, 2),
             us_usd=round(us_equity, 2),
             total_usd=round(total_usd, 2),
+            ngx_cost_usd=round(ngx_cost_usd, 2),
+            ngx_usd_return_pct=round(ngx_usd_return_pct, 2),
+            ngx_pct=round(ngx_pct, 1),
+            us_pct=round(us_pct, 1),
         ),
         ngx_stocks=ngx_stocks,
         ngx_sold=sold,

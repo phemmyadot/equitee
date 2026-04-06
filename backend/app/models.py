@@ -94,6 +94,11 @@ class StockRow(BaseModel):
     DayLow: Optional[float] = None
     Volume: Optional[float] = None
     PriceSource: str = "no-data"
+    # Real-return fields (NGX only for USD; both markets for RealReturnPct)
+    UsdEquity: Optional[float] = None       # equity in USD at current FX
+    UsdCost: Optional[float] = None         # cost in USD at current FX
+    UsdReturn: Optional[float] = None       # P&L in USD
+    RealReturnPct: Optional[float] = None   # NGN/USD return deflated by avg CPI
 
 
 class SectorRow(BaseModel):
@@ -132,6 +137,10 @@ class CombinedKPIs(BaseModel):
     ngx_usd: float
     us_usd: float
     total_usd: float
+    ngx_cost_usd: Optional[float] = None
+    ngx_usd_return_pct: Optional[float] = None
+    ngx_pct: Optional[float] = None
+    us_pct: Optional[float] = None
 
 
 class WaterfallData(BaseModel):

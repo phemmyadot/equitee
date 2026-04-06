@@ -48,6 +48,10 @@ export interface StockRow {
   DayLow?: number;
   Volume?: number;
   PriceSource: string;
+  UsdEquity?: number;
+  UsdCost?: number;
+  UsdReturn?: number;
+  RealReturnPct?: number;
 }
 
 export interface SectorRow {

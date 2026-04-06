@@ -22,6 +22,10 @@ export interface CombinedKPIs {
   ngx_usd: number;
   us_usd: number;
   total_usd: number;
+  ngx_cost_usd?: number;
+  ngx_usd_return_pct?: number;
+  ngx_pct?: number;
+  us_pct?: number;
 }
 
 export interface WaterfallData {

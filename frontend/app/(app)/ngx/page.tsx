@@ -10,14 +10,14 @@ import Sparkline from '@/components/atoms/Sparkline';
 import { ChartSkeleton, PriceBanner } from '@/components/atoms/Feedback';
 import PlotlyChart from '@/components/molecules/PlotlyChart';
 import { plotlyLayout, COLORS, sectorColor } from '@/utils/theme';
-import { fmtNGN, fmtNGNFull, fmtPct, fmtPct2, isPositive } from '@/utils/formatters';
+import { fmtNGN, fmtNGNFull, fmtUSD, fmtPct, fmtPct2, isPositive } from '@/utils/formatters';
 import { fetchNGXTickerData } from '@/services/api';
 import type { StockRow, TickerData } from '@/models';
 import { computeSignal } from '@/components/molecules/Signalscore';
 import { computeTargets } from '@/utils/targets';
 
 export default function NGXOverviewPage() {
-  const { data, loading } = usePortfolio();
+  const { data, loading, dividendsData } = usePortfolio();
   const isFirstLoad = loading && !data;
 
   // Per-ticker fundamentals for signal + target computation
@@ -38,6 +38,7 @@ export default function NGXOverviewPage() {
   if (!data && !loading) return null;
 
   const k = data?.ngx_kpis;
+  const ck = data?.combined_kpis;
   const active = (data?.ngx_stocks ?? []).filter((s) => s.CurrentEquity != null);
   const ngx_sectors = data?.ngx_sectors ?? [];
   const meta = data?.meta;
@@ -67,13 +68,7 @@ export default function NGXOverviewPage() {
   const wROE = weightedAvg((td) => _n(td.overview?.roe));
   const wBeta = weightedAvg((td) => _n(td.performance?.beta));
   const wDivY = weightedAvg((td) => _n(td.overview?.dividend_yield));
-  const annualDivIncome =
-    Object.keys(tickerMap).length > 0
-      ? active.reduce((sum, s) => {
-          const dy = _n(tickerMap[s.Ticker]?.overview?.dividend_yield);
-          return sum + (dy != null ? ((s.CurrentEquity ?? 0) * dy) / 100 : 0);
-        }, 0)
-      : null;
+  const annualDivIncome = dividendsData?.total_projected_payout ?? null;
 
   // ── Today's movers ───────────────────────────────────────────────────────────
   const moversSorted = [...active].sort((a, b) => (b.LiveChangePct ?? 0) - (a.LiveChangePct ?? 0));
@@ -240,14 +235,42 @@ export default function NGXOverviewPage() {
       key: 'ReturnPct',
       label: 'Return',
       right: true,
-      render: (v: number) => (
-        <span
-          className={`font-mono font-semibold text-[12px] ${isPositive(v) ? 'text-[var(--gain)]' : 'text-[var(--loss)]'}`}
-        >
-          {fmtPct(v)}
-        </span>
+      render: (v: number, row: StockRow) => (
+        <div className="flex flex-col items-end gap-0.5">
+          <span
+            className={`font-mono font-semibold text-[12px] ${isPositive(v) ? 'text-[var(--gain)]' : 'text-[var(--loss)]'}`}
+          >
+            {fmtPct(v)}
+          </span>
+          {row.RealReturnPct != null && (
+            <span
+              className={`font-mono text-[9px] ${isPositive(row.RealReturnPct) ? 'text-[var(--gain)]' : 'text-[var(--loss)]'} opacity-70`}
+              title="Inflation-adjusted (real) return"
+            >
+              {fmtPct(row.RealReturnPct)} real
+            </span>
+          )}
+        </div>
       ),
       sortValue: (r: StockRow) => r.ReturnPct ?? 0,
+    },
+    {
+      key: 'UsdEquity',
+      label: 'USD Val',
+      right: true,
+      render: (v: number, row: StockRow) => (
+        <div className="flex flex-col items-end gap-0.5">
+          <span className="font-mono text-[11px] text-[var(--ink-2)]">{fmtUSD(v)}</span>
+          {row.UsdReturn != null && (
+            <span
+              className={`font-mono text-[9px] ${isPositive(row.UsdReturn) ? 'text-[var(--gain)]' : 'text-[var(--loss)]'} opacity-70`}
+            >
+              {fmtUSD(row.UsdReturn)}
+            </span>
+          )}
+        </div>
+      ),
+      sortValue: (r: StockRow) => r.UsdEquity ?? 0,
     },
     {
       key: 'signal',
@@ -375,15 +398,51 @@ export default function NGXOverviewPage() {
               delay={150}
             />
             <KPICard
-              label="Annual Div Income"
+              label="Div Payout"
               value={annualDivIncome != null ? fmtNGN(annualDivIncome) : '—'}
-              sub="projected"
+              sub="from announced divs"
               accent="accent"
               delay={200}
             />
           </>
         )}
       </div>
+
+      {/* Currency risk gauge */}
+      {!isFirstLoad && ck?.ngx_pct != null && (
+        <div className="bg-white rounded-2xl border border-[var(--border)] px-4 py-3">
+          <div className="flex items-center justify-between mb-2">
+            <div>
+              <p className="text-[10px] font-bold uppercase tracking-widest text-[var(--ink-4)]">Currency Exposure</p>
+              <p className="text-[11px] text-[var(--ink-3)] mt-0.5">
+                NGX USD return:{' '}
+                <span className={`font-semibold font-mono ${isPositive(ck.ngx_usd_return_pct) ? 'text-[var(--gain)]' : 'text-[var(--loss)]'}`}>
+                  {fmtPct(ck.ngx_usd_return_pct)}
+                </span>
+                {(ck.ngx_pct ?? 0) > 80 && (
+                  <span className="ml-2 text-[10px] font-bold text-amber-600 bg-amber-50 px-1.5 py-0.5 rounded">
+                    ⚠ &gt;80% single currency
+                  </span>
+                )}
+              </p>
+            </div>
+            <div className="text-right shrink-0">
+              <p className="text-[10px] text-[var(--ink-4)]">NGN {fmtPct(ck.ngx_pct, false)} · USD {fmtPct(ck.us_pct, false)}</p>
+            </div>
+          </div>
+          {/* Bar */}
+          <div className="h-2 rounded-full bg-[var(--border)] overflow-hidden">
+            <div
+              className="h-full rounded-full bg-[var(--accent)] transition-all duration-500"
+              style={{ width: `${Math.min(ck.ngx_pct ?? 0, 100)}%` }}
+            />
+          </div>
+          <div className="flex justify-between mt-1">
+            <span className="text-[9px] text-[var(--ink-4)]">NGN (NGX)</span>
+            <span className="text-[9px] text-[var(--ink-4)]">USD (US)</span>
+          </div>
+        </div>
+      )}
 
       {/* Price banner */}
       {meta && (

@@ -4,7 +4,7 @@ These are SQLAlchemy models — completely separate from the Pydantic models
 in app/models.py which are the API response contracts.
 """
 
-from datetime import datetime, timezone
+from datetime import date, datetime, timezone
 from typing import Optional
 from sqlalchemy import (
     Integer,
@@ -12,6 +12,7 @@ from sqlalchemy import (
     Text,
     Float,
     Boolean,
+    Date,
     DateTime,
     ForeignKey,
     Index,
@@ -107,6 +108,7 @@ class Holding(Base):
     sector: Mapped[str] = mapped_column(String, nullable=False, default="")
     is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now)
+    purchase_date: Mapped[Optional[date]] = mapped_column(Date, nullable=True)
 
     __table_args__ = (
         Index("ix_holdings_market_active", "market", "is_active"),
@@ -121,6 +123,8 @@ class Holding(Base):
             "shares": self.shares,
             "avg_cost": self.avg_cost,
             "sector": self.sector,
+            "created_at": self.created_at.isoformat() if self.created_at else None,
+            "purchase_date": self.purchase_date.isoformat() if self.purchase_date else None,
         }
 
 
