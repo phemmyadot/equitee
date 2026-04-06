@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useRef, useMemo } from 'react';
 import { usePortfolio } from '@/context/PortfolioContext';
 import KPICard from '@/components/molecules/KPICard';
 import ChartCard from '@/components/molecules/ChartCard';
@@ -33,10 +33,14 @@ export default function NGXAdvancedPage() {
   const [correlation, setCorrelation] = useState<CorrelationData | null>(null);
   const [analytics, setAnalytics] = useState<AnalyticsData | null>(null);
   const [relStrength, setRelStrength] = useState<RelativeStrengthData | null>(null);
+  const loadedTickersRef = useRef<string>('');
 
   useEffect(() => {
     const active = (data?.ngx_stocks ?? []).filter((s) => s.CurrentEquity != null);
     if (!active.length) return;
+    const key = active.map((s) => s.Ticker).sort().join(',');
+    if (key === loadedTickersRef.current) return;
+    loadedTickersRef.current = key;
     Promise.allSettled(active.map((s) => fetchNGXTickerData(s.Ticker))).then((results) => {
       const map: Record<string, TickerData> = {};
       results.forEach((r, i) => {
@@ -65,6 +69,8 @@ export default function NGXAdvancedPage() {
   const wf = data?.waterfall;
   const meta = data?.meta;
   const totalEquity = k?.equity || 1;
+  // Use cost basis (shares × avg_cost) as weight — stable, price-independent
+  const totalCost = active.reduce((sum, s) => sum + (s.Shares ?? 0) * (s.AvgCost ?? 0), 0) || 1;
 
   // ── Weighted fundamentals ────────────────────────────────────────────────────
   const _n = (v: string | number | null | undefined) => {
@@ -80,14 +86,17 @@ export default function NGXAdvancedPage() {
       if (!td) return;
       const val = field(td);
       if (val == null || !isFinite(val)) return;
-      const w = (s.CurrentEquity ?? 0) / totalEquity;
+      const w = ((s.Shares ?? 0) * (s.AvgCost ?? 0)) / totalCost;
       wsum += val * w;
       wt += w;
     });
     return wt > 0.01 ? wsum / wt : null;
   };
   const wPE = weightedAvg((td) => _n(td.overview?.pe_ratio));
-  const wROE = weightedAvg((td) => _n(td.overview?.roe));
+  const wROE = weightedAvg((td) => {
+    const v = _n(td.overview?.roe);
+    return v != null && v <= 150 ? v : null;
+  });
   const wBeta = weightedAvg((td) => _n(td.performance?.beta));
   const wDivY = weightedAvg((td) => _n(td.overview?.dividend_yield));
   const annualDivIncome = dividendsData?.total_projected_payout ?? null;

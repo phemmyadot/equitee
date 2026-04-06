@@ -83,6 +83,10 @@ def _scrape_overview(ticker: str) -> Optional[Dict]:
     if not raw:
         return None
 
+    # Cap ROE at 150% — higher values are scraping artefacts (near-zero/negative equity)
+    _roe = raw.get("roe")
+    _roe = _roe if (_roe is not None and 0 < _roe <= 150) else None
+
     result = {
         "symbol": ticker.upper(),
         "market_cap": raw.get("marketcap"),
@@ -90,7 +94,7 @@ def _scrape_overview(ticker: str) -> Optional[Dict]:
         "eps": raw.get("eps"),
         "book_value": raw.get("bvps"),
         "dividend_yield": raw.get("dividendYield"),
-        "roe": raw.get("roe"),
+        "roe": _roe,
         "debt_to_equity": raw.get("debtEquity"),
         "current_ratio": raw.get("currentRatio"),
         "gross_margin": raw.get("grossMargin"),

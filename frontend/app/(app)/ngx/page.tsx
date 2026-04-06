@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import Link from 'next/link';
 import { usePortfolio } from '@/context/PortfolioContext';
 import KPICard from '@/components/molecules/KPICard';
@@ -21,11 +21,16 @@ export default function NGXOverviewPage() {
   const isFirstLoad = loading && !data;
 
   // Per-ticker fundamentals for signal + target computation
+  // Loaded once per session — fundamentals don't change with live price polls
   const [tickerMap, setTickerMap] = useState<Record<string, TickerData>>({});
+  const loadedTickersRef = useRef<string>('');
 
   useEffect(() => {
     const active = (data?.ngx_stocks ?? []).filter((s) => s.CurrentEquity != null);
     if (!active.length) return;
+    const key = active.map((s) => s.Ticker).sort().join(',');
+    if (key === loadedTickersRef.current) return; // already loaded this exact set
+    loadedTickersRef.current = key;
     Promise.allSettled(active.map((s) => fetchNGXTickerData(s.Ticker))).then((results) => {
       const map: Record<string, TickerData> = {};
       results.forEach((r, i) => {
@@ -44,6 +49,9 @@ export default function NGXOverviewPage() {
   const meta = data?.meta;
 
   // ── Weighted portfolio fundamentals ─────────────────────────────────────────
+  // Use cost basis (shares × avg_cost) as weight — stable, price-independent
+  const totalCost = active.reduce((sum, s) => sum + (s.Shares ?? 0) * (s.AvgCost ?? 0), 0) || 1;
+  // totalEquity still used for equity-weight display column in the table
   const totalEquity = active.reduce((sum, s) => sum + (s.CurrentEquity ?? 0), 0) || 1;
   const _n = (v: string | number | null | undefined) => {
     if (v == null) return null;
@@ -58,14 +66,18 @@ export default function NGXOverviewPage() {
       if (!td) return;
       const val = field(td);
       if (val == null || !isFinite(val)) return;
-      const w = (s.CurrentEquity ?? 0) / totalEquity;
+      const w = ((s.Shares ?? 0) * (s.AvgCost ?? 0)) / totalCost;
       wsum += val * w;
       wt += w;
     });
     return wt > 0.01 ? wsum / wt : null;
   };
   const wPE = weightedAvg((td) => _n(td.overview?.pe_ratio));
-  const wROE = weightedAvg((td) => _n(td.overview?.roe));
+  // Cap ROE at 150% — values above that are scraping artefacts (near-zero equity)
+  const wROE = weightedAvg((td) => {
+    const v = _n(td.overview?.roe);
+    return v != null && v <= 150 ? v : null;
+  });
   const wBeta = weightedAvg((td) => _n(td.performance?.beta));
   const wDivY = weightedAvg((td) => _n(td.overview?.dividend_yield));
   const annualDivIncome = dividendsData?.total_projected_payout ?? null;
