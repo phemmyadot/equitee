@@ -25,7 +25,7 @@ from app.db.crud import (
     get_watchlist,
     get_latest_analysis,
 )
-from app.db.models import DailyPriceHistory, PortfolioSnapshot
+from app.db.models import AnalysisHistory, DailyPriceHistory, PortfolioSnapshot
 from app.services import dividends as _dividends_svc
 from app.services import performance as _perf_svc
 
@@ -44,57 +44,67 @@ _ANALYST_PERSONA = (
 )
 
 _PORTFOLIO_SECTIONS = (
-    "Structure your response with exactly these seven sections:\n"
-    "## 1. Portfolio Health Score\n"
+    "Structure your response with exactly these eight sections:\n"
+    "## 1. Previous Analysis Overview\n"
+    "If prior analysis context is provided above, briefly recap the key recommendations "
+    "from the most recent analysis and note what has changed since (prices, positions, outlook). "
+    "If this is the first analysis, write: 'First analysis — establishing baseline.'\n"
+    "## 2. Portfolio Health Score\n"
     "Score X/100 — then 2 bullet points of rationale.\n"
-    "## 2. Top 3 Action Items\n"
+    "## 3. Top 3 Action Items\n"
     "- **TICKER** — Buy/Sell/Hold at ₦X | one-line reason\n"
-    "## 3. Risk Flags\n"
+    "## 4. Risk Flags\n"
     "Bullet list: concentration, currency exposure (NGN vs USD), high-beta names.\n"
-    "## 4. Watchlist Picks\n"
+    "## 5. Watchlist Picks\n"
     "- **TICKER** | Entry: ₦X–Y | Rationale: ...\n"
-    "## 5. Rebalancing Nudge\n"
+    "## 6. Rebalancing Nudge\n"
     "Bullet list of over/underweight sectors vs neutral 5-sector split.\n"
-    "## 6. Income Outlook\n"
+    "## 7. Income Outlook\n"
     "Projected annual dividend income and yield levers.\n"
-    "## 7. One Contrarian Thought\n"
+    "## 8. One Contrarian Thought\n"
     "> Contrarian insight here."
 )
 
 _WATCHLIST_SECTIONS = (
     "The user has provided their watchlist — tickers they are considering buying but do NOT yet own. "
     "Do NOT treat these as current holdings. Analyse each ticker as a prospective investment.\n"
-    "Structure your response with exactly these five sections:\n"
-    "## 1. Watchlist Ranking\n"
+    "Structure your response with exactly these six sections:\n"
+    "## 1. Previous Analysis Overview\n"
+    "If prior analysis context is provided above, briefly recap previous watchlist recommendations "
+    "and note what has changed since. If this is the first analysis, write: 'First analysis — establishing baseline.'\n"
+    "## 2. Watchlist Ranking\n"
     "Rank all tickers best-to-worst opportunity. One line per ticker with score /10 and key reason.\n"
-    "## 2. Top Buy Now\n"
+    "## 3. Top Buy Now\n"
     "- **TICKER** | Entry: ₦X–Y | Target: ₦X | Stop-loss: ₦X | Rationale: ...\n"
     "Pick the single best entry for immediate action and explain why now.\n"
-    "## 3. Wait / Avoid\n"
+    "## 4. Wait / Avoid\n"
     "Bullet list of tickers to avoid or wait on, with a one-line reason each.\n"
-    "## 4. Risk Snapshot\n"
+    "## 5. Risk Snapshot\n"
     "Key risks across the watchlist: sector concentration, liquidity, macro exposure.\n"
-    "## 5. One Contrarian Thought\n"
+    "## 6. One Contrarian Thought\n"
     "> Something the data suggests that goes against the obvious read on this watchlist."
 )
 
 _COMBINED_SECTIONS = (
     "The user has provided both their current holdings AND their watchlist. "
     "Analyse the full picture — how the watchlist complements or overlaps the portfolio.\n"
-    "Structure your response with exactly these seven sections:\n"
-    "## 1. Portfolio Health Score\n"
+    "Structure your response with exactly these eight sections:\n"
+    "## 1. Previous Analysis Overview\n"
+    "If prior analysis context is provided above, briefly recap previous recommendations "
+    "and note what has changed since. If this is the first analysis, write: 'First analysis — establishing baseline.'\n"
+    "## 2. Portfolio Health Score\n"
     "Score X/100 — then 2 bullet points of rationale.\n"
-    "## 2. Top 3 Action Items\n"
+    "## 3. Top 3 Action Items\n"
     "- **TICKER** — Buy/Sell/Hold at ₦X | one-line reason (can include watchlist names)\n"
-    "## 3. Best Watchlist Additions\n"
+    "## 4. Best Watchlist Additions\n"
     "Top 2 watchlist tickers that best complement the existing portfolio, with entry levels.\n"
-    "## 4. Risk Flags\n"
+    "## 5. Risk Flags\n"
     "Concentration, currency exposure, overlap between holdings and watchlist.\n"
-    "## 5. Rebalancing Nudge\n"
+    "## 6. Rebalancing Nudge\n"
     "Over/underweight sectors including what watchlist buys would change.\n"
-    "## 6. Income Outlook\n"
+    "## 7. Income Outlook\n"
     "Current dividend income + potential uplift if watchlist picks are added.\n"
-    "## 7. One Contrarian Thought\n"
+    "## 8. One Contrarian Thought\n"
     "> Contrarian insight here."
 )
 
@@ -123,7 +133,7 @@ def _latest_price(db: Session, ticker: str) -> Optional[float]:
     return db.scalar(stmt)
 
 
-def build_context(db: Session, user_id: int) -> dict:
+def build_context(db: Session, user_id: int, scope: str = "portfolio") -> dict:
     """
     Assemble a compact portfolio snapshot from the DB.
     Returns a dict that can be serialised to JSON and hashed.
@@ -260,6 +270,34 @@ def build_context(db: Session, user_id: int) -> dict:
     except Exception:
         pass
 
+    # Prior analyses for conversation continuity (same scope, newest-first)
+    prior_rows = (
+        db.execute(
+            select(AnalysisHistory)
+            .where(
+                AnalysisHistory.user_id == user_id,
+                AnalysisHistory.scope == scope,
+            )
+            .order_by(desc(AnalysisHistory.created_at))
+            .limit(3)
+        )
+        .scalars()
+        .all()
+    )
+    prior_analyses: list[dict] = []
+    for i, h in enumerate(prior_rows):
+        entry: dict = {
+            "date": h.created_at.strftime("%Y-%m-%d"),
+            "depth": h.depth,
+        }
+        if i == 0:
+            # Most recent: include full response (truncated to keep tokens manageable)
+            entry["response"] = (h.full_response or "")[:1800]
+        else:
+            # Older entries: summary only
+            entry["summary"] = h.summary or ""
+        prior_analyses.append(entry)
+
     return {
         "date": date.today().isoformat(),
         "ngx": ngx_rows,
@@ -279,6 +317,7 @@ def build_context(db: Session, user_id: int) -> dict:
             "no_pe_tickers": no_pe_tickers,
             "ngx_market_direction": ngx_market_direction,
         },
+        "prior_analyses": prior_analyses,
     }
 
 
@@ -310,7 +349,23 @@ def _format_holdings(rows: list[dict], currency: str, equity_key: str) -> str:
 
 def build_user_prompt(ctx: dict, scope: str) -> str:
     k = ctx["kpis"]
-    lines = [f"Portfolio snapshot: {ctx['date']}\n"]
+    lines = []
+
+    # Inject prior analyses for conversation continuity
+    prior = ctx.get("prior_analyses", [])
+    if prior:
+        lines.append("## Prior Analysis Context\n")
+        for i, p in enumerate(prior):
+            label = "Most recent" if i == 0 else f"{i + 1} analyses ago"
+            lines.append(f"**{label} ({p['date']} · {p['depth']}):**")
+            if "response" in p:
+                lines.append(p["response"])
+            else:
+                lines.append(f"Summary: {p.get('summary', '')}")
+            lines.append("")
+        lines.append("---\n")
+
+    lines.append(f"Portfolio snapshot: {ctx['date']}\n")
 
     if scope in ("portfolio", "combined"):
         lines.append("NGX Holdings (Nigerian Exchange, NGN):")

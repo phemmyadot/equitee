@@ -104,7 +104,7 @@ def get_context(
     current_user: User = Depends(get_current_user),
 ):
     """Return the assembled portfolio context + hash without running an analysis."""
-    ctx = build_context(db, current_user.id)
+    ctx = build_context(db, current_user.id, scope="portfolio")
     ctx_hash = compute_context_hash(ctx)
     return {"hash": ctx_hash, "context": ctx}
 
@@ -132,7 +132,7 @@ def run_analysis(
                 detail=f"Daily limit of {settings.ANALYSIS_DAILY_DEEP_LIMIT} deep analyses reached. Try again tomorrow.",
             )
 
-    ctx = build_context(db, current_user.id)
+    ctx = build_context(db, current_user.id, scope=scope)
     ctx_hash = compute_context_hash(ctx)
 
     # Return cached result for quick analyses when context hasn't changed
