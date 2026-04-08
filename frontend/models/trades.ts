@@ -5,6 +5,7 @@ export interface SaleEvent {
   market: string;
   shares_sold: number;
   sale_price: number;
+  commission: number;
   proceeds: number;
   realized_pl: number;
   fully_closed: boolean;

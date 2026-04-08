@@ -152,6 +152,7 @@ class SaleEvent(Base):
     market: Mapped[str] = mapped_column(String, nullable=False)  # 'ngx' | 'us'
     shares_sold: Mapped[float] = mapped_column(Float, nullable=False)
     sale_price: Mapped[float] = mapped_column(Float, nullable=False)
+    commission: Mapped[float] = mapped_column(Float, nullable=False, default=0.0, server_default="0.0")
     proceeds: Mapped[float] = mapped_column(Float, nullable=False)
     realized_pl: Mapped[float] = mapped_column(Float, nullable=False)
     fully_closed: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)

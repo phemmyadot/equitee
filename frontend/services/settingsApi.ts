@@ -66,8 +66,10 @@ export const buyShares = (
   body: { shares: number; buy_price: number; use_cash?: boolean },
 ) => request<HoldingRecord>(`/holdings/${id}/buy`, 'POST', body);
 
-export const sellShares = (id: number, body: { shares_sold: number; sale_price: number }) =>
-  request<SellResult>(`/holdings/${id}/sell`, 'POST', body);
+export const sellShares = (
+  id: number,
+  body: { shares_sold: number; sale_price: number; commission?: number },
+) => request<SellResult>(`/holdings/${id}/sell`, 'POST', body);
 
 // ── Closed positions ──────────────────────────────────────────────────────────
 

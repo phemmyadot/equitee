@@ -114,6 +114,7 @@ class DebitCashBody(BaseModel):
 class SellBody(BaseModel):
     shares_sold: float = Field(..., gt=0, description="Number of shares to sell")
     sale_price: float = Field(..., gt=0, description="Price per share received")
+    commission: float = Field(0.0, ge=0, description="Broker commission deducted from proceeds")
 
 
 class SellResponse(BaseModel):
@@ -238,9 +239,9 @@ def sell_shares(
             detail=f"Cannot sell {body.shares_sold} shares — only {holding.shares} held",
         )
 
-    realized_pl = (body.sale_price - holding.avg_cost) * body.shares_sold
+    realized_pl = (body.sale_price - holding.avg_cost) * body.shares_sold - body.commission
     obj, closed = record_sale(
-        db, holding_id, current_user.id, body.shares_sold, body.sale_price
+        db, holding_id, current_user.id, body.shares_sold, body.sale_price, body.commission
     )
 
     if obj is None:
@@ -300,4 +301,5 @@ def debit_cash_manually(
             status_code=400,
             detail=f"Insufficient cash balance — available: {avail:.2f}",
         )
+    db.commit()
     return get_cash_balance(db, current_user.id)

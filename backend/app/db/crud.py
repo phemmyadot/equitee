@@ -196,6 +196,7 @@ def log_sale_event(
     market: str,
     shares_sold: float,
     sale_price: float,
+    commission: float,
     proceeds: float,
     realized_pl: float,
     fully_closed: bool,
@@ -208,6 +209,7 @@ def log_sale_event(
         market=market,
         shares_sold=round(shares_sold, 8),
         sale_price=round(sale_price, 4),
+        commission=round(commission, 4),
         proceeds=round(proceeds, 4),
         realized_pl=round(realized_pl, 4),
         fully_closed=fully_closed,
@@ -280,10 +282,12 @@ def record_sale(
     user_id: int,
     shares_sold: float,
     sale_price: float,
+    commission: float = 0.0,
 ) -> tuple[Optional[Holding], Optional[ClosedPosition]]:
     """
     Sell shares_sold units at sale_price, scoped to user.
-    Automatically credits proceeds to the user's cash balance.
+    Commission is deducted from both proceeds and realized P&L.
+    Automatically credits net proceeds to the user's cash balance.
     Returns (updated_holding, closed_position_or_None)
     """
     obj = get_holding_by_id(db, holding_id, user_id)
@@ -291,8 +295,9 @@ def record_sale(
         return None, None
 
     shares_sold = min(shares_sold, obj.shares)
-    realized_pl = (sale_price - obj.avg_cost) * shares_sold
-    proceeds = shares_sold * sale_price
+    gross_proceeds = shares_sold * sale_price
+    realized_pl = (sale_price - obj.avg_cost) * shares_sold - commission
+    proceeds = gross_proceeds - commission
     obj.shares = round(obj.shares - shares_sold, 8)
     obj.realized_pl = round((obj.realized_pl or 0.0) + realized_pl, 4)
 
@@ -331,6 +336,7 @@ def record_sale(
         market=obj.market,
         shares_sold=shares_sold,
         sale_price=sale_price,
+        commission=commission,
         proceeds=proceeds,
         realized_pl=realized_pl,
         fully_closed=not obj.is_active,

@@ -1131,14 +1131,19 @@ function SellModal({
 }) {
   const [shares, setShares] = useState('');
   const [salePrice, setSalePrice] = useState('');
+  const [commission, setCommission] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
 
   const cur = holding.market === 'ngx' ? '₦' : '$';
   const sharesNum = Number(shares) || 0;
   const salePriceNum = Number(salePrice) || 0;
+  const commissionNum = Number(commission) || 0;
+  const grossProceeds = sharesNum > 0 && salePriceNum > 0 ? sharesNum * salePriceNum : null;
   const projPL =
-    sharesNum > 0 && salePriceNum > 0 ? (salePriceNum - holding.avg_cost) * sharesNum : null;
+    grossProceeds !== null
+      ? (salePriceNum - holding.avg_cost) * sharesNum - commissionNum
+      : null;
   const fullSale = sharesNum >= holding.shares;
 
   const submit = async () => {
@@ -1155,6 +1160,7 @@ function SellModal({
       const res = await sellShares(holding.id, {
         shares_sold: sharesNum,
         sale_price: salePriceNum,
+        commission: commissionNum,
       });
       onDone(res);
     } catch (e: any) {
@@ -1202,23 +1208,42 @@ function SellModal({
             placeholder="0.00"
           />
         </Field>
+        <Field label={`Commission (${cur})`}>
+          <Input
+            type="number"
+            min="0"
+            step="any"
+            value={commission}
+            onChange={(e) => setCommission(e.target.value)}
+            placeholder="0.00"
+          />
+        </Field>
       </div>
 
       {projPL !== null && (
         <div
           className={[
-            'rounded-md px-3 py-2 text-[11px] font-mono',
+            'rounded-md px-3 py-2 text-[11px] font-mono space-y-0.5',
             projPL >= 0 ? 'bg-[var(--gain-light)]' : 'bg-[var(--loss-light)]',
           ].join(' ')}
         >
+          {grossProceeds !== null && commissionNum > 0 && (
+            <div className="flex justify-between text-[var(--ink-4)]">
+              <span>Gross proceeds</span>
+              <span>{cur}{grossProceeds.toLocaleString(undefined, { maximumFractionDigits: 2 })}</span>
+            </div>
+          )}
+          {commissionNum > 0 && (
+            <div className="flex justify-between text-[var(--ink-4)]">
+              <span>Commission</span>
+              <span>−{cur}{commissionNum.toLocaleString(undefined, { maximumFractionDigits: 2 })}</span>
+            </div>
+          )}
           <div className="flex justify-between">
             <span className="text-[var(--ink-3)]">Projected P/L</span>
-            <span
-              className={`font-semibold ${projPL >= 0 ? 'text-[var(--gain)]' : 'text-[var(--loss)]'}`}
-            >
+            <span className={`font-semibold ${projPL >= 0 ? 'text-[var(--gain)]' : 'text-[var(--loss)]'}`}>
               {projPL >= 0 ? '+' : ''}
-              {cur}
-              {Math.abs(projPL).toLocaleString(undefined, { maximumFractionDigits: 2 })}
+              {cur}{Math.abs(projPL).toLocaleString(undefined, { maximumFractionDigits: 2 })}
             </span>
           </div>
           {fullSale && (
