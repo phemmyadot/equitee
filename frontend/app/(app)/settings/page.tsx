@@ -11,6 +11,7 @@ import {
   sellShares,
   getCashBalance,
   creditCash,
+  debitCash,
 } from '@/services/settingsApi';
 import type { HoldingRecord, ClosedRecord, SellResult, CashBalance } from '@/models';
 import { fmtNGN, fmtUSD, fmtPct } from '@/utils/formatters';
@@ -206,6 +207,7 @@ type ModalState =
   | { type: 'sell'; holding: HoldingRecord }
   | { type: 'delete'; holding: HoldingRecord }
   | { type: 'credit-cash' }
+  | { type: 'debit-cash' }
   | null;
 
 type Tab = 'active' | 'closed';
@@ -418,9 +420,14 @@ export default function SettingsPage() {
             </div>
           )}
         </div>
-        <Btn variant="secondary" size="xs" onClick={() => setModal({ type: 'credit-cash' })}>
-          + Credit Cash
-        </Btn>
+        <div className="flex gap-2">
+          <Btn variant="secondary" size="xs" onClick={() => setModal({ type: 'credit-cash' })}>
+            + Credit Cash
+          </Btn>
+          <Btn variant="danger" size="xs" onClick={() => setModal({ type: 'debit-cash' })}>
+            − Debit Cash
+          </Btn>
+        </div>
       </div>
 
       {/* ── Tabs + filter ── */}
@@ -652,6 +659,19 @@ export default function SettingsPage() {
             refreshPortfolio();
             setModal(null);
             showToast(`Shares added to ${modal.holding.ticker}`);
+          }}
+        />
+      )}
+
+      {/* ── Debit cash ── */}
+      {modal?.type === 'debit-cash' && (
+        <DebitCashModal
+          cash={cash}
+          onClose={() => setModal(null)}
+          onDone={(bal: CashBalance) => {
+            setCash(bal);
+            setModal(null);
+            showToast('Cash balance updated');
           }}
         />
       )}
@@ -1285,6 +1305,84 @@ function CreditCashModal({
         </Btn>
         <Btn variant="primary" loading={busy} onClick={submit}>
           Add to Balance
+        </Btn>
+      </div>
+    </Modal>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Debit Cash Modal
+// ─────────────────────────────────────────────────────────────────────────────
+
+function DebitCashModal({
+  cash,
+  onClose,
+  onDone,
+}: {
+  cash: CashBalance;
+  onClose: () => void;
+  onDone: (bal: CashBalance) => void;
+}) {
+  const [market, setMarket] = useState<'ngx' | 'us'>('ngx');
+  const [amount, setAmount] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState('');
+
+  const cur = market === 'ngx' ? '₦' : '$';
+  const available = market === 'ngx' ? cash.ngn : cash.usd;
+  const fmtAvail = market === 'ngx' ? fmtNGN : fmtUSD;
+  const amt = Number(amount) || 0;
+  const insufficient = amt > 0 && amt > available;
+
+  const submit = async () => {
+    if (!amount || isNaN(amt) || amt <= 0) { setError('Enter a valid amount'); return; }
+    if (insufficient) { setError(`Insufficient — available: ${fmtAvail(available)}`); return; }
+    setBusy(true);
+    try {
+      const bal = await debitCash({ market, amount: amt });
+      onDone(bal);
+    } catch (e: any) {
+      setError(e.message);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <Modal title="Debit Cash Balance" onClose={onClose}>
+      <p className="text-[11px] text-[var(--ink-4)]">
+        Manually remove cash — e.g. a withdrawal or off-app purchase.
+      </p>
+      <div className="grid grid-cols-2 gap-3">
+        <Field label="Market">
+          <Select value={market} onChange={(e) => setMarket(e.target.value as 'ngx' | 'us')}>
+            <option value="ngx">NGX (₦)</option>
+            <option value="us">US ($)</option>
+          </Select>
+        </Field>
+        <Field label={`Amount (${cur})`}>
+          <Input
+            type="number"
+            min="0"
+            step="any"
+            value={amount}
+            onChange={(e) => setAmount(e.target.value)}
+            placeholder="0.00"
+          />
+        </Field>
+      </div>
+      <div className="bg-[var(--canvas)] rounded-md px-3 py-2 text-[11px] font-mono flex justify-between">
+        <span className="text-[var(--ink-4)]">Available</span>
+        <span className={insufficient ? 'text-[var(--loss)] font-semibold' : 'text-[var(--ink)]'}>
+          {fmtAvail(available)}
+        </span>
+      </div>
+      {error && <p className="text-[11px] text-[var(--loss)]">{error}</p>}
+      <div className="flex justify-end gap-2 pt-1">
+        <Btn variant="secondary" onClick={onClose}>Cancel</Btn>
+        <Btn variant="danger" loading={busy} onClick={submit}>
+          Debit Balance
         </Btn>
       </div>
     </Modal>

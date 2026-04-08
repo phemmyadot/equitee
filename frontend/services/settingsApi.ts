@@ -79,3 +79,6 @@ export const getCashBalance = () => request<CashBalance>('/cash', 'GET');
 
 export const creditCash = (body: { market: string; amount: number }) =>
   request<CashBalance>('/cash/credit', 'POST', body);
+
+export const debitCash = (body: { market: string; amount: number }) =>
+  request<CashBalance>('/cash/debit', 'POST', body);

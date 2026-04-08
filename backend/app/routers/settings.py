@@ -106,6 +106,11 @@ class CreditCashBody(BaseModel):
     amount: float = Field(..., gt=0, description="Amount to credit in local currency")
 
 
+class DebitCashBody(BaseModel):
+    market: str = Field(..., pattern="^(ngx|us)$")
+    amount: float = Field(..., gt=0, description="Amount to debit in local currency")
+
+
 class SellBody(BaseModel):
     shares_sold: float = Field(..., gt=0, description="Number of shares to sell")
     sale_price: float = Field(..., gt=0, description="Price per share received")
@@ -278,3 +283,21 @@ def credit_cash_manually(
 ):
     """Manually credit cash — use this to record proceeds from sales already booked."""
     return credit_cash(db, current_user.id, body.market, body.amount)
+
+
+@router.post("/cash/debit", response_model=CashBalanceOut)
+def debit_cash_manually(
+    body: DebitCashBody,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Manually debit cash — e.g. a withdrawal or purchase made outside the app."""
+    ok = debit_cash(db, current_user.id, body.market, body.amount)
+    if not ok:
+        bal = get_cash_balance(db, current_user.id)
+        avail = bal["ngn"] if body.market == "ngx" else bal["usd"]
+        raise HTTPException(
+            status_code=400,
+            detail=f"Insufficient cash balance — available: {avail:.2f}",
+        )
+    return get_cash_balance(db, current_user.id)
