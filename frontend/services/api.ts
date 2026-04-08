@@ -201,8 +201,15 @@ export function streamAnalysis(
   onChunk: (text: string) => void,
   onDone: (id: number, tokens: number, cached: boolean) => void,
   onError: (msg: string) => void,
+  followUp?: string,
+  followUpAnalysisId?: number,
 ): AbortController {
   const controller = new AbortController();
+  const body = {
+    scope,
+    depth,
+    ...(followUp ? { follow_up: followUp, follow_up_analysis_id: followUpAnalysisId } : {}),
+  };
 
   (async () => {
     let res: Response;
@@ -210,7 +217,7 @@ export function streamAnalysis(
       res = await fetch(`${BASE}/analysis/run`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ scope, depth }),
+        body: JSON.stringify(body),
         cache: 'no-store',
         signal: controller.signal,
       });
@@ -224,7 +231,7 @@ export function streamAnalysis(
         res = await fetch(`${BASE}/analysis/run`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ scope, depth }),
+          body: JSON.stringify(body),
           cache: 'no-store',
           signal: controller.signal,
         });

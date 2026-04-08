@@ -226,6 +226,9 @@ export default function AnalysisPage() {
   const [activeDetail, setActiveDetail] = useState<AnalysisDetail | null>(null);
   const [copied, setCopied] = useState(false);
 
+  const [followUpText, setFollowUpText] = useState('');
+  const followUpRef = useRef<HTMLTextAreaElement>(null);
+
   const abortRef = useRef<AbortController | null>(null);
   const viewerRef = useRef<HTMLDivElement>(null);
 
@@ -240,20 +243,29 @@ export default function AnalysisPage() {
       viewerRef.current.scrollIntoView({ behavior: 'smooth', block: 'end' });
   }, [streamText, streaming]);
 
-  const handleRun = useCallback(() => {
+  const handleRun = useCallback((followUp?: string, followUpId?: number) => {
     setStreaming(true);
     setStreamText('');
     setError(null);
     setTokenInfo(null);
-    setActiveId(null);
-    setActiveDetail(null);
+    if (!followUp) { setActiveId(null); setActiveDetail(null); }
     abortRef.current = streamAnalysis(
       scope, depth,
       (chunk) => setStreamText(prev => prev + chunk),
       (id, tokens, cached) => { setStreaming(false); setTokenInfo({ tokens, cached }); if (id) setActiveId(id); loadHistory(); },
       (msg) => { setStreaming(false); setError(msg); },
+      followUp,
+      followUpId,
     );
   }, [scope, depth, loadHistory]);
+
+  const handleFollowUp = useCallback(() => {
+    const text = followUpText.trim();
+    if (!text || streaming) return;
+    const id = activeId ?? undefined;
+    setFollowUpText('');
+    handleRun(text, id);
+  }, [followUpText, streaming, activeId, handleRun]);
 
   const handleAbort = useCallback(() => { abortRef.current?.abort(); setStreaming(false); }, []);
 
@@ -296,7 +308,7 @@ export default function AnalysisPage() {
         {displayText && !streaming && (
           <div className="flex items-center gap-2">
             <button
-              onClick={handleRun}
+              onClick={() => handleRun()}
               className="flex items-center gap-1.5 h-8 px-3 text-[11px] font-semibold border border-[var(--border)] text-[var(--ink-3)] rounded-lg hover:border-[var(--accent-light)] transition-colors"
             >
               <IconRefresh width={12} height={12} />
@@ -369,7 +381,7 @@ export default function AnalysisPage() {
           </button>
         ) : (
           <button
-            onClick={handleRun}
+            onClick={() => handleRun()}
             className="w-full flex items-center justify-center gap-2 py-2.5 rounded-xl text-[13px] font-semibold bg-[var(--accent)] text-white hover:bg-[#17A06B] transition-colors"
           >
             <IconSparkles width={14} height={14} />
@@ -430,6 +442,31 @@ export default function AnalysisPage() {
               </>
             )}
           </div>
+
+          {/* Follow-up input */}
+          {!streaming && displayText && (
+            <div className="px-4 pb-4 pt-2 border-t border-[var(--border)]">
+              <p className="text-[10px] font-bold uppercase tracking-[0.08em] text-[var(--ink-4)] mb-2">Ask a follow-up</p>
+              <div className="flex gap-2 items-end">
+                <textarea
+                  ref={followUpRef}
+                  value={followUpText}
+                  onChange={e => setFollowUpText(e.target.value)}
+                  onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleFollowUp(); } }}
+                  placeholder="e.g. Which NGX holding has the most downside risk?"
+                  rows={2}
+                  className="flex-1 resize-none rounded-xl border border-[var(--border)] px-3 py-2 text-[12px] text-[var(--ink)] placeholder:text-[var(--ink-5)] focus:outline-none focus:border-[var(--accent)] bg-white"
+                />
+                <button
+                  onClick={handleFollowUp}
+                  disabled={!followUpText.trim()}
+                  className="h-10 px-4 rounded-xl text-[12px] font-semibold bg-[var(--accent)] text-white hover:bg-[#17A06B] transition-colors disabled:opacity-40 shrink-0"
+                >
+                  Ask
+                </button>
+              </div>
+            </div>
+          )}
         </div>
       )}
 

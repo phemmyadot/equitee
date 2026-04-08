@@ -49,6 +49,8 @@ router = APIRouter(prefix="/api/analysis", tags=["analysis"])
 class RunAnalysisRequest(BaseModel):
     scope: str = "portfolio"  # portfolio | watchlist | combined
     depth: str = "quick"  # quick | deep
+    follow_up: str | None = None  # follow-up question text
+    follow_up_analysis_id: int | None = None  # ID of the analysis being followed up on
 
 
 class AnalysisSummary(BaseModel):
@@ -132,11 +134,20 @@ def run_analysis(
                 detail=f"Daily limit of {settings.ANALYSIS_DAILY_DEEP_LIMIT} deep analyses reached. Try again tomorrow.",
             )
 
+    follow_up = (body.follow_up or "").strip() or None
+    follow_up_analysis_id = body.follow_up_analysis_id
+
     ctx = build_context(db, current_user.id, scope=scope)
     ctx_hash = compute_context_hash(ctx)
 
-    # Return cached result for quick analyses when context hasn't changed
-    if depth == "quick":
+    # Resolve prior response for follow-up conversations
+    prior_response: str | None = None
+    if follow_up and follow_up_analysis_id:
+        prior_row = get_analysis_by_id(db, follow_up_analysis_id, current_user.id)
+        prior_response = prior_row.full_response if prior_row else None
+
+    # Return cached result for quick analyses when context hasn't changed (skip for follow-ups)
+    if depth == "quick" and not follow_up:
         latest = get_latest_analysis(db, current_user.id, scope)
         if latest and latest.context_hash == ctx_hash and latest.full_response:
             log.info("Returning cached analysis for user %s scope=%s", current_user.id, scope)
@@ -161,6 +172,8 @@ def run_analysis(
             scope=scope,
             depth=depth,
             ctx=ctx,
+            follow_up=follow_up,
+            prior_response=prior_response,
         ),
         media_type="text/event-stream",
         headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},

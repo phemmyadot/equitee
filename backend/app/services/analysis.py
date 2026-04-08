@@ -31,6 +31,7 @@ from app.db.crud import (
 from app.db.models import AnalysisHistory, DailyPriceHistory, PortfolioSnapshot
 from app.services import dividends as _dividends_svc
 from app.services import performance as _perf_svc
+from app.services import yahoo as _yahoo_svc
 
 log = logging.getLogger(__name__)
 
@@ -182,8 +183,13 @@ def build_context(db: Session, user_id: int, scope: str = "portfolio") -> dict:
     us_total_cost = 0.0
     us_total_equity = 0.0
 
+    # Batch-fetch live US prices from Yahoo (in-memory cache, TTL ~2 min)
+    us_tickers = [h.ticker for h in us_holdings]
+    us_price_map = _yahoo_svc.get_prices(us_tickers) if us_tickers else {}
+
     for h in us_holdings:
-        price = _latest_price(db, h.ticker)
+        yp = us_price_map.get(h.ticker)
+        price = yp.price if yp else None
         cost = (h.shares or 0) * (h.avg_cost or 0)
         equity = (h.shares or 0) * price if price else cost
         us_total_cost += cost
@@ -528,23 +534,40 @@ def stream_analysis_sse(
     scope: str,
     depth: str,
     ctx: dict,
+    follow_up: str | None = None,
+    prior_response: str | None = None,
 ) -> Generator[str, None, None]:
     """
     Generator that yields SSE-formatted strings.
     Saves the completed analysis to DB when done.
     Must be consumed in a thread (not async) — FastAPI's StreamingResponse handles this.
+
+    When follow_up + prior_response are provided, builds a multi-turn conversation:
+      user: original portfolio prompt
+      assistant: prior analysis response
+      user: follow-up question
     """
     if not settings.ANTHROPIC_API_KEY:
         yield f"data: {json.dumps({'error': 'ANTHROPIC_API_KEY is not configured on the server.'})}\n\n"
         return
 
     from anthropic import Anthropic
+    from anthropic.types import MessageParam
     from app.db.engine import SessionLocal
     from app.db.crud import save_analysis
 
     model = MODEL_QUICK if depth == "quick" else MODEL_DEEP
     prompt = build_user_prompt(ctx, scope)
     ctx_hash = compute_context_hash(ctx)
+
+    if follow_up and prior_response:
+        messages: list[MessageParam] = [
+            {"role": "user", "content": prompt},
+            {"role": "assistant", "content": prior_response},
+            {"role": "user", "content": follow_up},
+        ]
+    else:
+        messages = [{"role": "user", "content": prompt}]
 
     client = Anthropic(api_key=settings.ANTHROPIC_API_KEY)
     full_chunks: list[str] = []
@@ -555,7 +578,7 @@ def stream_analysis_sse(
             model=model,
             max_tokens=2048,
             system=build_system_prompt(scope),
-            messages=[{"role": "user", "content": prompt}],
+            messages=messages,
         ) as stream:
             for text in stream.text_stream:
                 full_chunks.append(text)
