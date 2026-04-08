@@ -26,3 +26,8 @@ export interface SellResult {
   fully_closed: boolean;
   closed_position?: ClosedRecord;
 }
+
+export interface CashBalance {
+  ngn: number;
+  usd: number;
+}

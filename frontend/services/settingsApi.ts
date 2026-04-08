@@ -4,8 +4,8 @@
 
 const BASE = '/api/settings';
 
-export type { HoldingRecord, ClosedRecord, SellResult } from '@/models/holdings';
-import type { HoldingRecord, ClosedRecord, SellResult } from '@/models/holdings';
+export type { HoldingRecord, ClosedRecord, SellResult, CashBalance } from '@/models/holdings';
+import type { HoldingRecord, ClosedRecord, SellResult, CashBalance } from '@/models/holdings';
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -61,8 +61,10 @@ export const updateHolding = (
 
 export const deleteHolding = (id: number) => request<void>(`/holdings/${id}`, 'DELETE');
 
-export const buyShares = (id: number, body: { shares: number; buy_price: number }) =>
-  request<HoldingRecord>(`/holdings/${id}/buy`, 'POST', body);
+export const buyShares = (
+  id: number,
+  body: { shares: number; buy_price: number; use_cash?: boolean },
+) => request<HoldingRecord>(`/holdings/${id}/buy`, 'POST', body);
 
 export const sellShares = (id: number, body: { shares_sold: number; sale_price: number }) =>
   request<SellResult>(`/holdings/${id}/sell`, 'POST', body);
@@ -70,3 +72,10 @@ export const sellShares = (id: number, body: { shares_sold: number; sale_price: 
 // ── Closed positions ──────────────────────────────────────────────────────────
 
 export const getClosedPositions = () => request<ClosedRecord[]>('/closed', 'GET');
+
+// ── Cash balance ──────────────────────────────────────────────────────────────
+
+export const getCashBalance = () => request<CashBalance>('/cash', 'GET');
+
+export const creditCash = (body: { market: string; amount: number }) =>
+  request<CashBalance>('/cash/credit', 'POST', body);

@@ -183,6 +183,54 @@ def add_shares(
     return obj
 
 
+# ── Cash balance ──────────────────────────────────────────────────────────────
+
+
+def _adjust_cash(db: Session, user_id: int, market: str, delta: float) -> None:
+    """Internal helper — add delta (can be negative) to the correct cash bucket."""
+    user = get_user_by_id(db, user_id)
+    if user is None:
+        return
+    if market == "ngx":
+        user.cash_balance_ngn = round((user.cash_balance_ngn or 0.0) + delta, 4)
+    else:
+        user.cash_balance_usd = round((user.cash_balance_usd or 0.0) + delta, 4)
+    # Caller is responsible for db.commit()
+
+
+def get_cash_balance(db: Session, user_id: int) -> dict:
+    user = get_user_by_id(db, user_id)
+    if user is None:
+        return {"ngn": 0.0, "usd": 0.0}
+    return {
+        "ngn": round(user.cash_balance_ngn or 0.0, 4),
+        "usd": round(user.cash_balance_usd or 0.0, 4),
+    }
+
+
+def credit_cash(db: Session, user_id: int, market: str, amount: float) -> dict:
+    """Manually credit cash (e.g. recording proceeds from an already-recorded sale)."""
+    _adjust_cash(db, user_id, market, amount)
+    db.commit()
+    return get_cash_balance(db, user_id)
+
+
+def debit_cash(db: Session, user_id: int, market: str, amount: float) -> bool:
+    """
+    Deduct amount from cash balance for a purchase funded from cash.
+    Returns False (without committing) if balance is insufficient.
+    """
+    user = get_user_by_id(db, user_id)
+    if user is None:
+        return False
+    bal = user.cash_balance_ngn if market == "ngx" else user.cash_balance_usd
+    if (bal or 0.0) < amount:
+        return False
+    _adjust_cash(db, user_id, market, -amount)
+    # Caller commits after the buy
+    return True
+
+
 def record_sale(
     db: Session,
     holding_id: int,
@@ -192,6 +240,7 @@ def record_sale(
 ) -> tuple[Optional[Holding], Optional[ClosedPosition]]:
     """
     Sell shares_sold units at sale_price, scoped to user.
+    Automatically credits proceeds to the user's cash balance.
     Returns (updated_holding, closed_position_or_None)
     """
     obj = get_holding_by_id(db, holding_id, user_id)
@@ -200,6 +249,7 @@ def record_sale(
 
     shares_sold = min(shares_sold, obj.shares)
     realized_pl = (sale_price - obj.avg_cost) * shares_sold
+    proceeds = shares_sold * sale_price
     obj.shares = round(obj.shares - shares_sold, 8)
 
     closed = None
@@ -223,6 +273,9 @@ def record_sale(
             obj.shares,
             realized_pl,
         )
+
+    # Credit proceeds to cash balance
+    _adjust_cash(db, user_id, obj.market, proceeds)
 
     db.commit()
     if closed:

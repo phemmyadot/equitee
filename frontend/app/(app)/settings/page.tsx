@@ -9,8 +9,10 @@ import {
   deleteHolding,
   buyShares,
   sellShares,
+  getCashBalance,
+  creditCash,
 } from '@/services/settingsApi';
-import type { HoldingRecord, ClosedRecord, SellResult } from '@/models';
+import type { HoldingRecord, ClosedRecord, SellResult, CashBalance } from '@/models';
 import { fmtNGN, fmtUSD, fmtPct } from '@/utils/formatters';
 import { useAuth } from '@/context/AuthContext';
 import { usePortfolio } from '@/context/PortfolioContext';
@@ -203,6 +205,7 @@ type ModalState =
   | { type: 'buy'; holding: HoldingRecord }
   | { type: 'sell'; holding: HoldingRecord }
   | { type: 'delete'; holding: HoldingRecord }
+  | { type: 'credit-cash' }
   | null;
 
 type Tab = 'active' | 'closed';
@@ -351,6 +354,7 @@ export default function SettingsPage() {
   const [tab, setTab] = useState<Tab>('active');
   const [holdings, setHoldings] = useState<HoldingRecord[]>([]);
   const [closed, setClosed] = useState<ClosedRecord[]>([]);
+  const [cash, setCash] = useState<CashBalance>({ ngn: 0, usd: 0 });
   const [modal, setModal] = useState<ModalState>(null);
   const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' } | null>(null);
   const [busy, setBusy] = useState(false);
@@ -358,9 +362,10 @@ export default function SettingsPage() {
 
   // ── Load data ──────────────────────────────────────────────────────────────
   const reload = useCallback(async () => {
-    const [h, c] = await Promise.all([getHoldings(), getClosedPositions()]);
+    const [h, c, bal] = await Promise.all([getHoldings(), getClosedPositions(), getCashBalance()]);
     setHoldings(h);
     setClosed(c);
+    setCash(bal);
   }, []);
 
   useEffect(() => {
@@ -396,6 +401,25 @@ export default function SettingsPage() {
         <Btn variant="primary" onClick={() => setModal({ type: 'add' })}>
           <IconPlus width={12} height={12} />
           Add Position
+        </Btn>
+      </div>
+
+      {/* ── Cash balance card ── */}
+      <div className="card px-4 py-3 flex items-center justify-between gap-4">
+        <div className="flex items-center gap-6">
+          <div>
+            <p className="text-[10px] font-semibold uppercase tracking-[0.07em] text-[var(--ink-4)]">Cash Balance · NGN</p>
+            <p className="text-[14px] font-mono font-semibold text-[var(--ink)] mt-0.5">{fmtNGN(cash.ngn)}</p>
+          </div>
+          {cash.usd > 0 && (
+            <div>
+              <p className="text-[10px] font-semibold uppercase tracking-[0.07em] text-[var(--ink-4)]">Cash Balance · USD</p>
+              <p className="text-[14px] font-mono font-semibold text-[var(--ink)] mt-0.5">{fmtUSD(cash.usd)}</p>
+            </div>
+          )}
+        </div>
+        <Btn variant="secondary" size="xs" onClick={() => setModal({ type: 'credit-cash' })}>
+          + Credit Cash
         </Btn>
       </div>
 
@@ -621,12 +645,25 @@ export default function SettingsPage() {
       {modal?.type === 'buy' && (
         <BuyModal
           holding={modal.holding}
+          cash={cash}
           onClose={() => setModal(null)}
           onDone={() => {
             reload();
             refreshPortfolio();
             setModal(null);
             showToast(`Shares added to ${modal.holding.ticker}`);
+          }}
+        />
+      )}
+
+      {/* ── Credit cash ── */}
+      {modal?.type === 'credit-cash' && (
+        <CreditCashModal
+          onClose={() => setModal(null)}
+          onDone={(bal: CashBalance) => {
+            setCash(bal);
+            setModal(null);
+            showToast('Cash balance updated');
           }}
         />
       )}
@@ -925,32 +962,46 @@ function EditModal({
 
 function BuyModal({
   holding,
+  cash,
   onClose,
   onDone,
 }: {
   holding: HoldingRecord;
+  cash: CashBalance;
   onClose: () => void;
   onDone: () => void;
 }) {
   const [shares, setShares] = useState('');
   const [buyPrice, setBuyPrice] = useState('');
+  const [useCash, setUseCash] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
 
+  const cur = holding.market === 'ngx' ? '₦' : '$';
+  const availCash = holding.market === 'ngx' ? cash.ngn : cash.usd;
+  const fmtCash = holding.market === 'ngx' ? fmtNGN : fmtUSD;
+
+  const sharesNum = Number(shares) || 0;
+  const priceNum = Number(buyPrice) || 0;
+  const cost = sharesNum > 0 && priceNum > 0 ? sharesNum * priceNum : null;
   const newAvg =
-    shares && buyPrice
-      ? (holding.shares * holding.avg_cost + Number(shares) * Number(buyPrice)) /
-        (holding.shares + Number(shares))
+    sharesNum > 0 && priceNum > 0
+      ? (holding.shares * holding.avg_cost + sharesNum * priceNum) / (holding.shares + sharesNum)
       : null;
+  const insufficientCash = useCash && cost !== null && cost > availCash;
 
   const submit = async () => {
     if (!shares || !buyPrice) {
       setError('Both fields required');
       return;
     }
+    if (insufficientCash) {
+      setError(`Insufficient cash — available: ${fmtCash(availCash)}`);
+      return;
+    }
     setBusy(true);
     try {
-      await buyShares(holding.id, { shares: Number(shares), buy_price: Number(buyPrice) });
+      await buyShares(holding.id, { shares: sharesNum, buy_price: priceNum, use_cash: useCash });
       onDone();
     } catch (e: any) {
       setError(e.message);
@@ -958,8 +1009,6 @@ function BuyModal({
       setBusy(false);
     }
   };
-
-  const cur = holding.market === 'ngx' ? '₦' : '$';
 
   return (
     <Modal title={`Buy More · ${holding.ticker}`} onClose={onClose}>
@@ -974,6 +1023,10 @@ function BuyModal({
             {cur}
             {holding.avg_cost.toLocaleString(undefined, { maximumFractionDigits: 4 })}
           </span>
+        </div>
+        <div className="flex justify-between">
+          <span className="text-[var(--ink-4)]">Cash available</span>
+          <span className={availCash > 0 ? 'text-[var(--gain)]' : ''}>{fmtCash(availCash)}</span>
         </div>
       </div>
       <div className="grid grid-cols-2 gap-3">
@@ -998,6 +1051,27 @@ function BuyModal({
           />
         </Field>
       </div>
+      {/* Fund source toggle */}
+      <label className="flex items-center gap-2 cursor-pointer select-none">
+        <input
+          type="checkbox"
+          checked={useCash}
+          onChange={(e) => setUseCash(e.target.checked)}
+          className="rounded border-[var(--border)] accent-[var(--accent)]"
+          disabled={availCash <= 0}
+        />
+        <span className="text-[11px] text-[var(--ink-3)]">
+          Fund from cash balance{availCash > 0 ? ` (${fmtCash(availCash)} available)` : ' (no cash)'}
+        </span>
+      </label>
+      {cost !== null && useCash && (
+        <div className={`rounded-md px-3 py-2 text-[11px] font-mono flex justify-between ${insufficientCash ? 'bg-[var(--loss-light)]' : 'bg-[var(--canvas)]'}`}>
+          <span className="text-[var(--ink-3)]">Cost</span>
+          <span className={`font-semibold ${insufficientCash ? 'text-[var(--loss)]' : 'text-[var(--ink)]'}`}>
+            {fmtCash(cost)}
+          </span>
+        </div>
+      )}
       {newAvg !== null && (
         <div className="bg-[var(--accent-light)] rounded-md px-3 py-2 text-[11px] font-mono flex justify-between">
           <span className="text-[var(--ink-3)]">New avg cost</span>
@@ -1140,6 +1214,77 @@ function SellModal({
         </Btn>
         <Btn variant={fullSale ? 'danger' : 'primary'} loading={busy} onClick={submit}>
           {fullSale ? 'Close Position' : 'Record Sale'}
+        </Btn>
+      </div>
+    </Modal>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Credit Cash Modal
+// ─────────────────────────────────────────────────────────────────────────────
+
+function CreditCashModal({
+  onClose,
+  onDone,
+}: {
+  onClose: () => void;
+  onDone: (bal: CashBalance) => void;
+}) {
+  const [market, setMarket] = useState<'ngx' | 'us'>('ngx');
+  const [amount, setAmount] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState('');
+
+  const cur = market === 'ngx' ? '₦' : '$';
+
+  const submit = async () => {
+    const amt = Number(amount);
+    if (!amount || isNaN(amt) || amt <= 0) {
+      setError('Enter a valid amount');
+      return;
+    }
+    setBusy(true);
+    try {
+      const bal = await creditCash({ market, amount: amt });
+      onDone(bal);
+    } catch (e: any) {
+      setError(e.message);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <Modal title="Credit Cash Balance" onClose={onClose}>
+      <p className="text-[11px] text-[var(--ink-4)]">
+        Manually add proceeds to your cash balance — e.g. from a sale already recorded.
+      </p>
+      <div className="grid grid-cols-2 gap-3">
+        <Field label="Market">
+          <Select value={market} onChange={(e) => setMarket(e.target.value as 'ngx' | 'us')}>
+            <option value="ngx">NGX (₦)</option>
+            <option value="us">US ($)</option>
+          </Select>
+        </Field>
+        <Field label={`Amount (${cur})`}>
+          <Input
+            type="number"
+            min="0"
+            step="any"
+            value={amount}
+            onChange={(e) => setAmount(e.target.value)}
+            placeholder="0.00"
+          />
+        </Field>
+      </div>
+      {error && <p className="text-[11px] text-[var(--loss)]">{error}</p>}
+      <div className="flex justify-end gap-2 pt-1">
+        <Btn variant="secondary" onClick={onClose}>
+          Cancel
+        </Btn>
+        <Btn variant="primary" loading={busy} onClick={submit}>
+          Add to Balance
         </Btn>
       </div>
     </Modal>

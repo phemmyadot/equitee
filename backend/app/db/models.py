@@ -43,6 +43,8 @@ class User(Base):
     is_admin: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now)
+    cash_balance_ngn: Mapped[float] = mapped_column(Float, nullable=False, default=0.0, server_default="0.0")
+    cash_balance_usd: Mapped[float] = mapped_column(Float, nullable=False, default=0.0, server_default="0.0")
 
     __table_args__ = (
         Index("ix_users_email", "email"),

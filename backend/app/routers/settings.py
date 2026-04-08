@@ -32,6 +32,9 @@ from app.db.crud import (
     add_shares,
     record_sale,
     get_closed_positions,
+    get_cash_balance,
+    credit_cash,
+    debit_cash,
 )
 
 log = logging.getLogger(__name__)
@@ -90,6 +93,17 @@ class UpdateHoldingBody(BaseModel):
 class BuyBody(BaseModel):
     shares: float = Field(..., gt=0, description="Number of new shares to add")
     buy_price: float = Field(..., gt=0, description="Price per share paid")
+    use_cash: bool = Field(False, description="Deduct purchase cost from cash balance")
+
+
+class CashBalanceOut(BaseModel):
+    ngn: float
+    usd: float
+
+
+class CreditCashBody(BaseModel):
+    market: str = Field(..., pattern="^(ngx|us)$")
+    amount: float = Field(..., gt=0, description="Amount to credit in local currency")
 
 
 class SellBody(BaseModel):
@@ -177,6 +191,20 @@ def buy_more(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
+    holding = get_holding_by_id(db, holding_id, current_user.id)
+    if holding is None:
+        raise HTTPException(status_code=404, detail="Holding not found")
+
+    if body.use_cash:
+        cost = body.shares * body.buy_price
+        if not debit_cash(db, current_user.id, holding.market, cost):
+            bal = get_cash_balance(db, current_user.id)
+            avail = bal["ngn"] if holding.market == "ngx" else bal["usd"]
+            raise HTTPException(
+                status_code=400,
+                detail=f"Insufficient cash balance — available: {avail:.2f}",
+            )
+
     obj = add_shares(
         db,
         holding_id,
@@ -229,3 +257,24 @@ def list_closed(
     current_user: User = Depends(get_current_user),
 ):
     return get_closed_positions(db, current_user.id)
+
+
+# ── Cash balance ───────────────────────────────────────────────────────────────
+
+
+@router.get("/cash", response_model=CashBalanceOut)
+def get_cash(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    return get_cash_balance(db, current_user.id)
+
+
+@router.post("/cash/credit", response_model=CashBalanceOut)
+def credit_cash_manually(
+    body: CreditCashBody,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Manually credit cash — use this to record proceeds from sales already booked."""
+    return credit_cash(db, current_user.id, body.market, body.amount)
