@@ -22,6 +22,9 @@ from sqlalchemy import select, desc
 from app.config import settings
 from app.db.crud import (
     get_active_holdings,
+    get_closed_positions,
+    get_sale_events,
+    get_cash_balance,
     get_watchlist,
     get_latest_analysis,
 )
@@ -40,28 +43,37 @@ _ANALYST_PERSONA = (
     "Be direct, specific, and actionable. "
     "Always respond in well-structured Markdown. Use ## for section headings, "
     "**bold** for tickers and key figures, bullet lists (- item) for action points. "
-    "No disclaimers. No plain prose — Markdown only. Keep total response under 1000 words."
+    "No disclaimers. No plain prose — Markdown only. Keep total response under 1200 words.\n\n"
+    "You will receive: active holdings, closed positions, recent trade history (buys and sells "
+    "with commission), cash balances (NGN and USD), realized P&L by position, "
+    "watchlist, dividends, and prior analyses. "
+    "Use ALL of this data — especially the trade history and realized P&L — to inform your analysis. "
+    "Comment on trading behaviour (e.g. frequent partial sells, commission drag, holding period). "
+    "Factor in available cash when recommending buys."
 )
 
 _PORTFOLIO_SECTIONS = (
-    "Structure your response with exactly these eight sections:\n"
+    "Structure your response with exactly these nine sections:\n"
     "## 1. Previous Analysis Overview\n"
     "If prior analysis context is provided above, briefly recap the key recommendations "
     "from the most recent analysis and note what has changed since (prices, positions, outlook). "
     "If this is the first analysis, write: 'First analysis — establishing baseline.'\n"
     "## 2. Portfolio Health Score\n"
-    "Score X/100 — then 2 bullet points of rationale.\n"
-    "## 3. Top 3 Action Items\n"
-    "- **TICKER** — Buy/Sell/Hold at ₦X | one-line reason\n"
-    "## 4. Risk Flags\n"
-    "Bullet list: concentration, currency exposure (NGN vs USD), high-beta names.\n"
-    "## 5. Watchlist Picks\n"
+    "Score X/100 — then 2 bullet points of rationale. Factor in realized P&L trend and cash buffer.\n"
+    "## 3. Trading Activity Review\n"
+    "Comment on recent sales: were they well-timed? Commission drag? Any position fully closed "
+    "at a gain or loss? How is the cash balance being deployed?\n"
+    "## 4. Top 3 Action Items\n"
+    "- **TICKER** — Buy/Sell/Hold at ₦X | one-line reason. Note if cash balance can fund a buy.\n"
+    "## 5. Risk Flags\n"
+    "Bullet list: concentration, currency exposure (NGN vs USD), realized losses, high-beta names.\n"
+    "## 6. Watchlist Picks\n"
     "- **TICKER** | Entry: ₦X–Y | Rationale: ...\n"
-    "## 6. Rebalancing Nudge\n"
+    "## 7. Rebalancing Nudge\n"
     "Bullet list of over/underweight sectors vs neutral 5-sector split.\n"
-    "## 7. Income Outlook\n"
+    "## 8. Income Outlook\n"
     "Projected annual dividend income and yield levers.\n"
-    "## 8. One Contrarian Thought\n"
+    "## 9. One Contrarian Thought\n"
     "> Contrarian insight here."
 )
 
@@ -162,6 +174,7 @@ def build_context(db: Session, user_id: int, scope: str = "portfolio") -> dict:
                 "avg_cost": round(h.avg_cost or 0, 2),
                 "current_price": round(price, 2) if price else None,
                 "equity_ngn": round(equity, 2),
+                "realized_pl_ngn": round(h.realized_pl or 0, 2),
             }
         )
 
@@ -184,6 +197,7 @@ def build_context(db: Session, user_id: int, scope: str = "portfolio") -> dict:
                 "avg_cost": round(h.avg_cost or 0, 2),
                 "current_price": round(price, 2) if price else None,
                 "equity_usd": round(equity, 2),
+                "realized_pl_usd": round(h.realized_pl or 0, 2),
             }
         )
 
@@ -270,6 +284,53 @@ def build_context(db: Session, user_id: int, scope: str = "portfolio") -> dict:
     except Exception:
         pass
 
+    # Cash balances
+    cash = get_cash_balance(db, user_id)
+
+    # Closed positions (fully exited) — last 10, newest first
+    closed_positions = get_closed_positions(db, user_id)
+    closed_rows = [
+        {
+            "ticker": c.ticker,
+            "name": c.name,
+            "market": c.market,
+            "realized_pl": round(c.realized_pl, 2),
+            "closed_at": c.closed_at.strftime("%Y-%m-%d"),
+        }
+        for c in closed_positions[:10]
+    ]
+
+    # Realized P&L totals
+    ngx_realized_pl = sum(
+        (h.realized_pl or 0) for h in ngx_holdings
+    ) + sum(
+        c["realized_pl"] for c in closed_rows if c["market"] == "ngx"
+    )
+    us_realized_pl = sum(
+        (h.realized_pl or 0) for h in us_holdings
+    ) + sum(
+        c["realized_pl"] for c in closed_rows if c["market"] == "us"
+    )
+
+    # Recent sale events — last 15, newest first
+    sale_events = get_sale_events(db, user_id)
+    trade_rows = []
+    for e in sale_events[:15]:
+        row: dict = {
+            "date": e.sold_at.strftime("%Y-%m-%d"),
+            "ticker": e.ticker,
+            "market": e.market,
+            "type": "full_close" if e.fully_closed else "partial_sell",
+            "shares_sold": round(e.shares_sold, 4),
+            "sale_price": round(e.sale_price, 4),
+            "realized_pl": round(e.realized_pl, 2),
+        }
+        if e.commission and e.commission > 0:
+            row["commission"] = round(e.commission, 2)
+        if e.proceeds and e.proceeds > 0:
+            row["net_proceeds"] = round(e.proceeds, 2)
+        trade_rows.append(row)
+
     # Prior analyses for conversation continuity (same scope, newest-first)
     prior_rows = (
         db.execute(
@@ -303,13 +364,19 @@ def build_context(db: Session, user_id: int, scope: str = "portfolio") -> dict:
         "ngx": ngx_rows,
         "us": us_rows,
         "watchlist": wl_rows,
+        "closed_positions": closed_rows,
+        "recent_trades": trade_rows,
         "kpis": {
             "ngx_total_equity_ngn": round(ngx_total_equity, 2),
             "ngx_total_cost_ngn": round(ngx_total_cost, 2),
             "ngx_gain_pct": ngx_gain_pct,
+            "ngx_realized_pl_ngn": round(ngx_realized_pl, 2),
             "us_total_equity_usd": round(us_total_equity, 2),
             "us_total_cost_usd": round(us_total_cost, 2),
             "us_gain_pct": us_gain_pct,
+            "us_realized_pl_usd": round(us_realized_pl, 2),
+            "cash_balance_ngn": round(cash.get("ngn") or 0.0, 2),
+            "cash_balance_usd": round(cash.get("usd") or 0.0, 2),
             "ngx_positions": len(ngx_holdings),
             "us_positions": len(us_holdings),
             "watchlist_count": len(wl_rows),
@@ -329,7 +396,7 @@ def compute_context_hash(ctx: dict) -> str:
 # ── Prompt builder ────────────────────────────────────────────────────────────
 
 
-def _format_holdings(rows: list[dict], currency: str, equity_key: str) -> str:
+def _format_holdings(rows: list[dict], currency: str, equity_key: str, pl_key: str) -> str:
     if not rows:
         return "  (none)\n"
     lines = []
@@ -338,11 +405,13 @@ def _format_holdings(rows: list[dict], currency: str, equity_key: str) -> str:
         if r.get("current_price") and r.get("avg_cost"):
             pct = (r["current_price"] / r["avg_cost"] - 1) * 100
             ret = f" ({pct:+.1f}%)"
+        realized_pl = r.get(pl_key, 0) or 0
+        pl_str = f"  realized_pl={currency}{realized_pl:,.0f}" if realized_pl != 0 else ""
         lines.append(
             f"  {r['ticker']:<12} {r['sector']:<18} "
             f"{r['shares']} shares @ {currency}{r['avg_cost']:.2f}"
             f" → {currency}{r['current_price'] or 'N/A'}{ret}"
-            f"  [{currency}{r[equity_key]:,.0f}]"
+            f"  [{currency}{r[equity_key]:,.0f}]{pl_str}"
         )
     return "\n".join(lines) + "\n"
 
@@ -369,13 +438,13 @@ def build_user_prompt(ctx: dict, scope: str) -> str:
 
     if scope in ("portfolio", "combined"):
         lines.append("NGX Holdings (Nigerian Exchange, NGN):")
-        lines.append(_format_holdings(ctx["ngx"], "₦", "equity_ngn"))
+        lines.append(_format_holdings(ctx["ngx"], "₦", "equity_ngn", "realized_pl_ngn"))
         lines.append(
             f"  NGX Total: ₦{k['ngx_total_equity_ngn']:,.0f}  "
             f"(cost ₦{k['ngx_total_cost_ngn']:,.0f}, {k['ngx_gain_pct']:+.1f}%)\n"
         )
         lines.append("US Holdings (USD):")
-        lines.append(_format_holdings(ctx["us"], "$", "equity_usd"))
+        lines.append(_format_holdings(ctx["us"], "$", "equity_usd", "realized_pl_usd"))
         lines.append(
             f"  US Total: ${k['us_total_equity_usd']:,.0f}  "
             f"(cost ${k['us_total_cost_usd']:,.0f}, {k['us_gain_pct']:+.1f}%)\n"
@@ -401,6 +470,50 @@ def build_user_prompt(ctx: dict, scope: str) -> str:
     mkt = k.get("ngx_market_direction")
     if mkt:
         lines.append(f"NGX portfolio direction: {mkt}")
+        lines.append("")
+
+    # Cash balances
+    cash_ngn = k.get("cash_balance_ngn", 0) or 0
+    cash_usd = k.get("cash_balance_usd", 0) or 0
+    lines.append(f"Cash available: ₦{cash_ngn:,.2f} NGN | ${cash_usd:,.2f} USD")
+    lines.append("")
+
+    # Realized P&L totals
+    ngx_rpl = k.get("ngx_realized_pl_ngn", 0) or 0
+    us_rpl = k.get("us_realized_pl_usd", 0) or 0
+    lines.append(f"Total realized P&L: NGX ₦{ngx_rpl:,.2f} | US ${us_rpl:,.2f}")
+    lines.append("")
+
+    # Recent trades
+    trades = ctx.get("recent_trades", [])
+    if trades:
+        lines.append("Recent sales (newest first):")
+        for t in trades:
+            if t.get("shares_sold", 0) == 0 and t.get("sale_price", 0) == 0:
+                # Backfilled row — skip unknowns
+                lines.append(
+                    f"  {t['date']}  {t['ticker']:<8} [{t['market']}]  {t['type']}  "
+                    f"P&L: ₦{t['realized_pl']:,.2f}"
+                )
+            else:
+                commission_str = f"  commission={t['commission']:,.2f}" if t.get("commission") else ""
+                proceeds_str = f"  proceeds={t['net_proceeds']:,.2f}" if t.get("net_proceeds") else ""
+                lines.append(
+                    f"  {t['date']}  {t['ticker']:<8} [{t['market']}]  {t['type']}  "
+                    f"{t['shares_sold']} shares @ {t['sale_price']:.4f}"
+                    f"{commission_str}{proceeds_str}  P&L: {t['realized_pl']:+,.2f}"
+                )
+        lines.append("")
+
+    # Closed positions
+    closed = ctx.get("closed_positions", [])
+    if closed:
+        lines.append("Fully closed positions (last 10):")
+        for c in closed:
+            lines.append(
+                f"  {c['closed_at']}  {c['ticker']:<8} [{c['market']}]  "
+                f"realized P&L: {c['realized_pl']:+,.2f}"
+            )
         lines.append("")
 
     lines.append("Provide your analysis now.")
