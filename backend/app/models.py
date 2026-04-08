@@ -123,6 +123,7 @@ class NGXKPIs(BaseModel):
     realized_pl: float
     total_cost: float
     positions: int
+    cash_balance_ngn: float = 0.0
 
 
 class USKPIs(BaseModel):

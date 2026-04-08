@@ -251,6 +251,7 @@ def record_sale(
     realized_pl = (sale_price - obj.avg_cost) * shares_sold
     proceeds = shares_sold * sale_price
     obj.shares = round(obj.shares - shares_sold, 8)
+    obj.realized_pl = round((obj.realized_pl or 0.0) + realized_pl, 4)
 
     closed = None
     if obj.shares <= 1e-8:
@@ -261,10 +262,10 @@ def record_sale(
             ticker=obj.ticker,
             name=obj.name,
             market=obj.market,
-            realized_pl=round(realized_pl, 4),
+            realized_pl=round(obj.realized_pl, 4),
         )
         db.add(closed)
-        log.info("Full sale: %s → realized P/L %.4f", obj.ticker, realized_pl)
+        log.info("Full sale: %s → realized P/L %.4f", obj.ticker, obj.realized_pl)
     else:
         log.info(
             "Partial sale: %s sold %.4f shares → %.4f remaining, P/L %.4f",

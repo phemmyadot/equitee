@@ -350,7 +350,13 @@ export default function NGXOverviewPage() {
           [...Array(6)].map((_, i) => <ChartSkeleton key={i} height={88} />)
         ) : (
           <>
-            <KPICard label="Total Equity" value={fmtNGN(k?.equity)} accent="neutral" delay={0} />
+            <KPICard
+              label="Total Equity"
+              value={fmtNGN(k?.equity)}
+              sub={`${k?.positions ?? '—'} positions`}
+              accent="neutral"
+              delay={0}
+            />
             <KPICard label="Total Cost" value={fmtNGN(k?.cost)} accent="neutral" delay={50} />
             <KPICard
               label="Unrealized G/L"
@@ -370,7 +376,12 @@ export default function NGXOverviewPage() {
               accent={isPositive(k?.realized_pl) ? 'gain' : 'loss'}
               delay={200}
             />
-            <KPICard label="Positions" value={k?.positions ?? '—'} accent="accent" delay={250} />
+            <KPICard
+              label="Cash Balance"
+              value={fmtNGN(k?.cash_balance_ngn ?? 0)}
+              accent="teal"
+              delay={250}
+            />
           </>
         )}
       </div>

@@ -109,6 +109,7 @@ class Holding(Base):
     avg_cost: Mapped[float] = mapped_column(Float, nullable=False)
     sector: Mapped[str] = mapped_column(String, nullable=False, default="")
     is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
+    realized_pl: Mapped[float] = mapped_column(Float, nullable=False, default=0.0, server_default="0.0")
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now)
     purchase_date: Mapped[Optional[date]] = mapped_column(Date, nullable=True)
 
@@ -125,6 +126,7 @@ class Holding(Base):
             "shares": self.shares,
             "avg_cost": self.avg_cost,
             "sector": self.sector,
+            "realized_pl": self.realized_pl or 0.0,
             "created_at": self.created_at.isoformat() if self.created_at else None,
             "purchase_date": self.purchase_date.isoformat() if self.purchase_date else None,
         }

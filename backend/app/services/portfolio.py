@@ -18,6 +18,7 @@ from sqlalchemy.orm import Session
 from app.db.crud import (
     get_active_holdings,
     get_closed_positions,
+    get_cash_balance,
     should_write_snapshot,
     write_snapshot,
 )
@@ -246,7 +247,13 @@ def build_portfolio_response(
         )
         for s in holdings.get("sold", [])
     ]
-    ngx_realized = sum(s.RealizedPL for s in sold if s.Market == "NGX")
+    # Realized P&L = fully closed positions + partial sale P&L accumulated on active holdings
+    ngx_partial_realized = sum(
+        float(h.get("realized_pl", 0)) for h in holdings.get("ngx", [])
+    )
+    ngx_realized = sum(s.RealizedPL for s in sold if s.Market == "NGX") + ngx_partial_realized
+
+    cash = get_cash_balance(db, user_id)
 
     # ── KPIs ─────────────────────────────────────────────────────────────────
     ngx_equity = _sum(ngx_stocks, "CurrentEquity")
@@ -328,6 +335,7 @@ def build_portfolio_response(
             realized_pl=round(ngx_realized, 2),
             total_cost=round(ngx_cost, 2),
             positions=len(ngx_stocks),
+            cash_balance_ngn=round(cash.get("ngn") or 0.0, 2),
         ),
         us_kpis=USKPIs(
             equity=round(us_equity, 4),
@@ -342,8 +350,8 @@ def build_portfolio_response(
             total_usd=round(total_usd, 2),
             ngx_cost_usd=round(ngx_cost_usd, 2),
             ngx_usd_return_pct=round(ngx_usd_return_pct, 2),
-            ngx_pct=round(ngx_pct, 1),
-            us_pct=round(us_pct, 1),
+            ngx_pct=round(ngx_pct, 1) if ngx_pct is not None else None,
+            us_pct=round(us_pct, 1) if us_pct is not None else None,
         ),
         ngx_stocks=ngx_stocks,
         ngx_sold=sold,

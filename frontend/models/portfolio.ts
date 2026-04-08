@@ -8,6 +8,7 @@ export interface NGXKPIs {
   realized_pl: number;
   total_cost: number;
   positions: number;
+  cash_balance_ngn: number;
 }
 
 export interface USKPIs {
