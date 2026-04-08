@@ -17,6 +17,7 @@ import {
   IconLogOut,
   IconBookmark,
   IconSparkles,
+  IconTrendingUp,
 } from '@/components/atoms/icons';
 
 interface HeaderProps {
@@ -53,6 +54,11 @@ const NAV_ITEMS = [
     href: '/history',
     label: 'History',
     icon: <IconChartHistory width={14} height={14} />,
+  },
+  {
+    href: '/trades',
+    label: 'Trades',
+    icon: <IconTrendingUp width={14} height={14} />,
   },
   {
     href: '/watchlist',

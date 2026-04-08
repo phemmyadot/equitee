@@ -7,3 +7,4 @@ export * from './analytics';
 export * from './watchlist';
 export * from './holdings';
 export * from './analysis';
+export * from './trades';

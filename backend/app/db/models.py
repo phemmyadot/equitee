@@ -132,6 +132,37 @@ class Holding(Base):
         }
 
 
+# ── sale_events ───────────────────────────────────────────────────────────────
+
+
+class SaleEvent(Base):
+    """One row per sale transaction — partial or full. Immutable audit log."""
+
+    __tablename__ = "sale_events"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    user_id: Mapped[int] = mapped_column(
+        Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False
+    )
+    holding_id: Mapped[Optional[int]] = mapped_column(
+        Integer, ForeignKey("holdings.id", ondelete="SET NULL"), nullable=True
+    )
+    ticker: Mapped[str] = mapped_column(String, nullable=False)
+    name: Mapped[str] = mapped_column(String, nullable=False)
+    market: Mapped[str] = mapped_column(String, nullable=False)  # 'ngx' | 'us'
+    shares_sold: Mapped[float] = mapped_column(Float, nullable=False)
+    sale_price: Mapped[float] = mapped_column(Float, nullable=False)
+    proceeds: Mapped[float] = mapped_column(Float, nullable=False)
+    realized_pl: Mapped[float] = mapped_column(Float, nullable=False)
+    fully_closed: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    sold_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now)
+
+    __table_args__ = (
+        Index("ix_sale_events_user_id", "user_id"),
+        Index("ix_sale_events_user_sold_at", "user_id", "sold_at"),
+    )
+
+
 # ── closed_positions ──────────────────────────────────────────────────────────
 
 

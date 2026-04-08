@@ -13,6 +13,7 @@ import {
   IconSettings,
   IconBookmark,
   IconSparkles,
+  IconTrendingUp,
 } from '@/components/atoms/icons';
 
 const NAV_ITEMS = [
@@ -21,6 +22,7 @@ const NAV_ITEMS = [
   { href: '/us', label: 'US Market', icon: <IconGlobe width={20} height={20} /> },
   { href: '/dividends', label: 'Dividends', icon: <IconClock width={20} height={20} /> },
   { href: '/history', label: 'History', icon: <IconChartHistory width={20} height={20} /> },
+  { href: '/trades', label: 'Trades', icon: <IconTrendingUp width={20} height={20} /> },
   { href: '/watchlist', label: 'Watchlist', icon: <IconBookmark width={20} height={20} /> },
   { href: '/analysis', label: 'AI Analyst', icon: <IconSparkles width={20} height={20} /> },
   { href: '/settings', label: 'Settings', icon: <IconSettings width={20} height={20} /> },

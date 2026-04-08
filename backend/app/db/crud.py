@@ -16,6 +16,7 @@ from sqlalchemy.orm import Session
 from app.db.models import (
     Holding,
     ClosedPosition,
+    SaleEvent,
     PortfolioSnapshot,
     PriceHistory,
     User,
@@ -183,6 +184,48 @@ def add_shares(
     return obj
 
 
+# ── Sale events ───────────────────────────────────────────────────────────────
+
+
+def log_sale_event(
+    db: Session,
+    user_id: int,
+    holding_id: int,
+    ticker: str,
+    name: str,
+    market: str,
+    shares_sold: float,
+    sale_price: float,
+    proceeds: float,
+    realized_pl: float,
+    fully_closed: bool,
+) -> SaleEvent:
+    event = SaleEvent(
+        user_id=user_id,
+        holding_id=holding_id,
+        ticker=ticker,
+        name=name,
+        market=market,
+        shares_sold=round(shares_sold, 8),
+        sale_price=round(sale_price, 4),
+        proceeds=round(proceeds, 4),
+        realized_pl=round(realized_pl, 4),
+        fully_closed=fully_closed,
+    )
+    db.add(event)
+    # caller commits
+    return event
+
+
+def get_sale_events(db: Session, user_id: int) -> list[SaleEvent]:
+    stmt = (
+        select(SaleEvent)
+        .where(SaleEvent.user_id == user_id)
+        .order_by(desc(SaleEvent.sold_at))
+    )
+    return list(db.scalars(stmt).all())
+
+
 # ── Cash balance ──────────────────────────────────────────────────────────────
 
 
@@ -277,6 +320,21 @@ def record_sale(
 
     # Credit proceeds to cash balance
     _adjust_cash(db, user_id, obj.market, proceeds)
+
+    # Audit log
+    log_sale_event(
+        db,
+        user_id=user_id,
+        holding_id=obj.id,
+        ticker=obj.ticker,
+        name=obj.name,
+        market=obj.market,
+        shares_sold=shares_sold,
+        sale_price=sale_price,
+        proceeds=proceeds,
+        realized_pl=realized_pl,
+        fully_closed=not obj.is_active,
+    )
 
     db.commit()
     if closed:
