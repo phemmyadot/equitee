@@ -545,6 +545,7 @@ def stream_analysis_sse(
     scope: str,
     depth: str,
     ctx: dict,
+    initial_message: str | None = None,
     follow_up: str | None = None,
     prior_response: str | None = None,
     parent_id: int | None = None,
@@ -570,6 +571,8 @@ def stream_analysis_sse(
 
     model = MODEL_QUICK if depth == "quick" else MODEL_DEEP
     prompt = build_user_prompt(ctx, scope)
+    if initial_message:
+        prompt += f"\n\n---\nSpecific focus for this analysis: {initial_message}"
     ctx_hash = compute_context_hash(ctx)
 
     if follow_up and prior_response:

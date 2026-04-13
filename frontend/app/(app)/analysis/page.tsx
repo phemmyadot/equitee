@@ -8,6 +8,7 @@ import {
   fetchAnalysisHistory,
   fetchAnalysisById,
   clearAnalysisHistory,
+  deleteAnalysisById,
 } from '@/services/api';
 import type { AnalysisSummary, AnalysisDetail, AnalysisFollowUp, AnalysisScope, AnalysisDepth } from '@/models/analysis';
 import {
@@ -167,54 +168,12 @@ function RebalancingCalc({
   );
 }
 
-// ── History card ──────────────────────────────────────────────────────────────
-function HistoryCard({
-  item,
-  active,
-  onClick,
-}: {
-  item: AnalysisSummary;
-  active: boolean;
-  onClick: () => void;
-}) {
-  const d = new Date(item.created_at);
-  const dateStr = d.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
-  const timeStr = d.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' });
-  const summary = item.summary ? stripMd(item.summary) : null;
-
-  return (
-    <button
-      onClick={onClick}
-      className={`w-full text-left card px-4 py-3 transition-all duration-150 ${
-        active ? 'border-[var(--accent)] bg-[var(--accent-light)]' : 'hover:border-[var(--accent-light)]'
-      }`}
-    >
-      <div className="flex items-start justify-between gap-2 mb-1">
-        <span className={`text-[12px] font-semibold ${active ? 'text-[var(--accent)]' : 'text-[var(--ink)]'}`}>
-          {SCOPE_LABELS[item.scope] ?? item.scope} Analysis
-        </span>
-        <span className={`shrink-0 text-[10px] font-semibold px-1.5 py-0.5 rounded ${
-          item.depth === 'deep' ? 'bg-purple-100 text-purple-700' : 'bg-[var(--accent-light)] text-[var(--accent)]'
-        }`}>
-          {item.depth === 'quick' ? 'Haiku' : 'Sonnet'}
-        </span>
-      </div>
-      <p className="text-[11px] text-[var(--ink-3)] line-clamp-2 leading-relaxed mb-1.5">
-        {summary ?? 'No summary available'}
-      </p>
-      <div className="flex items-center gap-2 text-[10px] text-[var(--ink-5)]">
-        <span>{dateStr} · {timeStr}</span>
-        {item.tokens_used ? <span>· ~{item.tokens_used} tokens</span> : null}
-      </div>
-    </button>
-  );
-}
-
 // ── Main Page ─────────────────────────────────────────────────────────────────
 export default function AnalysisPage() {
   const { data: portfolioData } = usePortfolio();
   const [scope, setScope] = useState<AnalysisScope>('portfolio');
   const [depth, setDepth] = useState<AnalysisDepth>('quick');
+  const [initialMessage, setInitialMessage] = useState('');
 
   const [streaming, setStreaming] = useState(false);
   const [streamText, setStreamText] = useState('');
@@ -226,7 +185,6 @@ export default function AnalysisPage() {
   const [activeDetail, setActiveDetail] = useState<AnalysisDetail | null>(null);
   const [copied, setCopied] = useState(false);
 
-  // Follow-up thread — appended inline below the main analysis
   type FollowUpEntry = AnalysisFollowUp & { done: boolean };
   const [followUps, setFollowUps] = useState<FollowUpEntry[]>([]);
   const [followUpText, setFollowUpText] = useState('');
@@ -247,6 +205,7 @@ export default function AnalysisPage() {
   }, [streamText, streaming]);
 
   const handleRun = useCallback(() => {
+    const msg = initialMessage.trim() || undefined;
     setStreaming(true);
     setStreamText('');
     setError(null);
@@ -259,8 +218,9 @@ export default function AnalysisPage() {
       (chunk) => setStreamText(prev => prev + chunk),
       (id, tokens, cached) => { setStreaming(false); setTokenInfo({ tokens, cached }); if (id) { setActiveId(id); loadHistory(); } },
       (msg) => { setStreaming(false); setError(msg); },
+      undefined, undefined, msg,
     );
-  }, [scope, depth, loadHistory]);
+  }, [scope, depth, initialMessage, loadHistory]);
 
   const handleFollowUp = useCallback(() => {
     const text = followUpText.trim();
@@ -274,17 +234,12 @@ export default function AnalysisPage() {
       (chunk) => setFollowUps(prev => prev.map((f, i) => i === idx ? { ...f, answer: f.answer + chunk } : f)),
       async () => {
         setFollowUps(prev => prev.map((f, i) => i === idx ? { ...f, done: true } : f));
-        // Persist: refresh detail so follow-ups survive a page reload
         if (id) {
-          try {
-            const detail = await fetchAnalysisById(id);
-            setActiveDetail(detail);
-          } catch { /* non-critical */ }
+          try { const d = await fetchAnalysisById(id); setActiveDetail(d); } catch { /* non-critical */ }
         }
       },
       (msg) => { setFollowUps(prev => prev.map((f, i) => i === idx ? { ...f, answer: `Error: ${msg}`, done: true } : f)); },
-      text,
-      id,
+      text, id,
     );
   }, [followUpText, streaming, followUpStreaming, followUps, activeId, scope, depth]);
 
@@ -302,15 +257,22 @@ export default function AnalysisPage() {
     try {
       const detail = await fetchAnalysisById(item.id);
       setActiveDetail(detail);
-      // Restore persisted follow-up thread
-      if (detail.follow_ups?.length) {
+      if (detail.follow_ups?.length)
         setFollowUps(detail.follow_ups.map(f => ({ ...f, done: true })));
-      }
     } catch { setError('Failed to load analysis'); }
   }, []);
 
+  const handleDeleteThread = useCallback(async (id: number, e: React.MouseEvent) => {
+    e.stopPropagation();
+    await deleteAnalysisById(id);
+    setHistory(prev => prev.filter(h => h.id !== id));
+    if (activeId === id) {
+      setActiveId(null); setActiveDetail(null); setStreamText(''); setFollowUps([]);
+    }
+  }, [activeId]);
+
   const handleClearHistory = useCallback(async () => {
-    if (!confirm('Clear all analysis history?')) return;
+    if (!confirm('Clear all threads?')) return;
     await clearAnalysisHistory();
     setHistory([]); setActiveId(null); setActiveDetail(null); setStreamText(''); setFollowUps([]);
   }, []);
@@ -328,227 +290,232 @@ export default function AnalysisPage() {
     .map(s => ({ ticker: s.Ticker, equity: s.CurrentEquity! }));
 
   return (
-    <div className="space-y-5">
+    <div className="flex gap-4 items-start">
 
-      {/* ── Header ── */}
-      <div className="flex items-center justify-between flex-wrap gap-3">
-        <div>
-          <h1 className="text-[15px] font-semibold text-[var(--ink)]">AI Analyst</h1>
-          <p className="text-[11px] text-[var(--ink-4)] mt-0.5">
-            Claude analyses your portfolio and watchlist
-          </p>
-        </div>
-        {displayText && !streaming && (
-          <div className="flex items-center gap-2">
-            <button
-              onClick={() => handleRun()}
-              className="flex items-center gap-1.5 h-8 px-3 text-[11px] font-semibold border border-[var(--border)] text-[var(--ink-3)] rounded-lg hover:border-[var(--accent-light)] transition-colors"
-            >
-              <IconRefresh width={12} height={12} />
-              Re-run
-            </button>
-            <button
-              onClick={handleCopy}
-              className="flex items-center gap-1.5 h-8 px-3 text-[11px] font-semibold border border-[var(--border)] text-[var(--ink-3)] rounded-lg hover:border-[var(--accent-light)] transition-colors"
-            >
-              {copied ? <IconCheck width={12} height={12} className="text-[var(--gain)]" /> : <IconCopy width={12} height={12} />}
-              {copied ? 'Copied' : 'Copy'}
-            </button>
-          </div>
-        )}
-      </div>
-
-      {/* ── Controls card ── */}
-      <div className="card px-4 py-4 space-y-4">
-        {/* Scope */}
-        <div>
-          <p className="text-[10px] font-bold uppercase tracking-[0.08em] text-[var(--ink-4)] mb-2">Scope</p>
-          <div className="flex gap-2">
-            {(['portfolio', 'watchlist', 'combined'] as AnalysisScope[]).map(s => (
-              <button
-                key={s}
-                onClick={() => setScope(s)}
-                disabled={streaming}
-                className={`flex-1 text-[12px] font-semibold py-2 rounded-lg border transition-all duration-150 disabled:opacity-50 ${
-                  scope === s
-                    ? 'bg-[var(--accent)] text-white border-[var(--accent)]'
-                    : 'bg-white text-[var(--ink-3)] border-[var(--border)] hover:border-[var(--accent-light)]'
-                }`}
-              >
-                {SCOPE_LABELS[s]}
-              </button>
-            ))}
-          </div>
-        </div>
-
-        {/* Depth */}
-        <div>
-          <p className="text-[10px] font-bold uppercase tracking-[0.08em] text-[var(--ink-4)] mb-2">Depth</p>
-          <div className="flex gap-2">
-            {([
-              { key: 'quick', label: 'Quick · Haiku', active: 'bg-[var(--accent)] text-white border-[var(--accent)]' },
-              { key: 'deep',  label: 'Deep · Sonnet', active: 'bg-purple-600 text-white border-purple-600' },
-            ] as { key: AnalysisDepth; label: string; active: string }[]).map(d => (
-              <button
-                key={d.key}
-                onClick={() => setDepth(d.key)}
-                disabled={streaming}
-                className={`flex-1 text-[12px] font-semibold py-2 rounded-lg border transition-all duration-150 disabled:opacity-50 ${
-                  depth === d.key ? d.active : 'bg-white text-[var(--ink-3)] border-[var(--border)] hover:border-[var(--accent-light)]'
-                }`}
-              >
-                {d.label}
-              </button>
-            ))}
-          </div>
-        </div>
-
-        {/* Run / Abort */}
-        {(streaming || followUpStreaming) ? (
-          <button
-            onClick={handleAbort}
-            className="w-full flex items-center justify-center gap-2 py-2.5 rounded-xl text-[13px] font-semibold bg-red-50 text-red-600 border border-red-200 hover:bg-red-100 transition-colors"
-          >
-            <IconX width={14} height={14} />
-            Stop
-          </button>
-        ) : (
-          <button
-            onClick={() => handleRun()}
-            className="w-full flex items-center justify-center gap-2 py-2.5 rounded-xl text-[13px] font-semibold bg-[var(--accent)] text-white hover:bg-[#17A06B] transition-colors"
-          >
-            <IconSparkles width={14} height={14} />
-            Analyse Now
-          </button>
-        )}
-      </div>
-
-      {/* ── Result viewer ── */}
-      {(displayText || streaming || error) && (
-        <div className="card overflow-hidden">
-          {/* Meta bar */}
-          {(activeDetail || tokenInfo) && (
-            <div className="flex items-center gap-2 px-4 py-2.5 border-b border-[var(--border)] bg-[var(--sidebar)]">
-              {(() => {
-                const s = activeDetail?.scope ?? scope;
-                const d = activeDetail?.depth ?? depth;
-                const ts = activeDetail
-                  ? new Date(activeDetail.created_at).toLocaleString()
-                  : null;
-                const tok = activeDetail?.tokens_used ?? tokenInfo?.tokens;
-                const cached = tokenInfo?.cached;
-                return (
-                  <>
-                    <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded bg-[var(--ink-6)] text-[var(--ink-3)]">
-                      {SCOPE_LABELS[s] ?? s}
-                    </span>
-                    <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded ${d === 'deep' ? 'bg-purple-100 text-purple-700' : 'bg-[var(--accent-light)] text-[var(--accent)]'}`}>
-                      {d === 'quick' ? 'Haiku' : 'Sonnet'}
-                    </span>
-                    {cached && <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded bg-[var(--ink-6)] text-[var(--ink-4)]">cached</span>}
-                    <span className="ml-auto text-[10px] text-[var(--ink-4)]">
-                      {ts ?? ''}{tok ? ` · ~${tok} tokens` : ''}
-                    </span>
-                  </>
-                );
-              })()}
-            </div>
+      {/* ── Threads sidebar ── */}
+      <div className="w-48 shrink-0 space-y-1.5">
+        <div className="flex items-center justify-between px-0.5 mb-2">
+          <span className="text-[10px] font-bold uppercase tracking-[0.08em] text-[var(--ink-4)]">Threads</span>
+          {history.length > 0 && (
+            <button onClick={handleClearHistory} className="text-[10px] text-[var(--loss)] hover:underline">Clear all</button>
           )}
+        </div>
 
-          <div ref={viewerRef} className="px-4 py-4">
-            {error && (
-              <div className="rounded-xl bg-red-50 border border-red-200 px-4 py-3">
-                <p className="text-[13px] font-semibold text-red-700 mb-0.5">Analysis failed</p>
-                <p className="text-[11px] text-red-600">{error}</p>
-              </div>
-            )}
+        {history.length === 0 && (
+          <p className="text-[11px] text-[var(--ink-5)] px-0.5">No threads yet</p>
+        )}
 
-            {/* Streaming: flat render */}
-            {streaming && streamText && <MarkdownViewer>{streamText}</MarkdownViewer>}
-            {streaming && <Cursor />}
-
-            {/* Done: collapsible sections + rebalancing */}
-            {!streaming && displayText && (
-              <>
-                <CollapsibleSections markdown={displayText} />
-                <RebalancingCalc markdown={displayText} holdings={ngxHoldings} />
-              </>
-            )}
-
-            {/* Follow-up thread — inline below the main analysis */}
-            {followUps.map((f, i) => (
-              <div key={i} className="mt-5 pt-4 border-t border-[var(--border)]">
-                <div className="flex items-start gap-2 mb-3">
-                  <span className="shrink-0 mt-0.5 text-[10px] font-bold uppercase tracking-[0.08em] text-[var(--ink-4)] bg-[var(--canvas)] border border-[var(--border)] rounded px-1.5 py-0.5">You</span>
-                  <p className="text-[13px] text-[var(--ink)] leading-snug">{f.question}</p>
-                </div>
-                {f.answer && <MarkdownViewer>{f.answer}</MarkdownViewer>}
-                {!f.done && <Cursor />}
-              </div>
-            ))}
-          </div>
-
-          {/* Follow-up input */}
-          {!streaming && displayText && (
-            <div className="px-4 pb-4 pt-2 border-t border-[var(--border)]">
-              <div className="flex gap-2 items-end">
-                <textarea
-                  value={followUpText}
-                  onChange={e => setFollowUpText(e.target.value)}
-                  onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleFollowUp(); } }}
-                  placeholder="Ask a follow-up question…"
-                  rows={2}
-                  disabled={followUpStreaming}
-                  className="flex-1 resize-none rounded-xl border border-[var(--border)] px-3 py-2 text-[12px] text-[var(--ink)] placeholder:text-[var(--ink-5)] focus:outline-none focus:border-[var(--accent)] bg-white disabled:opacity-50"
-                />
+        {history.map(item => {
+          const d = new Date(item.created_at);
+          const label = d.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+          const time = d.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' });
+          const isActive = item.id === activeId;
+          return (
+            <div
+              key={item.id}
+              onClick={() => handleSelectHistory(item)}
+              className={`group relative rounded-xl border px-3 py-2.5 cursor-pointer transition-all duration-150 ${
+                isActive
+                  ? 'border-[var(--accent)] bg-[var(--accent-light)]'
+                  : 'border-[var(--border)] hover:border-[var(--accent-light)] bg-white'
+              }`}
+            >
+              <div className="flex items-center justify-between gap-1 mb-0.5">
+                <span className={`text-[11px] font-semibold truncate ${isActive ? 'text-[var(--accent)]' : 'text-[var(--ink)]'}`}>
+                  {SCOPE_LABELS[item.scope] ?? item.scope}
+                </span>
                 <button
-                  onClick={handleFollowUp}
-                  disabled={!followUpText.trim() || followUpStreaming}
-                  className="h-10 px-4 rounded-xl text-[12px] font-semibold bg-[var(--accent)] text-white hover:bg-[#17A06B] transition-colors disabled:opacity-40 shrink-0"
+                  onClick={(e) => handleDeleteThread(item.id, e)}
+                  className="opacity-0 group-hover:opacity-100 shrink-0 text-[var(--ink-5)] hover:text-[var(--loss)] transition-opacity"
+                  title="Delete thread"
                 >
-                  Ask
+                  <IconTrash width={11} height={11} />
                 </button>
               </div>
+              <div className="flex items-center gap-1.5">
+                <span className={`text-[9px] font-semibold px-1 py-0.5 rounded ${item.depth === 'deep' ? 'bg-purple-100 text-purple-600' : 'bg-[var(--accent-light)] text-[var(--accent)]'}`}>
+                  {item.depth === 'quick' ? 'Haiku' : 'Sonnet'}
+                </span>
+                <span className="text-[9px] text-[var(--ink-5)]">{label} {time}</span>
+              </div>
+              {item.summary && (
+                <p className="text-[10px] text-[var(--ink-4)] mt-1 line-clamp-2 leading-relaxed">
+                  {stripMd(item.summary)}
+                </p>
+              )}
+            </div>
+          );
+        })}
+      </div>
+
+      {/* ── Main content ── */}
+      <div className="flex-1 min-w-0 space-y-4">
+
+        {/* Header */}
+        <div className="flex items-center justify-between flex-wrap gap-3">
+          <div>
+            <h1 className="text-[15px] font-semibold text-[var(--ink)]">AI Analyst</h1>
+            <p className="text-[11px] text-[var(--ink-4)] mt-0.5">Claude analyses your portfolio and watchlist</p>
+          </div>
+          {displayText && !streaming && (
+            <div className="flex items-center gap-2">
+              <button onClick={() => handleRun()} className="flex items-center gap-1.5 h-8 px-3 text-[11px] font-semibold border border-[var(--border)] text-[var(--ink-3)] rounded-lg hover:border-[var(--accent-light)] transition-colors">
+                <IconRefresh width={12} height={12} />
+                Re-run
+              </button>
+              <button onClick={handleCopy} className="flex items-center gap-1.5 h-8 px-3 text-[11px] font-semibold border border-[var(--border)] text-[var(--ink-3)] rounded-lg hover:border-[var(--accent-light)] transition-colors">
+                {copied ? <IconCheck width={12} height={12} className="text-[var(--gain)]" /> : <IconCopy width={12} height={12} />}
+                {copied ? 'Copied' : 'Copy'}
+              </button>
             </div>
           )}
         </div>
-      )}
 
-      {/* ── Empty state ── */}
-      {displayEmpty && (
-        <div className="card px-6 py-14 flex flex-col items-center text-center">
-          <IconSparkles width={28} height={28} className="text-[var(--ink-5)] mb-3" />
-          <p className="text-[13px] font-semibold text-[var(--ink-3)]">No analysis yet</p>
-          <p className="text-[11px] text-[var(--ink-5)] mt-1">Choose a scope and depth, then tap Analyse Now</p>
-        </div>
-      )}
+        {/* Controls card */}
+        <div className="card px-4 py-4 space-y-4">
+          {/* Scope */}
+          <div>
+            <p className="text-[10px] font-bold uppercase tracking-[0.08em] text-[var(--ink-4)] mb-2">Scope</p>
+            <div className="flex gap-2">
+              {(['portfolio', 'watchlist', 'combined'] as AnalysisScope[]).map(s => (
+                <button key={s} onClick={() => setScope(s)} disabled={streaming}
+                  className={`flex-1 text-[12px] font-semibold py-2 rounded-lg border transition-all duration-150 disabled:opacity-50 ${scope === s ? 'bg-[var(--accent)] text-white border-[var(--accent)]' : 'bg-white text-[var(--ink-3)] border-[var(--border)] hover:border-[var(--accent-light)]'}`}>
+                  {SCOPE_LABELS[s]}
+                </button>
+              ))}
+            </div>
+          </div>
 
-      {/* ── History ── */}
-      {history.length > 0 && (
-        <div>
-          <div className="flex items-center justify-between mb-2">
-            <h2 className="text-[13px] font-semibold text-[var(--ink)]">Past Analyses</h2>
-            <button
-              onClick={handleClearHistory}
-              className="flex items-center gap-1 text-[11px] text-[var(--loss)] hover:underline"
-            >
-              <IconTrash width={11} height={11} />
-              Clear all
+          {/* Depth */}
+          <div>
+            <p className="text-[10px] font-bold uppercase tracking-[0.08em] text-[var(--ink-4)] mb-2">Depth</p>
+            <div className="flex gap-2">
+              {([
+                { key: 'quick', label: 'Quick · Haiku', active: 'bg-[var(--accent)] text-white border-[var(--accent)]' },
+                { key: 'deep',  label: 'Deep · Sonnet', active: 'bg-purple-600 text-white border-purple-600' },
+              ] as { key: AnalysisDepth; label: string; active: string }[]).map(d => (
+                <button key={d.key} onClick={() => setDepth(d.key)} disabled={streaming}
+                  className={`flex-1 text-[12px] font-semibold py-2 rounded-lg border transition-all duration-150 disabled:opacity-50 ${depth === d.key ? d.active : 'bg-white text-[var(--ink-3)] border-[var(--border)] hover:border-[var(--accent-light)]'}`}>
+                  {d.label}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* Custom message */}
+          <div>
+            <p className="text-[10px] font-bold uppercase tracking-[0.08em] text-[var(--ink-4)] mb-2">Focus <span className="font-normal normal-case text-[var(--ink-5)]">— optional</span></p>
+            <textarea
+              value={initialMessage}
+              onChange={e => setInitialMessage(e.target.value)}
+              placeholder="e.g. Focus on my NGX exposure and dividend outlook"
+              rows={2}
+              disabled={streaming}
+              className="w-full resize-none rounded-xl border border-[var(--border)] px-3 py-2 text-[12px] text-[var(--ink)] placeholder:text-[var(--ink-5)] focus:outline-none focus:border-[var(--accent)] bg-white disabled:opacity-50"
+            />
+          </div>
+
+          {/* Run / Stop */}
+          {(streaming || followUpStreaming) ? (
+            <button onClick={handleAbort} className="w-full flex items-center justify-center gap-2 py-2.5 rounded-xl text-[13px] font-semibold bg-red-50 text-red-600 border border-red-200 hover:bg-red-100 transition-colors">
+              <IconX width={14} height={14} />
+              Stop
             </button>
-          </div>
-          <div className="space-y-2">
-            {history.map(item => (
-              <HistoryCard
-                key={item.id}
-                item={item}
-                active={item.id === activeId}
-                onClick={() => handleSelectHistory(item)}
-              />
-            ))}
-          </div>
+          ) : (
+            <button onClick={() => handleRun()} className="w-full flex items-center justify-center gap-2 py-2.5 rounded-xl text-[13px] font-semibold bg-[var(--accent)] text-white hover:bg-[#17A06B] transition-colors">
+              <IconSparkles width={14} height={14} />
+              Analyse Now
+            </button>
+          )}
         </div>
-      )}
 
+        {/* Result viewer */}
+        {(displayText || streaming || error) && (
+          <div className="card overflow-hidden">
+            {(activeDetail || tokenInfo) && (
+              <div className="flex items-center gap-2 px-4 py-2.5 border-b border-[var(--border)] bg-[var(--sidebar)]">
+                {(() => {
+                  const s = activeDetail?.scope ?? scope;
+                  const d = activeDetail?.depth ?? depth;
+                  const ts = activeDetail ? new Date(activeDetail.created_at).toLocaleString() : null;
+                  const tok = activeDetail?.tokens_used ?? tokenInfo?.tokens;
+                  const cached = tokenInfo?.cached;
+                  return (
+                    <>
+                      <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded bg-[var(--ink-6)] text-[var(--ink-3)]">{SCOPE_LABELS[s] ?? s}</span>
+                      <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded ${d === 'deep' ? 'bg-purple-100 text-purple-700' : 'bg-[var(--accent-light)] text-[var(--accent)]'}`}>{d === 'quick' ? 'Haiku' : 'Sonnet'}</span>
+                      {cached && <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded bg-[var(--ink-6)] text-[var(--ink-4)]">cached</span>}
+                      <span className="ml-auto text-[10px] text-[var(--ink-4)]">{ts ?? ''}{tok ? ` · ~${tok} tokens` : ''}</span>
+                    </>
+                  );
+                })()}
+              </div>
+            )}
+
+            <div ref={viewerRef} className="px-4 py-4">
+              {error && (
+                <div className="rounded-xl bg-red-50 border border-red-200 px-4 py-3">
+                  <p className="text-[13px] font-semibold text-red-700 mb-0.5">Analysis failed</p>
+                  <p className="text-[11px] text-red-600">{error}</p>
+                </div>
+              )}
+
+              {streaming && streamText && <MarkdownViewer>{streamText}</MarkdownViewer>}
+              {streaming && <Cursor />}
+
+              {!streaming && displayText && (
+                <>
+                  <CollapsibleSections markdown={displayText} />
+                  <RebalancingCalc markdown={displayText} holdings={ngxHoldings} />
+                </>
+              )}
+
+              {/* Follow-up thread */}
+              {followUps.map((f, i) => (
+                <div key={i} className="mt-5 pt-4 border-t border-[var(--border)]">
+                  <div className="flex items-start gap-2 mb-3">
+                    <span className="shrink-0 mt-0.5 text-[10px] font-bold uppercase tracking-[0.08em] text-[var(--ink-4)] bg-[var(--canvas)] border border-[var(--border)] rounded px-1.5 py-0.5">You</span>
+                    <p className="text-[13px] text-[var(--ink)] leading-snug">{f.question}</p>
+                  </div>
+                  {f.answer && <MarkdownViewer>{f.answer}</MarkdownViewer>}
+                  {!f.done && <Cursor />}
+                </div>
+              ))}
+            </div>
+
+            {/* Follow-up input */}
+            {!streaming && displayText && (
+              <div className="px-4 pb-4 pt-2 border-t border-[var(--border)]">
+                <div className="flex gap-2 items-end">
+                  <textarea
+                    value={followUpText}
+                    onChange={e => setFollowUpText(e.target.value)}
+                    onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleFollowUp(); } }}
+                    placeholder="Ask a follow-up question…"
+                    rows={2}
+                    disabled={followUpStreaming}
+                    className="flex-1 resize-none rounded-xl border border-[var(--border)] px-3 py-2 text-[12px] text-[var(--ink)] placeholder:text-[var(--ink-5)] focus:outline-none focus:border-[var(--accent)] bg-white disabled:opacity-50"
+                  />
+                  <button onClick={handleFollowUp} disabled={!followUpText.trim() || followUpStreaming}
+                    className="h-10 px-4 rounded-xl text-[12px] font-semibold bg-[var(--accent)] text-white hover:bg-[#17A06B] transition-colors disabled:opacity-40 shrink-0">
+                    Ask
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Empty state */}
+        {displayEmpty && (
+          <div className="card px-6 py-14 flex flex-col items-center text-center">
+            <IconSparkles width={28} height={28} className="text-[var(--ink-5)] mb-3" />
+            <p className="text-[13px] font-semibold text-[var(--ink-3)]">No analysis yet</p>
+            <p className="text-[11px] text-[var(--ink-5)] mt-1">Choose a scope and depth, then tap Analyse Now</p>
+          </div>
+        )}
+
+      </div>
     </div>
   );
 }

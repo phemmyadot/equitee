@@ -1116,3 +1116,13 @@ def delete_analysis_history(db: Session, user_id: int) -> int:
         db.delete(row)
     db.commit()
     return len(rows)
+
+
+def delete_analysis_by_id(db: Session, analysis_id: int, user_id: int) -> bool:
+    """Delete a single analysis thread (cascades to follow-up children via FK)."""
+    row = get_analysis_by_id(db, analysis_id, user_id)
+    if not row:
+        return False
+    db.delete(row)
+    db.commit()
+    return True

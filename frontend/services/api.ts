@@ -190,6 +190,9 @@ export const fetchAnalysisById = (id: number) =>
 export const clearAnalysisHistory = () =>
   del<{ deleted: number }>('/analysis/history');
 
+export const deleteAnalysisById = (id: number) =>
+  del<{ deleted: number }>(`/analysis/${id}`);
+
 /**
  * Opens an SSE stream to POST /analysis/run.
  * Calls onChunk for each text token, onDone when complete, onError on failure.
@@ -203,11 +206,13 @@ export function streamAnalysis(
   onError: (msg: string) => void,
   followUp?: string,
   followUpAnalysisId?: number,
+  initialMessage?: string,
 ): AbortController {
   const controller = new AbortController();
   const body = {
     scope,
     depth,
+    ...(initialMessage ? { initial_message: initialMessage } : {}),
     ...(followUp ? { follow_up: followUp, follow_up_analysis_id: followUpAnalysisId } : {}),
   };
 

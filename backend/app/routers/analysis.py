@@ -26,6 +26,7 @@ from app.db.engine import get_db
 from app.db.models import User
 from app.db.crud import (
     count_deep_analyses_today,
+    delete_analysis_by_id,
     delete_analysis_history,
     get_analysis_by_id,
     get_analysis_follow_ups,
@@ -50,6 +51,7 @@ router = APIRouter(prefix="/api/analysis", tags=["analysis"])
 class RunAnalysisRequest(BaseModel):
     scope: str = "portfolio"  # portfolio | watchlist | combined
     depth: str = "quick"  # quick | deep
+    initial_message: str | None = None  # optional custom focus for a fresh analysis
     follow_up: str | None = None  # follow-up question text
     follow_up_analysis_id: int | None = None  # ID of the analysis being followed up on
 
@@ -146,6 +148,7 @@ def run_analysis(
             )
 
     follow_up = (body.follow_up or "").strip() or None
+    initial_message = (body.initial_message or "").strip() or None
     follow_up_analysis_id = body.follow_up_analysis_id
 
     ctx = build_context(db, current_user.id, scope=scope)
@@ -183,6 +186,7 @@ def run_analysis(
             scope=scope,
             depth=depth,
             ctx=ctx,
+            initial_message=initial_message,
             follow_up=follow_up,
             prior_response=prior_response,
             parent_id=follow_up_analysis_id if follow_up else None,
@@ -213,6 +217,19 @@ def get_analysis(
         raise HTTPException(status_code=404, detail="Analysis not found")
     follow_ups = get_analysis_follow_ups(db, analysis_id, current_user.id)
     return _to_detail(row, follow_ups)
+
+
+@router.delete("/{analysis_id}")
+def delete_analysis(
+    analysis_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Delete one analysis thread and all its follow-up children."""
+    ok = delete_analysis_by_id(db, analysis_id, current_user.id)
+    if not ok:
+        raise HTTPException(status_code=404, detail="Analysis not found")
+    return {"deleted": analysis_id}
 
 
 @router.delete("/history")
