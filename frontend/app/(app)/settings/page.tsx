@@ -12,9 +12,7 @@ import {
   getCashBalance,
   creditCash,
   debitCash,
-  getTickerInfo,
 } from '@/services/settingsApi';
-import type { TickerInfo } from '@/services/settingsApi';
 import type { HoldingRecord, ClosedRecord, SellResult, CashBalance } from '@/models';
 import { fmtNGN, fmtUSD, fmtPct } from '@/utils/formatters';
 import { useAuth } from '@/context/AuthContext';
@@ -774,14 +772,12 @@ function AddModal({
   const [shares, setShares] = useState('');
   const [price, setPrice] = useState('');
   const [commission, setCommission] = useState('');
-  const [info, setInfo] = useState<TickerInfo | null>(null);
-  const [infoLoading, setInfoLoading] = useState(false);
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [busy, setBusy] = useState(false);
 
   const cur = market === 'ngx' ? '₦' : '$';
 
-  // Detect if ticker already has an existing position
+  // Detect if ticker already has an existing position (local — no extra fetch)
   const existing = ticker.trim()
     ? holdings.find(h => h.ticker === ticker.trim().toUpperCase() && h.market === market)
     : undefined;
@@ -791,21 +787,6 @@ function AddModal({
   const commNum = Number(commission) || 0;
   const gross = sharesNum > 0 && priceNum > 0 ? sharesNum * priceNum : null;
   const total = gross !== null ? gross + commNum : null;
-
-  const lookupTicker = async () => {
-    const t = ticker.trim().toUpperCase();
-    if (!t) return;
-    setInfoLoading(true);
-    setInfo(null);
-    try {
-      const res = await getTickerInfo(t, market);
-      setInfo(res);
-    } catch {
-      setInfo({ ticker: t, name: t, sector: 'Other' });
-    } finally {
-      setInfoLoading(false);
-    }
-  };
 
   const validate = () => {
     const e: Record<string, string> = {};
@@ -842,35 +823,17 @@ function AddModal({
         <Field label="Ticker" error={errors.ticker}>
           <Input
             value={ticker}
-            onChange={e => { setTicker(e.target.value.toUpperCase()); setInfo(null); }}
-            onBlur={lookupTicker}
+            onChange={e => setTicker(e.target.value.toUpperCase())}
             placeholder="e.g. GTCO"
           />
         </Field>
         <Field label="Market">
-          <Select value={market} onChange={e => { setMarket(e.target.value); setInfo(null); }}>
+          <Select value={market} onChange={e => setMarket(e.target.value)}>
             <option value="ngx">NGX</option>
             <option value="us">US</option>
           </Select>
         </Field>
       </div>
-
-      {/* Resolved info */}
-      {infoLoading && (
-        <p className="text-[11px] text-[var(--ink-4)]">Looking up {ticker}…</p>
-      )}
-      {info && !infoLoading && (
-        <div className="bg-[var(--canvas)] rounded-lg px-3 py-2.5 text-[11px] space-y-0.5">
-          <div className="flex justify-between">
-            <span className="text-[var(--ink-4)]">Name</span>
-            <span className="font-medium text-[var(--ink)]">{info.name}</span>
-          </div>
-          <div className="flex justify-between">
-            <span className="text-[var(--ink-4)]">Sector</span>
-            <span className="text-[var(--ink-2)]">{info.sector}</span>
-          </div>
-        </div>
-      )}
 
       {/* Existing position notice */}
       {existing && (
