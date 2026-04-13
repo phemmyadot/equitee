@@ -226,8 +226,11 @@ export default function AnalysisPage() {
   const [activeDetail, setActiveDetail] = useState<AnalysisDetail | null>(null);
   const [copied, setCopied] = useState(false);
 
+  // Follow-up thread — appended inline below the main analysis
+  type FollowUpEntry = { question: string; answer: string; done: boolean };
+  const [followUps, setFollowUps] = useState<FollowUpEntry[]>([]);
   const [followUpText, setFollowUpText] = useState('');
-  const followUpRef = useRef<HTMLTextAreaElement>(null);
+  const followUpStreaming = followUps.some(f => !f.done);
 
   const abortRef = useRef<AbortController | null>(null);
   const viewerRef = useRef<HTMLDivElement>(null);
@@ -243,35 +246,50 @@ export default function AnalysisPage() {
       viewerRef.current.scrollIntoView({ behavior: 'smooth', block: 'end' });
   }, [streamText, streaming]);
 
-  const handleRun = useCallback((followUp?: string, followUpId?: number) => {
+  const handleRun = useCallback(() => {
     setStreaming(true);
     setStreamText('');
     setError(null);
     setTokenInfo(null);
-    if (!followUp) { setActiveId(null); setActiveDetail(null); }
+    setFollowUps([]);
+    setActiveId(null);
+    setActiveDetail(null);
     abortRef.current = streamAnalysis(
       scope, depth,
       (chunk) => setStreamText(prev => prev + chunk),
       (id, tokens, cached) => { setStreaming(false); setTokenInfo({ tokens, cached }); if (id) setActiveId(id); loadHistory(); },
       (msg) => { setStreaming(false); setError(msg); },
-      followUp,
-      followUpId,
     );
   }, [scope, depth, loadHistory]);
 
   const handleFollowUp = useCallback(() => {
     const text = followUpText.trim();
-    if (!text || streaming) return;
+    if (!text || streaming || followUpStreaming) return;
     const id = activeId ?? undefined;
+    const idx = followUps.length;
     setFollowUpText('');
-    handleRun(text, id);
-  }, [followUpText, streaming, activeId, handleRun]);
+    setFollowUps(prev => [...prev, { question: text, answer: '', done: false }]);
+    abortRef.current = streamAnalysis(
+      scope, depth,
+      (chunk) => setFollowUps(prev => prev.map((f, i) => i === idx ? { ...f, answer: f.answer + chunk } : f)),
+      () => { setFollowUps(prev => prev.map((f, i) => i === idx ? { ...f, done: true } : f)); },
+      (msg) => { setFollowUps(prev => prev.map((f, i) => i === idx ? { ...f, answer: `Error: ${msg}`, done: true } : f)); },
+      text,
+      id,
+    );
+  }, [followUpText, streaming, followUpStreaming, followUps, activeId, scope, depth]);
 
-  const handleAbort = useCallback(() => { abortRef.current?.abort(); setStreaming(false); }, []);
+  const handleAbort = useCallback(() => {
+    abortRef.current?.abort();
+    setStreaming(false);
+    setFollowUps(prev => prev.map(f => f.done ? f : { ...f, done: true }));
+  }, []);
 
   const handleSelectHistory = useCallback(async (item: AnalysisSummary) => {
-    setStreamText(''); setError(null); setTokenInfo(null);
+    setStreamText(''); setError(null); setTokenInfo(null); setFollowUps([]);
     setActiveId(item.id);
+    setScope(item.scope as AnalysisScope);
+    setDepth(item.depth as AnalysisDepth);
     try { setActiveDetail(await fetchAnalysisById(item.id)); }
     catch { setError('Failed to load analysis'); }
   }, []);
@@ -279,7 +297,7 @@ export default function AnalysisPage() {
   const handleClearHistory = useCallback(async () => {
     if (!confirm('Clear all analysis history?')) return;
     await clearAnalysisHistory();
-    setHistory([]); setActiveId(null); setActiveDetail(null); setStreamText('');
+    setHistory([]); setActiveId(null); setActiveDetail(null); setStreamText(''); setFollowUps([]);
   }, []);
 
   const handleCopy = useCallback(() => {
@@ -289,7 +307,7 @@ export default function AnalysisPage() {
   }, [activeDetail, streamText]);
 
   const displayText = activeDetail?.full_response ?? streamText;
-  const displayEmpty = !displayText && !streaming && !error;
+  const displayEmpty = !displayText && !streaming && !error && !followUps.length;
   const ngxHoldings = (portfolioData?.ngx_stocks ?? [])
     .filter(s => s.CurrentEquity != null)
     .map(s => ({ ticker: s.Ticker, equity: s.CurrentEquity! }));
@@ -371,7 +389,7 @@ export default function AnalysisPage() {
         </div>
 
         {/* Run / Abort */}
-        {streaming ? (
+        {(streaming || followUpStreaming) ? (
           <button
             onClick={handleAbort}
             className="w-full flex items-center justify-center gap-2 py-2.5 rounded-xl text-[13px] font-semibold bg-red-50 text-red-600 border border-red-200 hover:bg-red-100 transition-colors"
@@ -441,25 +459,36 @@ export default function AnalysisPage() {
                 <RebalancingCalc markdown={displayText} holdings={ngxHoldings} />
               </>
             )}
+
+            {/* Follow-up thread — inline below the main analysis */}
+            {followUps.map((f, i) => (
+              <div key={i} className="mt-5 pt-4 border-t border-[var(--border)]">
+                <div className="flex items-start gap-2 mb-3">
+                  <span className="shrink-0 mt-0.5 text-[10px] font-bold uppercase tracking-[0.08em] text-[var(--ink-4)] bg-[var(--canvas)] border border-[var(--border)] rounded px-1.5 py-0.5">You</span>
+                  <p className="text-[13px] text-[var(--ink)] leading-snug">{f.question}</p>
+                </div>
+                {f.answer && <MarkdownViewer>{f.answer}</MarkdownViewer>}
+                {!f.done && <Cursor />}
+              </div>
+            ))}
           </div>
 
           {/* Follow-up input */}
           {!streaming && displayText && (
             <div className="px-4 pb-4 pt-2 border-t border-[var(--border)]">
-              <p className="text-[10px] font-bold uppercase tracking-[0.08em] text-[var(--ink-4)] mb-2">Ask a follow-up</p>
               <div className="flex gap-2 items-end">
                 <textarea
-                  ref={followUpRef}
                   value={followUpText}
                   onChange={e => setFollowUpText(e.target.value)}
                   onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleFollowUp(); } }}
-                  placeholder="e.g. Which NGX holding has the most downside risk?"
+                  placeholder="Ask a follow-up question…"
                   rows={2}
-                  className="flex-1 resize-none rounded-xl border border-[var(--border)] px-3 py-2 text-[12px] text-[var(--ink)] placeholder:text-[var(--ink-5)] focus:outline-none focus:border-[var(--accent)] bg-white"
+                  disabled={followUpStreaming}
+                  className="flex-1 resize-none rounded-xl border border-[var(--border)] px-3 py-2 text-[12px] text-[var(--ink)] placeholder:text-[var(--ink-5)] focus:outline-none focus:border-[var(--accent)] bg-white disabled:opacity-50"
                 />
                 <button
                   onClick={handleFollowUp}
-                  disabled={!followUpText.trim()}
+                  disabled={!followUpText.trim() || followUpStreaming}
                   className="h-10 px-4 rounded-xl text-[12px] font-semibold bg-[var(--accent)] text-white hover:bg-[#17A06B] transition-colors disabled:opacity-40 shrink-0"
                 >
                   Ask
