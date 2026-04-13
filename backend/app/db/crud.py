@@ -1024,6 +1024,8 @@ def save_analysis(
     full_response: str,
     context_hash: str,
     tokens_used: int,
+    parent_id: Optional[int] = None,
+    follow_up_question: Optional[str] = None,
 ) -> AnalysisHistory:
     row = AnalysisHistory(
         user_id=user_id,
@@ -1034,11 +1036,28 @@ def save_analysis(
         full_response=full_response,
         context_hash=context_hash,
         tokens_used=tokens_used,
+        parent_id=parent_id,
+        follow_up_question=follow_up_question,
     )
     db.add(row)
     db.commit()
     db.refresh(row)
     return row
+
+
+def get_analysis_follow_ups(
+    db: Session, analysis_id: int, user_id: int
+) -> list[AnalysisHistory]:
+    """Return all follow-up child rows for a given analysis, oldest first."""
+    stmt = (
+        select(AnalysisHistory)
+        .where(
+            AnalysisHistory.parent_id == analysis_id,
+            AnalysisHistory.user_id == user_id,
+        )
+        .order_by(AnalysisHistory.created_at)
+    )
+    return list(db.scalars(stmt).all())
 
 
 def get_analysis_history(

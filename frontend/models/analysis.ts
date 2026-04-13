@@ -45,9 +45,15 @@ export interface AnalysisSummary {
   tokens_used: number | null;
 }
 
+export interface AnalysisFollowUp {
+  question: string;
+  answer: string;
+}
+
 export interface AnalysisDetail extends AnalysisSummary {
   full_response: string | null;
   context_hash: string | null;
+  follow_ups: AnalysisFollowUp[];
 }
 
 export interface AnalysisContextResponse {

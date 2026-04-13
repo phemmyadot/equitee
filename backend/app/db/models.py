@@ -394,5 +394,10 @@ class AnalysisHistory(Base):
     full_response: Mapped[str] = mapped_column(Text, nullable=True)
     context_hash: Mapped[str] = mapped_column(String, nullable=True)
     tokens_used: Mapped[int] = mapped_column(Integer, nullable=True)
+    # Follow-up threading: child rows reference their parent analysis
+    parent_id: Mapped[int] = mapped_column(
+        Integer, ForeignKey("analysis_history.id", ondelete="CASCADE"), nullable=True
+    )
+    follow_up_question: Mapped[str] = mapped_column(Text, nullable=True)
 
     __table_args__ = (Index("ix_analysis_history_user_id", "user_id"),)

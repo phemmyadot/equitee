@@ -28,6 +28,7 @@ from app.db.crud import (
     count_deep_analyses_today,
     delete_analysis_history,
     get_analysis_by_id,
+    get_analysis_follow_ups,
     get_analysis_history,
     get_latest_analysis,
 )
@@ -63,9 +64,15 @@ class AnalysisSummary(BaseModel):
     tokens_used: int | None
 
 
+class FollowUpOut(BaseModel):
+    question: str
+    answer: str
+
+
 class AnalysisDetail(AnalysisSummary):
     full_response: str | None
     context_hash: str | None
+    follow_ups: list[FollowUpOut] = []
 
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
@@ -83,7 +90,7 @@ def _to_summary(row) -> AnalysisSummary:
     )
 
 
-def _to_detail(row) -> AnalysisDetail:
+def _to_detail(row, follow_ups=None) -> AnalysisDetail:
     return AnalysisDetail(
         id=row.id,
         created_at=row.created_at.isoformat(),
@@ -94,6 +101,10 @@ def _to_detail(row) -> AnalysisDetail:
         full_response=row.full_response,
         context_hash=row.context_hash,
         tokens_used=row.tokens_used,
+        follow_ups=[
+            FollowUpOut(question=f.follow_up_question or "", answer=f.full_response or "")
+            for f in (follow_ups or [])
+        ],
     )
 
 
@@ -174,6 +185,7 @@ def run_analysis(
             ctx=ctx,
             follow_up=follow_up,
             prior_response=prior_response,
+            parent_id=follow_up_analysis_id if follow_up else None,
         ),
         media_type="text/event-stream",
         headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
@@ -186,7 +198,8 @@ def list_history(
     current_user: User = Depends(get_current_user),
 ):
     rows = get_analysis_history(db, current_user.id)
-    return [_to_summary(r) for r in rows]
+    # Exclude follow-up child rows — they are accessed via parent detail
+    return [_to_summary(r) for r in rows if r.parent_id is None]
 
 
 @router.get("/{analysis_id}", response_model=AnalysisDetail)
@@ -198,7 +211,8 @@ def get_analysis(
     row = get_analysis_by_id(db, analysis_id, current_user.id)
     if not row:
         raise HTTPException(status_code=404, detail="Analysis not found")
-    return _to_detail(row)
+    follow_ups = get_analysis_follow_ups(db, analysis_id, current_user.id)
+    return _to_detail(row, follow_ups)
 
 
 @router.delete("/history")

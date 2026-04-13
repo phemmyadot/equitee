@@ -547,6 +547,7 @@ def stream_analysis_sse(
     ctx: dict,
     follow_up: str | None = None,
     prior_response: str | None = None,
+    parent_id: int | None = None,
 ) -> Generator[str, None, None]:
     """
     Generator that yields SSE-formatted strings.
@@ -628,6 +629,8 @@ def stream_analysis_sse(
                 full_response=full_response,
                 context_hash=ctx_hash,
                 tokens_used=tokens_used,
+                parent_id=parent_id,
+                follow_up_question=follow_up,
             )
             record_id = record.id
 

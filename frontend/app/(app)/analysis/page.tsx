@@ -9,7 +9,7 @@ import {
   fetchAnalysisById,
   clearAnalysisHistory,
 } from '@/services/api';
-import type { AnalysisSummary, AnalysisDetail, AnalysisScope, AnalysisDepth } from '@/models/analysis';
+import type { AnalysisSummary, AnalysisDetail, AnalysisFollowUp, AnalysisScope, AnalysisDepth } from '@/models/analysis';
 import {
   IconSparkles,
   IconRefresh,
@@ -227,7 +227,7 @@ export default function AnalysisPage() {
   const [copied, setCopied] = useState(false);
 
   // Follow-up thread — appended inline below the main analysis
-  type FollowUpEntry = { question: string; answer: string; done: boolean };
+  type FollowUpEntry = AnalysisFollowUp & { done: boolean };
   const [followUps, setFollowUps] = useState<FollowUpEntry[]>([]);
   const [followUpText, setFollowUpText] = useState('');
   const followUpStreaming = followUps.some(f => !f.done);
@@ -257,7 +257,7 @@ export default function AnalysisPage() {
     abortRef.current = streamAnalysis(
       scope, depth,
       (chunk) => setStreamText(prev => prev + chunk),
-      (id, tokens, cached) => { setStreaming(false); setTokenInfo({ tokens, cached }); if (id) setActiveId(id); loadHistory(); },
+      (id, tokens, cached) => { setStreaming(false); setTokenInfo({ tokens, cached }); if (id) { setActiveId(id); loadHistory(); } },
       (msg) => { setStreaming(false); setError(msg); },
     );
   }, [scope, depth, loadHistory]);
@@ -272,7 +272,16 @@ export default function AnalysisPage() {
     abortRef.current = streamAnalysis(
       scope, depth,
       (chunk) => setFollowUps(prev => prev.map((f, i) => i === idx ? { ...f, answer: f.answer + chunk } : f)),
-      () => { setFollowUps(prev => prev.map((f, i) => i === idx ? { ...f, done: true } : f)); },
+      async () => {
+        setFollowUps(prev => prev.map((f, i) => i === idx ? { ...f, done: true } : f));
+        // Persist: refresh detail so follow-ups survive a page reload
+        if (id) {
+          try {
+            const detail = await fetchAnalysisById(id);
+            setActiveDetail(detail);
+          } catch { /* non-critical */ }
+        }
+      },
       (msg) => { setFollowUps(prev => prev.map((f, i) => i === idx ? { ...f, answer: `Error: ${msg}`, done: true } : f)); },
       text,
       id,
@@ -290,8 +299,14 @@ export default function AnalysisPage() {
     setActiveId(item.id);
     setScope(item.scope as AnalysisScope);
     setDepth(item.depth as AnalysisDepth);
-    try { setActiveDetail(await fetchAnalysisById(item.id)); }
-    catch { setError('Failed to load analysis'); }
+    try {
+      const detail = await fetchAnalysisById(item.id);
+      setActiveDetail(detail);
+      // Restore persisted follow-up thread
+      if (detail.follow_ups?.length) {
+        setFollowUps(detail.follow_ups.map(f => ({ ...f, done: true })));
+      }
+    } catch { setError('Failed to load analysis'); }
   }, []);
 
   const handleClearHistory = useCallback(async () => {
