@@ -161,13 +161,14 @@ def add_shares(
     user_id: int,
     new_shares: float,
     buy_price: float,
+    commission: float = 0.0,
 ) -> Optional[Holding]:
     """Buy more of an existing position, scoped to user."""
     obj = get_holding_by_id(db, holding_id, user_id)
     if obj is None:
         return None
     old_cost_basis = obj.shares * obj.avg_cost
-    new_cost_basis = new_shares * buy_price
+    new_cost_basis = new_shares * buy_price + (commission or 0.0)
     total_shares = obj.shares + new_shares
     obj.avg_cost = (old_cost_basis + new_cost_basis) / total_shares
     obj.shares = total_shares

@@ -993,6 +993,7 @@ function BuyModal({
 }) {
   const [shares, setShares] = useState('');
   const [buyPrice, setBuyPrice] = useState('');
+  const [commission, setCommission] = useState('');
   const [useCash, setUseCash] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
@@ -1003,12 +1004,14 @@ function BuyModal({
 
   const sharesNum = Number(shares) || 0;
   const priceNum = Number(buyPrice) || 0;
-  const cost = sharesNum > 0 && priceNum > 0 ? sharesNum * priceNum : null;
+  const commNum = Number(commission) || 0;
+  const grossCost = sharesNum > 0 && priceNum > 0 ? sharesNum * priceNum : null;
+  const totalCost = grossCost !== null ? grossCost + commNum : null;
   const newAvg =
     sharesNum > 0 && priceNum > 0
-      ? (holding.shares * holding.avg_cost + sharesNum * priceNum) / (holding.shares + sharesNum)
+      ? (holding.shares * holding.avg_cost + sharesNum * priceNum + commNum) / (holding.shares + sharesNum)
       : null;
-  const insufficientCash = useCash && cost !== null && cost > availCash;
+  const insufficientCash = useCash && totalCost !== null && totalCost > availCash;
 
   const submit = async () => {
     if (!shares || !buyPrice) {
@@ -1021,7 +1024,7 @@ function BuyModal({
     }
     setBusy(true);
     try {
-      await buyShares(holding.id, { shares: sharesNum, buy_price: priceNum, use_cash: useCash });
+      await buyShares(holding.id, { shares: sharesNum, buy_price: priceNum, commission: commNum || undefined, use_cash: useCash });
       onDone();
     } catch (e: any) {
       setError(e.message);
@@ -1071,6 +1074,16 @@ function BuyModal({
           />
         </Field>
       </div>
+      <Field label={`Commission (${cur}) — optional`}>
+        <Input
+          type="number"
+          min="0"
+          step="any"
+          value={commission}
+          onChange={(e) => setCommission(e.target.value)}
+          placeholder="0.00"
+        />
+      </Field>
       {/* Fund source toggle */}
       <label className="flex items-center gap-2 cursor-pointer select-none">
         <input
@@ -1084,12 +1097,24 @@ function BuyModal({
           Fund from cash balance{availCash > 0 ? ` (${fmtCash(availCash)} available)` : ' (no cash)'}
         </span>
       </label>
-      {cost !== null && useCash && (
-        <div className={`rounded-md px-3 py-2 text-[11px] font-mono flex justify-between ${insufficientCash ? 'bg-[var(--loss-light)]' : 'bg-[var(--canvas)]'}`}>
-          <span className="text-[var(--ink-3)]">Cost</span>
-          <span className={`font-semibold ${insufficientCash ? 'text-[var(--loss)]' : 'text-[var(--ink)]'}`}>
-            {fmtCash(cost)}
-          </span>
+      {totalCost !== null && useCash && (
+        <div className={`rounded-md px-3 py-2 text-[11px] font-mono space-y-0.5 ${insufficientCash ? 'bg-[var(--loss-light)]' : 'bg-[var(--canvas)]'}`}>
+          {commNum > 0 && (
+            <div className="flex justify-between text-[var(--ink-4)]">
+              <span>Gross cost</span><span>{fmtCash(grossCost!)}</span>
+            </div>
+          )}
+          {commNum > 0 && (
+            <div className="flex justify-between text-[var(--ink-4)]">
+              <span>Commission</span><span>{fmtCash(commNum)}</span>
+            </div>
+          )}
+          <div className="flex justify-between">
+            <span className="text-[var(--ink-3)]">Total debit</span>
+            <span className={`font-semibold ${insufficientCash ? 'text-[var(--loss)]' : 'text-[var(--ink)]'}`}>
+              {fmtCash(totalCost)}
+            </span>
+          </div>
         </div>
       )}
       {newAvg !== null && (

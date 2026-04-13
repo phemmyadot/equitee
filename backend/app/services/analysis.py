@@ -122,7 +122,18 @@ _COMBINED_SECTIONS = (
 )
 
 
-def build_system_prompt(scope: str) -> str:
+_FOLLOWUP_INSTRUCTIONS = (
+    "The user is asking a follow-up question about the analysis above. "
+    "Answer it directly and concisely — do NOT use the structured section format. "
+    "Use Markdown freely (bold tickers, bullet lists where helpful), but respond "
+    "conversationally and keep the answer focused on what was asked. "
+    "Reference specific figures from the portfolio context or prior analysis where relevant."
+)
+
+
+def build_system_prompt(scope: str, is_follow_up: bool = False) -> str:
+    if is_follow_up:
+        return f"{_ANALYST_PERSONA}\n\n{_FOLLOWUP_INSTRUCTIONS}"
     if scope == "watchlist":
         sections = _WATCHLIST_SECTIONS
     elif scope == "combined":
@@ -577,7 +588,7 @@ def stream_analysis_sse(
         with client.messages.stream(
             model=model,
             max_tokens=2048,
-            system=build_system_prompt(scope),
+            system=build_system_prompt(scope, is_follow_up=bool(follow_up)),
             messages=messages,
         ) as stream:
             for text in stream.text_stream:

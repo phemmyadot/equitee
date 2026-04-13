@@ -93,6 +93,7 @@ class UpdateHoldingBody(BaseModel):
 class BuyBody(BaseModel):
     shares: float = Field(..., gt=0, description="Number of new shares to add")
     buy_price: float = Field(..., gt=0, description="Price per share paid")
+    commission: float = Field(0.0, ge=0, description="Brokerage commission paid")
     use_cash: bool = Field(False, description="Deduct purchase cost from cash balance")
 
 
@@ -202,7 +203,7 @@ def buy_more(
         raise HTTPException(status_code=404, detail="Holding not found")
 
     if body.use_cash:
-        cost = body.shares * body.buy_price
+        cost = body.shares * body.buy_price + (body.commission or 0.0)
         if not debit_cash(db, current_user.id, holding.market, cost):
             bal = get_cash_balance(db, current_user.id)
             avail = bal["ngn"] if holding.market == "ngx" else bal["usd"]
@@ -217,6 +218,7 @@ def buy_more(
         current_user.id,
         new_shares=body.shares,
         buy_price=body.buy_price,
+        commission=body.commission or 0.0,
     )
     if obj is None:
         raise HTTPException(status_code=404, detail="Holding not found")

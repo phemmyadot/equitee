@@ -63,7 +63,7 @@ export const deleteHolding = (id: number) => request<void>(`/holdings/${id}`, 'D
 
 export const buyShares = (
   id: number,
-  body: { shares: number; buy_price: number; use_cash?: boolean },
+  body: { shares: number; buy_price: number; commission?: number; use_cash?: boolean },
 ) => request<HoldingRecord>(`/holdings/${id}/buy`, 'POST', body);
 
 export const sellShares = (
