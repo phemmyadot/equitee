@@ -26,6 +26,7 @@ from app.auth.dependencies import get_current_user
 from app.db.crud import (
     get_all_holdings,
     get_holding_by_id,
+    get_holding_by_ticker,
     create_holding,
     update_holding,
     delete_holding,
@@ -74,11 +75,10 @@ class ClosedOut(BaseModel):
 
 class CreateHoldingBody(BaseModel):
     ticker: str = Field(..., min_length=1, max_length=20)
-    name: str = Field(..., min_length=1, max_length=120)
     market: str = Field(..., pattern="^(ngx|us)$")
     shares: float = Field(..., gt=0)
     avg_cost: float = Field(..., gt=0)
-    sector: str = Field(default="Other", max_length=60)
+    commission: float = Field(0.0, ge=0)
     purchase_date: Optional[date] = None
 
 
@@ -136,21 +136,118 @@ def list_holdings(
     return get_all_holdings(db, current_user.id)
 
 
+@router.get("/ticker-info")
+def ticker_info(
+    ticker: str,
+    market: str,
+    db=None,  # unused but keeps signature consistent
+    current_user: User = Depends(get_current_user),
+):
+    """Resolve name + sector for a ticker without creating a holding."""
+    ticker = ticker.strip().upper()
+    market = market.strip().lower()
+    name: str = ticker
+    sector: str = "Other"
+
+    if market == "ngx":
+        from app.services import profile as _profile_svc
+        p = _profile_svc.get_profile(ticker)
+        if p:
+            name = p.get("name") or ticker
+            sector = p.get("sector") or p.get("industry") or "Other"
+    else:
+        # US: fetch from Yahoo quote summary
+        import json, urllib.request
+        try:
+            url = f"https://query1.finance.yahoo.com/v8/finance/chart/{ticker}"
+            req = urllib.request.Request(url, headers={
+                "User-Agent": "Mozilla/5.0",
+                "Accept": "application/json",
+            })
+            with urllib.request.urlopen(req, timeout=6) as r:
+                meta = json.loads(r.read())["chart"]["result"][0]["meta"]
+            name = meta.get("longName") or meta.get("shortName") or ticker
+        except Exception:
+            pass
+        try:
+            url2 = f"https://query1.finance.yahoo.com/v11/finance/quoteSummary/{ticker}?modules=assetProfile"
+            req2 = urllib.request.Request(url2, headers={
+                "User-Agent": "Mozilla/5.0",
+                "Accept": "application/json",
+            })
+            with urllib.request.urlopen(req2, timeout=6) as r2:
+                ap = json.loads(r2.read())["quoteSummary"]["result"][0]["assetProfile"]
+            sector = ap.get("sector") or ap.get("industry") or "Other"
+        except Exception:
+            pass
+
+    return {"ticker": ticker, "name": name, "sector": sector}
+
+
 @router.post("/holdings", response_model=HoldingOut, status_code=201)
 def add_holding(
     body: CreateHoldingBody,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
+    ticker = body.ticker.strip().upper()
+    market = body.market.strip().lower()
+
+    # Resolve name + sector from external service
+    name: str = ticker
+    sector: str = "Other"
+    if market == "ngx":
+        from app.services import profile as _profile_svc
+        p = _profile_svc.get_profile(ticker)
+        if p:
+            name = p.get("name") or ticker
+            sector = p.get("sector") or p.get("industry") or "Other"
+    else:
+        import json, urllib.request
+        try:
+            url = f"https://query1.finance.yahoo.com/v8/finance/chart/{ticker}"
+            req = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0", "Accept": "application/json"})
+            with urllib.request.urlopen(req, timeout=6) as r:
+                meta = json.loads(r.read())["chart"]["result"][0]["meta"]
+            name = meta.get("longName") or meta.get("shortName") or ticker
+        except Exception:
+            pass
+        try:
+            url2 = f"https://query1.finance.yahoo.com/v11/finance/quoteSummary/{ticker}?modules=assetProfile"
+            req2 = urllib.request.Request(url2, headers={"User-Agent": "Mozilla/5.0", "Accept": "application/json"})
+            with urllib.request.urlopen(req2, timeout=6) as r2:
+                ap = json.loads(r2.read())["quoteSummary"]["result"][0]["assetProfile"]
+            sector = ap.get("sector") or ap.get("industry") or "Other"
+        except Exception:
+            pass
+
+    # If ticker already exists, add to existing position
+    existing = get_holding_by_ticker(db, ticker, market, current_user.id)
+    if existing:
+        obj = add_shares(
+            db,
+            existing.id,
+            current_user.id,
+            new_shares=body.shares,
+            buy_price=body.avg_cost,
+            commission=body.commission or 0.0,
+        )
+        if obj is None:
+            raise HTTPException(status_code=404, detail="Holding not found")
+        return obj
+
+    # New position — create it
     try:
+        commission = body.commission or 0.0
+        effective_avg_cost = (body.shares * body.avg_cost + commission) / body.shares
         return create_holding(
             db,
-            ticker=body.ticker,
-            name=body.name,
-            market=body.market,
+            ticker=ticker,
+            name=name,
+            market=market,
             shares=body.shares,
-            avg_cost=body.avg_cost,
-            sector=body.sector,
+            avg_cost=effective_avg_cost,
+            sector=sector,
             user_id=current_user.id,
             purchase_date=body.purchase_date,
         )

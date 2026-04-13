@@ -12,7 +12,9 @@ import {
   getCashBalance,
   creditCash,
   debitCash,
+  getTickerInfo,
 } from '@/services/settingsApi';
+import type { TickerInfo } from '@/services/settingsApi';
 import type { HoldingRecord, ClosedRecord, SellResult, CashBalance } from '@/models';
 import { fmtNGN, fmtUSD, fmtPct } from '@/utils/formatters';
 import { useAuth } from '@/context/AuthContext';
@@ -624,6 +626,7 @@ export default function SettingsPage() {
       {/* ── Add position ── */}
       {modal?.type === 'add' && (
         <AddModal
+          holdings={holdings}
           onClose={() => setModal(null)}
           onDone={() => {
             reload();
@@ -757,29 +760,58 @@ export default function SettingsPage() {
 // Add Modal
 // ─────────────────────────────────────────────────────────────────────────────
 
-function AddModal({ onClose, onDone }: { onClose: () => void; onDone: () => void }) {
-  const [form, setForm] = useState({
-    ticker: '',
-    name: '',
-    market: 'ngx',
-    shares: '',
-    avg_cost: '',
-    sector: 'Other',
-    purchase_date: '',
-  });
+function AddModal({
+  holdings,
+  onClose,
+  onDone,
+}: {
+  holdings: HoldingRecord[];
+  onClose: () => void;
+  onDone: () => void;
+}) {
+  const [ticker, setTicker] = useState('');
+  const [market, setMarket] = useState('ngx');
+  const [shares, setShares] = useState('');
+  const [price, setPrice] = useState('');
+  const [commission, setCommission] = useState('');
+  const [info, setInfo] = useState<TickerInfo | null>(null);
+  const [infoLoading, setInfoLoading] = useState(false);
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [busy, setBusy] = useState(false);
 
-  const set = (k: string, v: string) => setForm((f) => ({ ...f, [k]: v }));
+  const cur = market === 'ngx' ? '₦' : '$';
+
+  // Detect if ticker already has an existing position
+  const existing = ticker.trim()
+    ? holdings.find(h => h.ticker === ticker.trim().toUpperCase() && h.market === market)
+    : undefined;
+
+  const sharesNum = Number(shares) || 0;
+  const priceNum = Number(price) || 0;
+  const commNum = Number(commission) || 0;
+  const gross = sharesNum > 0 && priceNum > 0 ? sharesNum * priceNum : null;
+  const total = gross !== null ? gross + commNum : null;
+
+  const lookupTicker = async () => {
+    const t = ticker.trim().toUpperCase();
+    if (!t) return;
+    setInfoLoading(true);
+    setInfo(null);
+    try {
+      const res = await getTickerInfo(t, market);
+      setInfo(res);
+    } catch {
+      setInfo({ ticker: t, name: t, sector: 'Other' });
+    } finally {
+      setInfoLoading(false);
+    }
+  };
 
   const validate = () => {
     const e: Record<string, string> = {};
-    if (!form.ticker.trim()) e.ticker = 'Required';
-    if (!form.name.trim()) e.name = 'Required';
-    if (!form.shares || isNaN(Number(form.shares)) || Number(form.shares) <= 0)
-      e.shares = 'Must be > 0';
-    if (!form.avg_cost || isNaN(Number(form.avg_cost)) || Number(form.avg_cost) <= 0)
-      e.avg_cost = 'Must be > 0';
+    if (!ticker.trim()) e.ticker = 'Required';
+    if (!shares || sharesNum <= 0) e.shares = 'Must be > 0';
+    if (!price || priceNum <= 0) e.price = 'Must be > 0';
     setErrors(e);
     return Object.keys(e).length === 0;
   };
@@ -789,13 +821,11 @@ function AddModal({ onClose, onDone }: { onClose: () => void; onDone: () => void
     setBusy(true);
     try {
       await createHolding({
-        ticker: form.ticker.trim().toUpperCase(),
-        name: form.name.trim(),
-        market: form.market,
-        shares: Number(form.shares),
-        avg_cost: Number(form.avg_cost),
-        sector: form.sector,
-        ...(form.purchase_date ? { purchase_date: form.purchase_date } : {}),
+        ticker: ticker.trim().toUpperCase(),
+        market,
+        shares: sharesNum,
+        avg_cost: priceNum,
+        ...(commNum > 0 ? { commission: commNum } : {}),
       });
       onDone();
     } catch (e: any) {
@@ -806,75 +836,85 @@ function AddModal({ onClose, onDone }: { onClose: () => void; onDone: () => void
   };
 
   return (
-    <Modal title="Add New Position" onClose={onClose}>
+    <Modal title="Add Position" onClose={onClose}>
+      {/* Ticker + Market */}
       <div className="grid grid-cols-2 gap-3">
         <Field label="Ticker" error={errors.ticker}>
           <Input
-            value={form.ticker}
-            onChange={(e) => set('ticker', e.target.value.toUpperCase())}
+            value={ticker}
+            onChange={e => { setTicker(e.target.value.toUpperCase()); setInfo(null); }}
+            onBlur={lookupTicker}
             placeholder="e.g. GTCO"
           />
         </Field>
         <Field label="Market">
-          <Select value={form.market} onChange={(e) => set('market', e.target.value)}>
+          <Select value={market} onChange={e => { setMarket(e.target.value); setInfo(null); }}>
             <option value="ngx">NGX</option>
             <option value="us">US</option>
           </Select>
         </Field>
-        <Field label="Company Name" error={errors.name}>
-          <Input
-            className="col-span-2"
-            value={form.name}
-            onChange={(e) => set('name', e.target.value)}
-            placeholder="e.g. Guaranty Trust Holding Co"
-          />
-        </Field>
-        <Field label="Sector">
-          <Select value={form.sector} onChange={(e) => set('sector', e.target.value)}>
-            {SECTORS.map((s) => (
-              <option key={s}>{s}</option>
-            ))}
-          </Select>
-        </Field>
+      </div>
+
+      {/* Resolved info */}
+      {infoLoading && (
+        <p className="text-[11px] text-[var(--ink-4)]">Looking up {ticker}…</p>
+      )}
+      {info && !infoLoading && (
+        <div className="bg-[var(--canvas)] rounded-lg px-3 py-2.5 text-[11px] space-y-0.5">
+          <div className="flex justify-between">
+            <span className="text-[var(--ink-4)]">Name</span>
+            <span className="font-medium text-[var(--ink)]">{info.name}</span>
+          </div>
+          <div className="flex justify-between">
+            <span className="text-[var(--ink-4)]">Sector</span>
+            <span className="text-[var(--ink-2)]">{info.sector}</span>
+          </div>
+        </div>
+      )}
+
+      {/* Existing position notice */}
+      {existing && (
+        <div className="rounded-lg bg-[var(--accent-light)] border border-[var(--accent)] px-3 py-2 text-[11px] text-[var(--accent)]">
+          Already holding <strong>{existing.shares.toLocaleString()} shares</strong> @ {cur}{existing.avg_cost.toLocaleString(undefined, { maximumFractionDigits: 4 })} avg — will add to existing position
+        </div>
+      )}
+
+      {/* Shares + Price */}
+      <div className="grid grid-cols-2 gap-3">
         <Field label="Shares" error={errors.shares}>
-          <Input
-            type="number"
-            min="0"
-            step="any"
-            value={form.shares}
-            onChange={(e) => set('shares', e.target.value)}
-            placeholder="0"
-          />
+          <Input type="number" min="0" step="any" value={shares} onChange={e => setShares(e.target.value)} placeholder="0" />
         </Field>
-        <Field
-          label={`Avg Cost (${form.market === 'ngx' ? '₦' : '$'}) per share`}
-          error={errors.avg_cost}
-        >
-          <Input
-            type="number"
-            min="0"
-            step="any"
-            value={form.avg_cost}
-            onChange={(e) => set('avg_cost', e.target.value)}
-            placeholder="0.00"
-          />
-        </Field>
-        <Field label="Purchase Date (optional)">
-          <Input
-            type="date"
-            value={form.purchase_date}
-            onChange={(e) => set('purchase_date', e.target.value)}
-            max={new Date().toISOString().slice(0, 10)}
-          />
+        <Field label={`Unit price (${cur})`} error={errors.price}>
+          <Input type="number" min="0" step="any" value={price} onChange={e => setPrice(e.target.value)} placeholder="0.00" />
         </Field>
       </div>
+
+      {/* Commission */}
+      <Field label={`Commission (${cur}) — optional`}>
+        <Input type="number" min="0" step="any" value={commission} onChange={e => setCommission(e.target.value)} placeholder="0.00" />
+      </Field>
+
+      {/* Cost summary */}
+      {total !== null && (
+        <div className="bg-[var(--canvas)] rounded-lg px-3 py-2 text-[11px] font-mono space-y-0.5">
+          {commNum > 0 && (
+            <>
+              <div className="flex justify-between text-[var(--ink-4)]"><span>Gross</span><span>{cur}{gross!.toLocaleString(undefined, { maximumFractionDigits: 2 })}</span></div>
+              <div className="flex justify-between text-[var(--ink-4)]"><span>Commission</span><span>{cur}{commNum.toLocaleString(undefined, { maximumFractionDigits: 2 })}</span></div>
+            </>
+          )}
+          <div className="flex justify-between font-semibold">
+            <span className="text-[var(--ink-3)]">Total cost</span>
+            <span className="text-[var(--ink)]">{cur}{total.toLocaleString(undefined, { maximumFractionDigits: 2 })}</span>
+          </div>
+        </div>
+      )}
+
       {errors._ && <p className="text-[11px] text-[var(--loss)]">{errors._}</p>}
       <div className="flex justify-end gap-2 pt-1">
-        <Btn variant="secondary" onClick={onClose}>
-          Cancel
-        </Btn>
+        <Btn variant="secondary" onClick={onClose}>Cancel</Btn>
         <Btn variant="primary" loading={busy} onClick={submit}>
-          Add Position
+          {existing ? 'Add to Position' : 'Add Position'}
         </Btn>
       </div>
     </Modal>

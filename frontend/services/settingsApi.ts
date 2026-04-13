@@ -38,13 +38,19 @@ async function request<T>(path: string, method: string, body?: unknown): Promise
 
 export const getHoldings = () => request<HoldingRecord[]>('/holdings', 'GET');
 
+export interface TickerInfo { ticker: string; name: string; sector: string }
+
+export const getTickerInfo = (ticker: string, market: string): Promise<TickerInfo> => {
+  const params = new URLSearchParams({ ticker, market });
+  return request<TickerInfo>(`/ticker-info?${params}`, 'GET');
+};
+
 export const createHolding = (body: {
   ticker: string;
-  name: string;
   market: string;
   shares: number;
   avg_cost: number;
-  sector: string;
+  commission?: number;
   purchase_date?: string;
 }) => request<HoldingRecord>('/holdings', 'POST', body);
 

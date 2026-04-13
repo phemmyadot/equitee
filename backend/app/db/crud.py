@@ -87,6 +87,17 @@ def get_holding_by_id(db: Session, holding_id: int, user_id: int) -> Optional[Ho
     return obj
 
 
+def get_holding_by_ticker(
+    db: Session, ticker: str, market: str, user_id: int
+) -> Optional[Holding]:
+    stmt = select(Holding).where(
+        Holding.ticker == ticker.upper(),
+        Holding.market == market.lower(),
+        Holding.user_id == user_id,
+    )
+    return db.scalars(stmt).first()
+
+
 def create_holding(
     db: Session,
     ticker: str,
