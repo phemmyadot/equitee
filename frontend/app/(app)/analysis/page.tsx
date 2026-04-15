@@ -254,6 +254,7 @@ export default function AnalysisPage() {
     setActiveId(item.id);
     setScope(item.scope as AnalysisScope);
     setDepth(item.depth as AnalysisDepth);
+    setSidebarOpen(false);
     try {
       const detail = await fetchAnalysisById(item.id);
       setActiveDetail(detail);
@@ -283,6 +284,8 @@ export default function AnalysisPage() {
     navigator.clipboard.writeText(text).then(() => { setCopied(true); setTimeout(() => setCopied(false), 1500); });
   }, [activeDetail, streamText]);
 
+  const [sidebarOpen, setSidebarOpen] = useState(false);
+
   const displayText = activeDetail?.full_response ?? streamText;
   const displayEmpty = !displayText && !streaming && !error && !followUps.length;
   const ngxHoldings = (portfolioData?.ngx_stocks ?? [])
@@ -290,10 +293,10 @@ export default function AnalysisPage() {
     .map(s => ({ ticker: s.Ticker, equity: s.CurrentEquity! }));
 
   return (
-    <div className="flex gap-4 items-start">
+    <div className="flex flex-col gap-4 sm:flex-row sm:items-start">
 
       {/* ── Threads sidebar ── */}
-      <div className="w-48 shrink-0 space-y-1.5">
+      <div className={`${sidebarOpen ? 'block' : 'hidden'} sm:block w-full sm:w-48 sm:shrink-0 space-y-1.5`}>
         <div className="flex items-center justify-between px-0.5 mb-2">
           <span className="text-[10px] font-bold uppercase tracking-[0.08em] text-[var(--ink-4)]">Threads</span>
           {history.length > 0 && (
@@ -357,18 +360,27 @@ export default function AnalysisPage() {
             <h1 className="text-[15px] font-semibold text-[var(--ink)]">AI Analyst</h1>
             <p className="text-[11px] text-[var(--ink-4)] mt-0.5">Claude analyses your portfolio and watchlist</p>
           </div>
-          {displayText && !streaming && (
-            <div className="flex items-center gap-2">
-              <button onClick={() => handleRun()} className="flex items-center gap-1.5 h-8 px-3 text-[11px] font-semibold border border-[var(--border)] text-[var(--ink-3)] rounded-lg hover:border-[var(--accent-light)] transition-colors">
-                <IconRefresh width={12} height={12} />
-                Re-run
-              </button>
-              <button onClick={handleCopy} className="flex items-center gap-1.5 h-8 px-3 text-[11px] font-semibold border border-[var(--border)] text-[var(--ink-3)] rounded-lg hover:border-[var(--accent-light)] transition-colors">
-                {copied ? <IconCheck width={12} height={12} className="text-[var(--gain)]" /> : <IconCopy width={12} height={12} />}
-                {copied ? 'Copied' : 'Copy'}
-              </button>
-            </div>
-          )}
+          <div className="flex items-center gap-2">
+            {/* Mobile threads toggle */}
+            <button
+              onClick={() => setSidebarOpen(o => !o)}
+              className="sm:hidden flex items-center gap-1.5 h-8 px-3 text-[11px] font-semibold border border-[var(--border)] text-[var(--ink-3)] rounded-lg hover:border-[var(--accent-light)] transition-colors"
+            >
+              Threads{history.length > 0 ? ` (${history.length})` : ''}
+            </button>
+            {displayText && !streaming && (
+              <>
+                <button onClick={() => handleRun()} className="flex items-center gap-1.5 h-8 px-3 text-[11px] font-semibold border border-[var(--border)] text-[var(--ink-3)] rounded-lg hover:border-[var(--accent-light)] transition-colors">
+                  <IconRefresh width={12} height={12} />
+                  Re-run
+                </button>
+                <button onClick={handleCopy} className="flex items-center gap-1.5 h-8 px-3 text-[11px] font-semibold border border-[var(--border)] text-[var(--ink-3)] rounded-lg hover:border-[var(--accent-light)] transition-colors">
+                  {copied ? <IconCheck width={12} height={12} className="text-[var(--gain)]" /> : <IconCopy width={12} height={12} />}
+                  {copied ? 'Copied' : 'Copy'}
+                </button>
+              </>
+            )}
+          </div>
         </div>
 
         {/* Controls card */}
@@ -433,7 +445,7 @@ export default function AnalysisPage() {
         {(displayText || streaming || error) && (
           <div className="card overflow-hidden">
             {(activeDetail || tokenInfo) && (
-              <div className="flex items-center gap-2 px-4 py-2.5 border-b border-[var(--border)] bg-[var(--sidebar)]">
+              <div className="flex flex-wrap items-center gap-2 px-4 py-2.5 border-b border-[var(--border)] bg-[var(--sidebar)]">
                 {(() => {
                   const s = activeDetail?.scope ?? scope;
                   const d = activeDetail?.depth ?? depth;
@@ -445,7 +457,7 @@ export default function AnalysisPage() {
                       <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded bg-[var(--ink-6)] text-[var(--ink-3)]">{SCOPE_LABELS[s] ?? s}</span>
                       <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded ${d === 'deep' ? 'bg-purple-100 text-purple-700' : 'bg-[var(--accent-light)] text-[var(--accent)]'}`}>{d === 'quick' ? 'Haiku' : 'Sonnet'}</span>
                       {cached && <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded bg-[var(--ink-6)] text-[var(--ink-4)]">cached</span>}
-                      <span className="ml-auto text-[10px] text-[var(--ink-4)]">{ts ?? ''}{tok ? ` · ~${tok} tokens` : ''}</span>
+                      <span className="sm:ml-auto text-[10px] text-[var(--ink-4)] whitespace-nowrap">{ts ?? ''}{tok ? ` · ~${tok} tokens` : ''}</span>
                     </>
                   );
                 })()}
