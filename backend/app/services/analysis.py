@@ -303,8 +303,8 @@ def build_context(db: Session, user_id: int, scope: str = "portfolio") -> dict:
     us_rows = _trim(us_rows, "equity_usd")
 
     # Watchlist — enrich with live price so Claude knows where each sits vs entry
-    wl_ngx_tickers = [w.ticker for w in watchlist if w.market == "ngx"]
-    wl_us_tickers  = [w.ticker for w in watchlist if w.market == "us"]
+    wl_ngx_tickers = [w.ticker for w in watchlist if w.market.lower() == "ngx"]
+    wl_us_tickers  = [w.ticker for w in watchlist if w.market.lower() == "us"]
     wl_ngx_prices = _ngx_prices_svc.get_prices_by_tickers(wl_ngx_tickers) if wl_ngx_tickers else {}
     wl_us_prices  = _yahoo_svc.get_prices(wl_us_tickers) if wl_us_tickers else {}
 
@@ -315,7 +315,7 @@ def build_context(db: Session, user_id: int, scope: str = "portfolio") -> dict:
             "market": w.market,
             "added_price": round(w.added_price, 2) if w.added_price else None,
         }
-        if w.market == "ngx":
+        if w.market.lower() == "ngx":
             lp = wl_ngx_prices.get(w.ticker)
             if lp:
                 wl_row["current_price"] = round(lp.price, 2)

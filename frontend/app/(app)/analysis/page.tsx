@@ -254,7 +254,6 @@ export default function AnalysisPage() {
     setActiveId(item.id);
     setScope(item.scope as AnalysisScope);
     setDepth(item.depth as AnalysisDepth);
-    setSidebarOpen(false);
     try {
       const detail = await fetchAnalysisById(item.id);
       setActiveDetail(detail);
@@ -292,63 +291,89 @@ export default function AnalysisPage() {
     .filter(s => s.CurrentEquity != null)
     .map(s => ({ ticker: s.Ticker, equity: s.CurrentEquity! }));
 
+  // ── Shared thread list renderer ───────────────────────────────────────────
+  const ThreadList = ({ onSelect }: { onSelect?: () => void }) => (
+    <div className="space-y-1.5">
+      {history.length === 0 && (
+        <p className="text-[11px] text-[var(--ink-5)] px-0.5">No threads yet</p>
+      )}
+      {history.map(item => {
+        const d = new Date(item.created_at);
+        const label = d.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+        const time = d.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' });
+        const isActive = item.id === activeId;
+        return (
+          <div
+            key={item.id}
+            onClick={() => { handleSelectHistory(item); onSelect?.(); }}
+            className={`group relative rounded-xl border px-3 py-2.5 cursor-pointer transition-all duration-150 ${
+              isActive
+                ? 'border-[var(--accent)] bg-[var(--accent-light)]'
+                : 'border-[var(--border)] hover:border-[var(--accent-light)] bg-white'
+            }`}
+          >
+            <div className="flex items-center justify-between gap-1 mb-0.5">
+              <span className={`text-[11px] font-semibold truncate ${isActive ? 'text-[var(--accent)]' : 'text-[var(--ink)]'}`}>
+                {SCOPE_LABELS[item.scope] ?? item.scope}
+              </span>
+              <button
+                onClick={(e) => handleDeleteThread(item.id, e)}
+                className="opacity-0 group-hover:opacity-100 shrink-0 text-[var(--ink-5)] hover:text-[var(--loss)] transition-opacity"
+                title="Delete thread"
+              >
+                <IconTrash width={11} height={11} />
+              </button>
+            </div>
+            <div className="flex items-center gap-1.5">
+              <span className={`text-[9px] font-semibold px-1 py-0.5 rounded ${item.depth === 'deep' ? 'bg-purple-100 text-purple-600' : 'bg-[var(--accent-light)] text-[var(--accent)]'}`}>
+                {item.depth === 'quick' ? 'Haiku' : 'Sonnet'}
+              </span>
+              <span className="text-[9px] text-[var(--ink-5)]">{label} {time}</span>
+            </div>
+            {item.summary && (
+              <p className="text-[10px] text-[var(--ink-4)] mt-1 line-clamp-2 leading-relaxed">
+                {stripMd(item.summary)}
+              </p>
+            )}
+          </div>
+        );
+      })}
+    </div>
+  );
+
   return (
     <div className="flex flex-col gap-4 sm:flex-row sm:items-start">
 
-      {/* ── Threads sidebar ── */}
-      <div className={`${sidebarOpen ? 'block' : 'hidden'} sm:block w-full sm:w-48 sm:shrink-0 space-y-1.5`}>
+      {/* ── Mobile bottom-sheet overlay ── */}
+      {sidebarOpen && (
+        <div className="sm:hidden fixed inset-0 z-50 flex flex-col justify-end">
+          <div className="absolute inset-0 bg-black/40" onClick={() => setSidebarOpen(false)} />
+          <div className="relative bg-white rounded-t-2xl px-4 pt-4 pb-6 max-h-[70vh] overflow-y-auto">
+            <div className="flex items-center justify-between mb-3">
+              <span className="text-[10px] font-bold uppercase tracking-[0.08em] text-[var(--ink-4)]">Threads</span>
+              <div className="flex items-center gap-3">
+                {history.length > 0 && (
+                  <button onClick={handleClearHistory} className="text-[10px] text-[var(--loss)] hover:underline">Clear all</button>
+                )}
+                <button onClick={() => setSidebarOpen(false)} className="text-[var(--ink-4)] hover:text-[var(--ink)]">
+                  <IconX width={14} height={14} />
+                </button>
+              </div>
+            </div>
+            <ThreadList onSelect={() => setSidebarOpen(false)} />
+          </div>
+        </div>
+      )}
+
+      {/* ── Desktop threads sidebar ── */}
+      <div className="hidden sm:block w-48 shrink-0 space-y-1.5">
         <div className="flex items-center justify-between px-0.5 mb-2">
           <span className="text-[10px] font-bold uppercase tracking-[0.08em] text-[var(--ink-4)]">Threads</span>
           {history.length > 0 && (
             <button onClick={handleClearHistory} className="text-[10px] text-[var(--loss)] hover:underline">Clear all</button>
           )}
         </div>
-
-        {history.length === 0 && (
-          <p className="text-[11px] text-[var(--ink-5)] px-0.5">No threads yet</p>
-        )}
-
-        {history.map(item => {
-          const d = new Date(item.created_at);
-          const label = d.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
-          const time = d.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' });
-          const isActive = item.id === activeId;
-          return (
-            <div
-              key={item.id}
-              onClick={() => handleSelectHistory(item)}
-              className={`group relative rounded-xl border px-3 py-2.5 cursor-pointer transition-all duration-150 ${
-                isActive
-                  ? 'border-[var(--accent)] bg-[var(--accent-light)]'
-                  : 'border-[var(--border)] hover:border-[var(--accent-light)] bg-white'
-              }`}
-            >
-              <div className="flex items-center justify-between gap-1 mb-0.5">
-                <span className={`text-[11px] font-semibold truncate ${isActive ? 'text-[var(--accent)]' : 'text-[var(--ink)]'}`}>
-                  {SCOPE_LABELS[item.scope] ?? item.scope}
-                </span>
-                <button
-                  onClick={(e) => handleDeleteThread(item.id, e)}
-                  className="opacity-0 group-hover:opacity-100 shrink-0 text-[var(--ink-5)] hover:text-[var(--loss)] transition-opacity"
-                  title="Delete thread"
-                >
-                  <IconTrash width={11} height={11} />
-                </button>
-              </div>
-              <div className="flex items-center gap-1.5">
-                <span className={`text-[9px] font-semibold px-1 py-0.5 rounded ${item.depth === 'deep' ? 'bg-purple-100 text-purple-600' : 'bg-[var(--accent-light)] text-[var(--accent)]'}`}>
-                  {item.depth === 'quick' ? 'Haiku' : 'Sonnet'}
-                </span>
-                <span className="text-[9px] text-[var(--ink-5)]">{label} {time}</span>
-              </div>
-              {item.summary && (
-                <p className="text-[10px] text-[var(--ink-4)] mt-1 line-clamp-2 leading-relaxed">
-                  {stripMd(item.summary)}
-                </p>
-              )}
-            </div>
-          );
-        })}
+        <ThreadList />
       </div>
 
       {/* ── Main content ── */}
