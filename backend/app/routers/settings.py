@@ -250,6 +250,8 @@ def add_holding(
             sector=sector,
             user_id=current_user.id,
             purchase_date=body.purchase_date,
+            buy_price_raw=body.avg_cost,
+            commission=commission,
         )
     except Exception:
         log.exception("Error creating holding")

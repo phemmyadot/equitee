@@ -15,6 +15,7 @@ from sqlalchemy.orm import Session
 
 from app.db.models import (
     Holding,
+    BuyEvent,
     ClosedPosition,
     SaleEvent,
     PortfolioSnapshot,
@@ -108,6 +109,8 @@ def create_holding(
     sector: str,
     user_id: int,
     purchase_date=None,
+    buy_price_raw: Optional[float] = None,
+    commission: float = 0.0,
 ) -> Holding:
     obj = Holding(
         user_id=user_id,
@@ -124,6 +127,28 @@ def create_holding(
     db.commit()
     db.refresh(obj)
     log.info("Created holding %s (%s) for user_id=%d", obj.ticker, obj.market, user_id)
+
+    # Log buy event — use raw price if provided, otherwise reverse-engineer from avg_cost
+    raw_price = buy_price_raw if buy_price_raw is not None else avg_cost
+    total_cost = shares * raw_price + commission
+    bought_at = (
+        datetime(purchase_date.year, purchase_date.month, purchase_date.day,
+                 tzinfo=timezone.utc)
+        if purchase_date else datetime.now(timezone.utc)
+    )
+    log_buy_event(
+        db,
+        user_id=user_id,
+        holding_id=obj.id,
+        ticker=obj.ticker,
+        name=obj.name,
+        market=obj.market,
+        shares_bought=shares,
+        buy_price=raw_price,
+        commission=commission,
+        total_cost=total_cost,
+        bought_at=bought_at,
+    )
     return obj
 
 
@@ -193,6 +218,18 @@ def add_shares(
         buy_price,
         obj.avg_cost,
     )
+    log_buy_event(
+        db,
+        user_id=user_id,
+        holding_id=obj.id,
+        ticker=obj.ticker,
+        name=obj.name,
+        market=obj.market,
+        shares_bought=new_shares,
+        buy_price=buy_price,
+        commission=commission or 0.0,
+        total_cost=new_shares * buy_price + (commission or 0.0),
+    )
     return obj
 
 
@@ -236,6 +273,48 @@ def get_sale_events(db: Session, user_id: int) -> list[SaleEvent]:
         select(SaleEvent)
         .where(SaleEvent.user_id == user_id)
         .order_by(desc(SaleEvent.sold_at))
+    )
+    return list(db.scalars(stmt).all())
+
+
+# ── Buy events ────────────────────────────────────────────────────────────────
+
+
+def log_buy_event(
+    db: Session,
+    user_id: int,
+    holding_id: Optional[int],
+    ticker: str,
+    name: str,
+    market: str,
+    shares_bought: float,
+    buy_price: float,
+    commission: float,
+    total_cost: float,
+    bought_at: Optional[datetime] = None,
+) -> BuyEvent:
+    event = BuyEvent(
+        user_id=user_id,
+        holding_id=holding_id,
+        ticker=ticker,
+        name=name,
+        market=market,
+        shares_bought=round(shares_bought, 8),
+        buy_price=round(buy_price, 4),
+        commission=round(commission, 4),
+        total_cost=round(total_cost, 4),
+        bought_at=bought_at or datetime.now(timezone.utc),
+    )
+    db.add(event)
+    db.commit()
+    return event
+
+
+def get_buy_events(db: Session, user_id: int) -> list[BuyEvent]:
+    stmt = (
+        select(BuyEvent)
+        .where(BuyEvent.user_id == user_id)
+        .order_by(desc(BuyEvent.bought_at))
     )
     return list(db.scalars(stmt).all())
 

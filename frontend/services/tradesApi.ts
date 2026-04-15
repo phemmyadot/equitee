@@ -1,4 +1,4 @@
-import type { SaleEvent } from '@/models/trades';
+import type { SaleEvent, BuyEvent } from '@/models/trades';
 
 async function request<T>(path: string): Promise<T> {
   let res = await fetch(path, { cache: 'no-store' });
@@ -13,3 +13,4 @@ async function request<T>(path: string): Promise<T> {
 }
 
 export const getTrades = () => request<SaleEvent[]>('/api/trades');
+export const getBuys   = () => request<BuyEvent[]>('/api/trades/buys');

@@ -164,6 +164,36 @@ class SaleEvent(Base):
     )
 
 
+# ── buy_events ────────────────────────────────────────────────────────────────
+
+
+class BuyEvent(Base):
+    """One row per buy transaction. Immutable audit log."""
+
+    __tablename__ = "buy_events"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    user_id: Mapped[int] = mapped_column(
+        Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False
+    )
+    holding_id: Mapped[Optional[int]] = mapped_column(
+        Integer, ForeignKey("holdings.id", ondelete="SET NULL"), nullable=True
+    )
+    ticker: Mapped[str] = mapped_column(String, nullable=False)
+    name: Mapped[str] = mapped_column(String, nullable=False)
+    market: Mapped[str] = mapped_column(String, nullable=False)  # 'ngx' | 'us'
+    shares_bought: Mapped[float] = mapped_column(Float, nullable=False)
+    buy_price: Mapped[float] = mapped_column(Float, nullable=False)
+    commission: Mapped[float] = mapped_column(Float, nullable=False, default=0.0, server_default="0.0")
+    total_cost: Mapped[float] = mapped_column(Float, nullable=False)
+    bought_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now)
+
+    __table_args__ = (
+        Index("ix_buy_events_user_id", "user_id"),
+        Index("ix_buy_events_user_bought_at", "user_id", "bought_at"),
+    )
+
+
 # ── closed_positions ──────────────────────────────────────────────────────────
 
 
