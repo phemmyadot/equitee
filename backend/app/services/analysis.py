@@ -31,6 +31,8 @@ from app.db.crud import (
 from app.db.models import AnalysisHistory, DailyPriceHistory, PortfolioSnapshot
 from app.services import dividends as _dividends_svc
 from app.services import performance as _perf_svc
+from app.services import overview as _overview_svc
+from app.services import prices as _ngx_prices_svc
 from app.services import yahoo as _yahoo_svc
 
 log = logging.getLogger(__name__)
@@ -157,38 +159,89 @@ def _latest_price(db: Session, ticker: str) -> Optional[float]:
     return db.scalar(stmt)
 
 
+def _get_cached_fundamentals(ticker: str) -> dict:
+    """
+    Pull fundamental + momentum metrics from in-memory caches without triggering
+    a scrape.  Returns an empty dict if the ticker hasn't been cached yet.
+    """
+    result: dict = {}
+
+    # Valuation / quality from performance.py cache
+    ov = _perf_svc._overview_cache.get(ticker.upper())
+    if ov:
+        for k in ("pe_ratio", "roe", "debt_to_equity", "dividend_yield", "eps"):
+            if ov.get(k) is not None:
+                result[k] = ov[k]
+
+    # Returns / technicals from overview.py cache
+    perf = _overview_svc._performance_cache.get(ticker.upper())
+    if perf:
+        for k in (
+            "return_1m", "return_3m", "return_6m", "return_1y",
+            "rsi_14", "piotroski_score", "altman_zscore",
+            "price_to_book", "ev_ebitda", "fcf_yield", "roic",
+            "sharpe_ratio", "volatility",
+        ):
+            if perf.get(k) is not None:
+                result[k] = perf[k]
+
+    return result
+
+
 def build_context(db: Session, user_id: int, scope: str = "portfolio") -> dict:
     """
     Assemble a compact portfolio snapshot from the DB.
     Returns a dict that can be serialised to JSON and hashed.
-    No external scraping — DB-only.
+
+    Prices: live NGX prices from the in-memory cache (falls back to DB history);
+            live US prices from Yahoo Finance (TTL ~2 min).
+    Fundamentals: pulled from in-memory caches only — no scraping triggered here.
     """
     ngx_holdings = get_active_holdings(db, "ngx", user_id)
     us_holdings = get_active_holdings(db, "us", user_id)
     watchlist = get_watchlist(db, user_id)
+
+    # ── Live NGX prices (in-memory cache, TTL ~15 min) ────────────────────────
+    ngx_tickers_list = [h.ticker for h in ngx_holdings]
+    ngx_live_map = (
+        _ngx_prices_svc.get_prices_by_tickers(ngx_tickers_list)
+        if ngx_tickers_list else {}
+    )
 
     ngx_rows = []
     ngx_total_cost = 0.0
     ngx_total_equity = 0.0
 
     for h in ngx_holdings:
-        price = _latest_price(db, h.ticker)
+        live = ngx_live_map.get(h.ticker)
+        # Prefer live price; fall back to most-recent DB close
+        price = (live.price if live else None) or _latest_price(db, h.ticker)
         cost = (h.shares or 0) * (h.avg_cost or 0)
         equity = (h.shares or 0) * price if price else cost
         ngx_total_cost += cost
         ngx_total_equity += equity
-        ngx_rows.append(
-            {
-                "ticker": h.ticker,
-                "name": h.name,
-                "sector": h.sector or "Unknown",
-                "shares": round(h.shares or 0, 2),
-                "avg_cost": round(h.avg_cost or 0, 2),
-                "current_price": round(price, 2) if price else None,
-                "equity_ngn": round(equity, 2),
-                "realized_pl_ngn": round(h.realized_pl or 0, 2),
-            }
-        )
+
+        row: dict = {
+            "ticker": h.ticker,
+            "name": h.name,
+            "sector": h.sector or "Unknown",
+            "shares": round(h.shares or 0, 2),
+            "avg_cost": round(h.avg_cost or 0, 2),
+            "current_price": round(price, 2) if price else None,
+            "equity_ngn": round(equity, 2),
+            "realized_pl_ngn": round(h.realized_pl or 0, 2),
+        }
+        if live and live.change_pct is not None:
+            row["change_pct_today"] = round(live.change_pct, 2)
+        if live and live.change is not None:
+            row["change_today"] = round(live.change, 2)
+
+        # Non-blocking fundamentals from cache
+        fundamentals = _get_cached_fundamentals(h.ticker)
+        if fundamentals:
+            row["fundamentals"] = fundamentals
+
+        ngx_rows.append(row)
 
     us_rows = []
     us_total_cost = 0.0
@@ -205,18 +258,22 @@ def build_context(db: Session, user_id: int, scope: str = "portfolio") -> dict:
         equity = (h.shares or 0) * price if price else cost
         us_total_cost += cost
         us_total_equity += equity
-        us_rows.append(
-            {
-                "ticker": h.ticker,
-                "name": h.name,
-                "sector": h.sector or "Unknown",
-                "shares": round(h.shares or 0, 4),
-                "avg_cost": round(h.avg_cost or 0, 2),
-                "current_price": round(price, 2) if price else None,
-                "equity_usd": round(equity, 2),
-                "realized_pl_usd": round(h.realized_pl or 0, 2),
-            }
-        )
+
+        row = {
+            "ticker": h.ticker,
+            "name": h.name,
+            "sector": h.sector or "Unknown",
+            "shares": round(h.shares or 0, 4),
+            "avg_cost": round(h.avg_cost or 0, 2),
+            "current_price": round(price, 2) if price else None,
+            "equity_usd": round(equity, 2),
+            "realized_pl_usd": round(h.realized_pl or 0, 2),
+        }
+        if yp and yp.change_pct is not None:
+            row["change_pct_today"] = round(yp.change_pct, 2)
+        if yp and yp.change is not None:
+            row["change_today"] = round(yp.change, 2)
+        us_rows.append(row)
 
     # Token-efficiency: if > 15 holdings, keep top 10 by equity + worst performer
     def _trim(rows: list[dict], equity_key: str) -> list[dict]:
@@ -242,14 +299,36 @@ def build_context(db: Session, user_id: int, scope: str = "portfolio") -> dict:
     ngx_rows = _trim(ngx_rows, "equity_ngn")
     us_rows = _trim(us_rows, "equity_usd")
 
-    wl_rows = [
-        {
+    # Watchlist — enrich with live price so Claude knows where each sits vs entry
+    wl_ngx_tickers = [w.ticker for w in watchlist if w.market == "ngx"]
+    wl_us_tickers  = [w.ticker for w in watchlist if w.market == "us"]
+    wl_ngx_prices = _ngx_prices_svc.get_prices_by_tickers(wl_ngx_tickers) if wl_ngx_tickers else {}
+    wl_us_prices  = _yahoo_svc.get_prices(wl_us_tickers) if wl_us_tickers else {}
+
+    wl_rows = []
+    for w in watchlist:
+        wl_row: dict = {
             "ticker": w.ticker,
             "market": w.market,
             "added_price": round(w.added_price, 2) if w.added_price else None,
         }
-        for w in watchlist
-    ]
+        if w.market == "ngx":
+            lp = wl_ngx_prices.get(w.ticker)
+            if lp:
+                wl_row["current_price"] = round(lp.price, 2)
+                if lp.change_pct is not None:
+                    wl_row["change_pct_today"] = round(lp.change_pct, 2)
+                if w.added_price and lp.price:
+                    wl_row["vs_entry_pct"] = round((lp.price / w.added_price - 1) * 100, 1)
+        else:
+            yp = wl_us_prices.get(w.ticker)
+            if yp:
+                wl_row["current_price"] = round(yp.price, 2)
+                if yp.change_pct is not None:
+                    wl_row["change_pct_today"] = round(yp.change_pct, 2)
+                if w.added_price and yp.price:
+                    wl_row["vs_entry_pct"] = round((yp.price / w.added_price - 1) * 100, 1)
+        wl_rows.append(wl_row)
 
     ngx_gain_pct = (
         round((ngx_total_equity / ngx_total_cost - 1) * 100, 2)
@@ -424,12 +503,49 @@ def _format_holdings(rows: list[dict], currency: str, equity_key: str, pl_key: s
             ret = f" ({pct:+.1f}%)"
         realized_pl = r.get(pl_key, 0) or 0
         pl_str = f"  realized_pl={currency}{realized_pl:,.0f}" if realized_pl != 0 else ""
+
+        # Today's price move
+        today_str = ""
+        if r.get("change_pct_today") is not None:
+            chg = r["change_pct_today"]
+            today_str = f"  today: {chg:+.2f}%"
+            if r.get("change_today") is not None:
+                today_str += f" ({currency}{r['change_today']:+.2f})"
+
         lines.append(
             f"  {r['ticker']:<12} {r['sector']:<18} "
             f"{r['shares']} shares @ {currency}{r['avg_cost']:.2f}"
             f" → {currency}{r['current_price'] or 'N/A'}{ret}"
-            f"  [{currency}{r[equity_key]:,.0f}]{pl_str}"
+            f"  [{currency}{r[equity_key]:,.0f}]{pl_str}{today_str}"
         )
+
+        # Fundamentals line (only when cached data exists)
+        fund = r.get("fundamentals")
+        if fund:
+            parts = []
+            if fund.get("pe_ratio") is not None:
+                parts.append(f"P/E {fund['pe_ratio']:.1f}×")
+            if fund.get("price_to_book") is not None:
+                parts.append(f"P/B {fund['price_to_book']:.2f}×")
+            if fund.get("roe") is not None:
+                parts.append(f"ROE {fund['roe']:.1f}%")
+            if fund.get("roic") is not None:
+                parts.append(f"ROIC {fund['roic']:.1f}%")
+            if fund.get("piotroski_score") is not None:
+                parts.append(f"F-Score {fund['piotroski_score']:.0f}/9")
+            if fund.get("altman_zscore") is not None:
+                parts.append(f"Z {fund['altman_zscore']:.1f}")
+            if fund.get("return_1m") is not None:
+                parts.append(f"1M {fund['return_1m']:+.1f}%")
+            if fund.get("return_3m") is not None:
+                parts.append(f"3M {fund['return_3m']:+.1f}%")
+            if fund.get("return_1y") is not None:
+                parts.append(f"1Y {fund['return_1y']:+.1f}%")
+            if fund.get("rsi_14") is not None:
+                parts.append(f"RSI {fund['rsi_14']:.0f}")
+            if parts:
+                lines.append(f"    {'  '.join(parts)}")
+
     return "\n".join(lines) + "\n"
 
 
@@ -470,8 +586,17 @@ def build_user_prompt(ctx: dict, scope: str) -> str:
     if scope in ("watchlist", "combined") and ctx["watchlist"]:
         lines.append("Watchlist:")
         for w in ctx["watchlist"]:
-            added = f" (added @ {w['market']} {w['added_price']})" if w["added_price"] else ""
-            lines.append(f"  {w['ticker']} [{w['market']}]{added}")
+            parts = [f"  {w['ticker']} [{w['market']}]"]
+            if w.get("current_price"):
+                cur = w["current_price"]
+                parts.append(f"@ {cur}")
+                if w.get("change_pct_today") is not None:
+                    parts.append(f"({w['change_pct_today']:+.2f}% today)")
+            if w.get("added_price"):
+                parts.append(f"added @ {w['added_price']}")
+                if w.get("vs_entry_pct") is not None:
+                    parts.append(f"[{w['vs_entry_pct']:+.1f}% vs entry]")
+            lines.append("  ".join(parts))
         lines.append("")
 
     div_income = k.get("dividend_income_ngn", 0)
