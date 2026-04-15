@@ -559,42 +559,75 @@ def stream_analysis_sse(
       user: original portfolio prompt
       assistant: prior analysis response
       user: follow-up question
+
+    Prompt caching: system prompt and portfolio context are marked ephemeral so
+    repeated calls within the 5-minute cache window pay only output tokens.
+
+    Extended thinking: deep analyses use a thinking budget so the model reasons
+    through valuation and risk trade-offs before writing the response.
     """
     if not settings.ANTHROPIC_API_KEY:
         yield f"data: {json.dumps({'error': 'ANTHROPIC_API_KEY is not configured on the server.'})}\n\n"
         return
 
     from anthropic import Anthropic
-    from anthropic.types import MessageParam
+    from anthropic.types import MessageParam, TextBlockParam
     from app.db.engine import SessionLocal
     from app.db.crud import save_analysis
 
     model = MODEL_QUICK if depth == "quick" else MODEL_DEEP
+    is_deep = depth == "deep"
     prompt = build_user_prompt(ctx, scope)
     if initial_message:
         prompt += f"\n\n---\nSpecific focus for this analysis: {initial_message}"
     ctx_hash = compute_context_hash(ctx)
 
+    # ── Prompt caching ────────────────────────────────────────────────────────
+    # System and portfolio context are the largest, most-repeated inputs.
+    # cache_control: ephemeral pins them in the 5-min cache window so each
+    # follow-up or re-run only charges for the new tokens.
+    system_content: list[TextBlockParam] = [
+        TextBlockParam(
+            type="text",
+            text=build_system_prompt(scope, is_follow_up=bool(follow_up)),
+            cache_control={"type": "ephemeral"},
+        )
+    ]
+    portfolio_block = TextBlockParam(
+        type="text",
+        text=prompt,
+        cache_control={"type": "ephemeral"},
+    )
+
     if follow_up and prior_response:
         messages: list[MessageParam] = [
-            {"role": "user", "content": prompt},
+            {"role": "user", "content": [portfolio_block]},
             {"role": "assistant", "content": prior_response},
             {"role": "user", "content": follow_up},
         ]
     else:
-        messages = [{"role": "user", "content": prompt}]
+        messages = [{"role": "user", "content": [portfolio_block]}]
 
     client = Anthropic(api_key=settings.ANTHROPIC_API_KEY)
     full_chunks: list[str] = []
     tokens_used = 0
 
+    # ── Extended thinking (deep mode only) ───────────────────────────────────
+    # budget_tokens gives the model reasoning space before composing the response.
+    # max_tokens must exceed budget_tokens; we allocate 8 k thinking + 2 k output.
+    max_tokens = 10048 if is_deep else 2048
+    stream_kwargs: dict = {
+        "model": model,
+        "max_tokens": max_tokens,
+        "system": system_content,
+        "messages": messages,
+    }
+    if is_deep:
+        stream_kwargs["thinking"] = {"type": "enabled", "budget_tokens": 8000}
+
     try:
-        with client.messages.stream(
-            model=model,
-            max_tokens=2048,
-            system=build_system_prompt(scope, is_follow_up=bool(follow_up)),
-            messages=messages,
-        ) as stream:
+        with client.messages.stream(**stream_kwargs) as stream:
+            # text_stream automatically skips thinking blocks — only text deltas
             for text in stream.text_stream:
                 full_chunks.append(text)
                 yield f"data: {json.dumps({'text': text})}\n\n"
@@ -641,4 +674,126 @@ def stream_analysis_sse(
 
     except Exception as exc:
         log.exception("Analysis stream error: %s", exc)
+        yield f"data: {json.dumps({'error': str(exc)})}\n\n"
+
+
+# ── Trade Journal ─────────────────────────────────────────────────────────────
+
+_TRADE_JOURNAL_SYSTEM = (
+    "You are a trading coach and behavioural finance analyst. "
+    "Your job is to analyse a trader's transaction history and surface honest, "
+    "actionable insights about their trading behaviour — not their portfolio positions. "
+    "Be direct and specific. Use Markdown: ## for sections, **bold** for tickers and figures, "
+    "bullet lists for observations. No disclaimers. Under 800 words.\n\n"
+    "Focus exclusively on:\n"
+    "- Win/loss rate and average gain vs average loss (reward-to-risk)\n"
+    "- Holding period patterns (are they trading too frequently?)\n"
+    "- Commission drag (total commissions as % of gross proceeds)\n"
+    "- Behavioural biases: selling winners early, averaging down, panic selling\n"
+    "- Position sizing consistency\n"
+    "- Best and worst individual trades\n"
+    "- One concrete rule the trader should adopt to improve results\n\n"
+    "Structure with exactly these sections:\n"
+    "## Trade Journal Summary\n"
+    "## Win Rate & Reward-to-Risk\n"
+    "## Behavioural Patterns\n"
+    "## Commission Drag\n"
+    "## Best & Worst Trades\n"
+    "## One Rule to Adopt\n"
+    "> Stated as a concrete, measurable rule."
+)
+
+
+def _build_trade_journal_prompt(db, user_id: int) -> str:
+    """Build a compact trade history prompt for behavioural analysis."""
+    from app.db.crud import get_sale_events, get_cash_balance
+
+    sale_events = get_sale_events(db, user_id)
+    cash = get_cash_balance(db, user_id)
+
+    if not sale_events:
+        return "No trade history found for this account."
+
+    lines = [f"Trade history as of {date.today().isoformat()}:\n"]
+    total_commission = 0.0
+    total_proceeds = 0.0
+
+    for e in sale_events:
+        row = (
+            f"  {e.sold_at.strftime('%Y-%m-%d')}  {e.ticker:<8} [{e.market}]  "
+            f"{'CLOSE' if e.fully_closed else 'PARTIAL'}  "
+            f"{round(e.shares_sold or 0, 4)} shares @ {round(e.sale_price or 0, 4)}"
+        )
+        if e.commission and e.commission > 0:
+            row += f"  commission={round(e.commission, 2)}"
+            total_commission += e.commission
+        if e.proceeds and e.proceeds > 0:
+            row += f"  net_proceeds={round(e.proceeds, 2)}"
+            total_proceeds += e.proceeds
+        row += f"  P&L={round(e.realized_pl or 0, 2):+,.2f}"
+        lines.append(row)
+
+    lines.append(
+        f"\nSummary: {len(sale_events)} sale events | "
+        f"total commissions={total_commission:,.2f} | "
+        f"total proceeds={total_proceeds:,.2f}"
+    )
+    cash_ngn = (cash.get("ngn") or 0.0)
+    cash_usd = (cash.get("usd") or 0.0)
+    lines.append(f"Current cash: ₦{cash_ngn:,.2f} NGN | ${cash_usd:,.2f} USD")
+    lines.append("\nProvide your trade journal analysis now.")
+    return "\n".join(lines)
+
+
+def stream_trade_journal_sse(user_id: int) -> Generator[str, None, None]:
+    """
+    Stream a behavioural trade journal analysis.
+    Uses Haiku for speed — this is pattern recognition, not deep reasoning.
+    Caches the system prompt; trade history is user-specific so not cached.
+    """
+    if not settings.ANTHROPIC_API_KEY:
+        yield f"data: {json.dumps({'error': 'ANTHROPIC_API_KEY is not configured on the server.'})}\n\n"
+        return
+
+    from anthropic import Anthropic
+    from anthropic.types import TextBlockParam
+    from app.db.engine import SessionLocal
+
+    system_content: list[TextBlockParam] = [
+        TextBlockParam(
+            type="text",
+            text=_TRADE_JOURNAL_SYSTEM,
+            cache_control={"type": "ephemeral"},
+        )
+    ]
+
+    with SessionLocal() as db:
+        prompt = _build_trade_journal_prompt(db, user_id)
+
+    if prompt == "No trade history found for this account.":
+        yield f"data: {json.dumps({'text': 'No trade history found — make some trades first.'})}\n\n"
+        yield f"data: {json.dumps({'done': True})}\n\n"
+        return
+
+    client = Anthropic(api_key=settings.ANTHROPIC_API_KEY)
+    full_chunks: list[str] = []
+
+    try:
+        with client.messages.stream(
+            model=MODEL_QUICK,
+            max_tokens=1500,
+            system=system_content,
+            messages=[{"role": "user", "content": prompt}],
+        ) as stream:
+            for text in stream.text_stream:
+                full_chunks.append(text)
+                yield f"data: {json.dumps({'text': text})}\n\n"
+
+            final = stream.get_final_message()
+            tokens_used = final.usage.input_tokens + final.usage.output_tokens
+
+        yield f"data: {json.dumps({'done': True, 'tokens': tokens_used})}\n\n"
+
+    except Exception as exc:
+        log.exception("Trade journal stream error: %s", exc)
         yield f"data: {json.dumps({'error': str(exc)})}\n\n"

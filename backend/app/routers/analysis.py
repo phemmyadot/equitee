@@ -37,6 +37,7 @@ from app.services.analysis import (
     build_context,
     compute_context_hash,
     stream_analysis_sse,
+    stream_trade_journal_sse,
 )
 from app.config import settings
 
@@ -239,3 +240,19 @@ def clear_history(
 ):
     deleted = delete_analysis_history(db, current_user.id)
     return {"deleted": deleted}
+
+
+@router.post("/trade-journal")
+def run_trade_journal(
+    current_user: User = Depends(get_current_user),
+):
+    """
+    Stream a behavioural trade journal analysis.
+    Analyses transaction history only — not portfolio positions.
+    Returns insights on win rate, commission drag, and behavioural patterns.
+    """
+    return StreamingResponse(
+        stream_trade_journal_sse(user_id=current_user.id),
+        media_type="text/event-stream",
+        headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
+    )
