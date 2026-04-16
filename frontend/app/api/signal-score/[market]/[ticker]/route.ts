@@ -4,10 +4,10 @@ export const dynamic = 'force-dynamic';
 
 export async function GET(
   request: NextRequest,
-  { params }: { params: { market: string; ticker: string } },
+  { params }: { params: Promise<{ market: string; ticker: string }> },
 ) {
   const backendUrl = process.env.API_URL || 'http://localhost:8000';
-  const { market, ticker } = params;
+  const { market, ticker } = await params;
   const cookie = request.headers.get('cookie') ?? '';
 
   let upstream: Response;
