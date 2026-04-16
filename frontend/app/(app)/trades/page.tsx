@@ -6,7 +6,7 @@ import type { SaleEvent, BuyEvent } from '@/models/trades';
 import { fmtNGN, fmtUSD } from '@/utils/formatters';
 
 type Tab = 'sells' | 'buys';
-type Market = 'all' | 'ngx' | 'us';
+type Market = 'ngx' | 'us';
 
 function fmtAmt(market: string, v: number) {
   return market === 'ngx' ? fmtNGN(v) : fmtUSD(v);
@@ -21,9 +21,7 @@ function fmtDate(iso: string) {
 // ─── Sells tab ───────────────────────────────────────────────────────────────
 
 function SellsTab({ sells, market }: { sells: SaleEvent[]; market: Market }) {
-  const filtered = market === 'all' ? sells : sells.filter((t) => t.market === market);
-
-  const ngxProceeds = sells.filter((t) => t.market === 'ngx').reduce((s, t) => s + (t.proceeds || 0), 0);
+  const filtered = sells.filter((t) => t.market === market);
   const totalProceeds = filtered.reduce((s, t) => s + (t.proceeds || 0), 0);
   const totalPL = filtered.reduce((s, t) => s + t.realized_pl, 0);
 
@@ -32,21 +30,18 @@ function SellsTab({ sells, market }: { sells: SaleEvent[]; market: Market }) {
       <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
         <div className="card px-4 py-3">
           <p className="text-[10px] font-semibold uppercase tracking-[0.07em] text-[var(--ink-4)]">
-            Proceeds {market !== 'all' ? `(${market.toUpperCase()})` : '(NGX)'}
+            Proceeds ({market.toUpperCase()})
           </p>
           <p className="font-mono text-[18px] font-semibold text-[var(--ink)] mt-1">
-            {market === 'us' ? fmtUSD(totalProceeds) : fmtNGN(market === 'all' ? ngxProceeds : totalProceeds)}
+            {fmtAmt(market, totalProceeds)}
           </p>
-          {market === 'all' && (
-            <p className="text-[10px] text-[var(--ink-4)] mt-0.5 font-mono">NGX only · US in USD</p>
-          )}
         </div>
         <div className="card px-4 py-3">
           <p className="text-[10px] font-semibold uppercase tracking-[0.07em] text-[var(--ink-4)]">
-            Realized P/L {market !== 'all' ? `(${market.toUpperCase()})` : ''}
+            Realized P/L ({market.toUpperCase()})
           </p>
           <p className={`font-mono text-[18px] font-semibold mt-1 ${totalPL >= 0 ? 'text-[var(--gain)]' : 'text-[var(--loss)]'}`}>
-            {totalPL >= 0 ? '+' : ''}{fmtNGN(totalPL)}
+            {totalPL >= 0 ? '+' : ''}{fmtAmt(market, totalPL)}
           </p>
         </div>
         <div className="card px-4 py-3">
@@ -67,7 +62,6 @@ function SellsTab({ sells, market }: { sells: SaleEvent[]; market: Market }) {
                 <th>Date</th>
                 <th>Ticker</th>
                 <th>Name</th>
-                <th>Mkt</th>
                 <th>Type</th>
                 <th className="right">Shares</th>
                 <th className="right">Price</th>
@@ -79,8 +73,8 @@ function SellsTab({ sells, market }: { sells: SaleEvent[]; market: Market }) {
             <tbody>
               {filtered.length === 0 && (
                 <tr>
-                  <td colSpan={10} className="text-center text-[var(--ink-4)] py-10 text-[12px]">
-                    No sales recorded yet.
+                  <td colSpan={9} className="text-center text-[var(--ink-4)] py-10 text-[12px]">
+                    No {market.toUpperCase()} sales recorded yet.
                   </td>
                 </tr>
               )}
@@ -91,7 +85,6 @@ function SellsTab({ sells, market }: { sells: SaleEvent[]; market: Market }) {
                     <td className="text-[var(--ink-4)] font-mono text-[11px] whitespace-nowrap">{fmtDate(t.sold_at)}</td>
                     <td><span className="font-mono font-semibold text-[var(--ink)] text-[11px]">{t.ticker}</span></td>
                     <td className="text-[var(--ink-2)] max-w-[140px] truncate">{t.name}</td>
-                    <td><span className={`badge ${t.market === 'ngx' ? 'badge-live' : 'badge-yahoo'}`}>{t.market.toUpperCase()}</span></td>
                     <td><span className={`badge ${t.fully_closed ? 'badge-nodata' : 'badge-live'}`}>{t.fully_closed ? 'Full' : 'Partial'}</span></td>
                     <td className="right font-mono text-[var(--ink)]">
                       {isBackfilled ? '—' : t.shares_sold.toLocaleString(undefined, { maximumFractionDigits: 4 })}
@@ -118,9 +111,7 @@ function SellsTab({ sells, market }: { sells: SaleEvent[]; market: Market }) {
 // ─── Buys tab ────────────────────────────────────────────────────────────────
 
 function BuysTab({ buys, market }: { buys: BuyEvent[]; market: Market }) {
-  const filtered = market === 'all' ? buys : buys.filter((t) => t.market === market);
-
-  const ngxInvested = buys.filter((t) => t.market === 'ngx').reduce((s, t) => s + t.total_cost, 0);
+  const filtered = buys.filter((t) => t.market === market);
   const totalInvested = filtered.reduce((s, t) => s + t.total_cost, 0);
   const totalShares = filtered.reduce((s, t) => s + t.shares_bought, 0);
 
@@ -129,14 +120,11 @@ function BuysTab({ buys, market }: { buys: BuyEvent[]; market: Market }) {
       <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
         <div className="card px-4 py-3">
           <p className="text-[10px] font-semibold uppercase tracking-[0.07em] text-[var(--ink-4)]">
-            Total Invested {market !== 'all' ? `(${market.toUpperCase()})` : '(NGX)'}
+            Total Invested ({market.toUpperCase()})
           </p>
           <p className="font-mono text-[18px] font-semibold text-[var(--ink)] mt-1">
-            {market === 'us' ? fmtUSD(totalInvested) : fmtNGN(market === 'all' ? ngxInvested : totalInvested)}
+            {fmtAmt(market, totalInvested)}
           </p>
-          {market === 'all' && (
-            <p className="text-[10px] text-[var(--ink-4)] mt-0.5 font-mono">NGX only · US in USD</p>
-          )}
         </div>
         <div className="card px-4 py-3">
           <p className="text-[10px] font-semibold uppercase tracking-[0.07em] text-[var(--ink-4)]">Shares Bought</p>
@@ -148,10 +136,6 @@ function BuysTab({ buys, market }: { buys: BuyEvent[]; market: Market }) {
         <div className="card px-4 py-3">
           <p className="text-[10px] font-semibold uppercase tracking-[0.07em] text-[var(--ink-4)]">Transactions</p>
           <p className="font-mono text-[18px] font-semibold text-[var(--ink)] mt-1">{filtered.length}</p>
-          <p className="text-[10px] text-[var(--ink-4)] mt-0.5 font-mono">
-            {filtered.filter((t) => t.market === 'ngx').length} NGX ·{' '}
-            {filtered.filter((t) => t.market === 'us').length} US
-          </p>
         </div>
       </div>
 
@@ -163,7 +147,6 @@ function BuysTab({ buys, market }: { buys: BuyEvent[]; market: Market }) {
                 <th>Date</th>
                 <th>Ticker</th>
                 <th>Name</th>
-                <th>Mkt</th>
                 <th className="right">Shares</th>
                 <th className="right">Buy Price</th>
                 <th className="right">Commission</th>
@@ -173,8 +156,8 @@ function BuysTab({ buys, market }: { buys: BuyEvent[]; market: Market }) {
             <tbody>
               {filtered.length === 0 && (
                 <tr>
-                  <td colSpan={8} className="text-center text-[var(--ink-4)] py-10 text-[12px]">
-                    No buys recorded yet.
+                  <td colSpan={7} className="text-center text-[var(--ink-4)] py-10 text-[12px]">
+                    No {market.toUpperCase()} buys recorded yet.
                   </td>
                 </tr>
               )}
@@ -183,7 +166,6 @@ function BuysTab({ buys, market }: { buys: BuyEvent[]; market: Market }) {
                   <td className="text-[var(--ink-4)] font-mono text-[11px] whitespace-nowrap">{fmtDate(t.bought_at)}</td>
                   <td><span className="font-mono font-semibold text-[var(--ink)] text-[11px]">{t.ticker}</span></td>
                   <td className="text-[var(--ink-2)] max-w-[140px] truncate">{t.name}</td>
-                  <td><span className={`badge ${t.market === 'ngx' ? 'badge-live' : 'badge-yahoo'}`}>{t.market.toUpperCase()}</span></td>
                   <td className="right font-mono text-[var(--ink)]">
                     {t.shares_bought.toLocaleString(undefined, { maximumFractionDigits: 4 })}
                   </td>
@@ -209,7 +191,7 @@ export default function TradesPage() {
   const [buys, setBuys] = useState<BuyEvent[]>([]);
   const [loading, setLoading] = useState(true);
   const [tab, setTab] = useState<Tab>('sells');
-  const [market, setMarket] = useState<Market>('all');
+  const [market, setMarket] = useState<Market>('ngx');
 
   useEffect(() => {
     Promise.allSettled([getTrades(), getBuys()]).then(([s, b]) => {
@@ -219,7 +201,9 @@ export default function TradesPage() {
     });
   }, []);
 
-  const count = tab === 'sells' ? sells.length : buys.length;
+  const filtered = tab === 'sells'
+    ? sells.filter((t) => t.market === market)
+    : buys.filter((t) => t.market === market);
 
   return (
     <div className="space-y-5">
@@ -228,12 +212,12 @@ export default function TradesPage() {
         <div>
           <h1 className="text-[15px] font-semibold text-[var(--ink)]">Trade History</h1>
           <p className="text-[11px] text-[var(--ink-4)] mt-0.5">
-            {loading ? 'Loading…' : `${count} ${tab === 'sells' ? 'sale' : 'buy'}${count !== 1 ? 's' : ''} recorded`}
+            {loading ? 'Loading…' : `${filtered.length} ${tab === 'sells' ? 'sale' : 'buy'}${filtered.length !== 1 ? 's' : ''} recorded`}
           </p>
         </div>
 
         <div className="flex items-center gap-3">
-          {/* Buy / Sell tabs */}
+          {/* Sells / Buys tabs */}
           <div className="flex rounded-lg border border-[var(--border)] overflow-hidden">
             {(['sells', 'buys'] as Tab[]).map((t) => (
               <button
@@ -253,20 +237,20 @@ export default function TradesPage() {
             ))}
           </div>
 
-          {/* Market filter */}
-          <div className="flex gap-1">
-            {(['all', 'ngx', 'us'] as Market[]).map((f) => (
+          {/* NGX / US market tabs */}
+          <div className="flex rounded-lg border border-[var(--border)] overflow-hidden">
+            {(['ngx', 'us'] as Market[]).map((m) => (
               <button
-                key={f}
-                onClick={() => setMarket(f)}
+                key={m}
+                onClick={() => setMarket(m)}
                 className={[
-                  'px-3 py-1.5 rounded-md text-[10px] font-semibold uppercase tracking-wide transition-colors',
-                  market === f
+                  'px-4 py-1.5 text-[11px] font-semibold uppercase tracking-wide transition-colors',
+                  market === m
                     ? 'bg-[var(--accent-light)] text-[var(--accent)]'
                     : 'text-[var(--ink-4)] hover:text-[var(--ink)]',
                 ].join(' ')}
               >
-                {f}
+                {m}
               </button>
             ))}
           </div>

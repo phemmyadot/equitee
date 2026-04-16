@@ -64,11 +64,18 @@ def _fetch_ticker(ticker: str) -> Optional[USPrice]:
             low=meta.get("regularMarketDayLow"),
             volume=meta.get("regularMarketVolume"),
             currency=meta.get("currency", "USD"),
+            name=meta.get("shortName") or meta.get("longName"),
         )
 
     except Exception as exc:
         log.warning(f"[Yahoo] {ticker} failed: {exc}")
         return None
+
+
+def get_price(ticker: str) -> Optional[USPrice]:
+    """Get price for a single US ticker."""
+    result = get_prices([ticker])
+    return result.get(ticker)
 
 
 def get_prices(tickers: list[str]) -> dict[str, USPrice]:

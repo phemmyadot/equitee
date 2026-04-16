@@ -7,7 +7,7 @@ DELETE /api/watchlist/{ticker}    — remove ticker from watchlist
 GET    /api/watchlist/check/{ticker} — is this ticker on the watchlist?
 """
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel
 from typing import Optional, Any
 from concurrent.futures import ThreadPoolExecutor
@@ -28,6 +28,7 @@ from app.services import ngx as _ngx_service
 from app.services import prices as _prices_service
 from app.services import performance as _overview_service
 from app.services import overview as _performance_service
+from app.services import yahoo as _yahoo_service
 
 router = APIRouter(prefix="/api/watchlist", tags=["watchlist"])
 
@@ -39,8 +40,31 @@ def _safe(fn, *args, **kwargs):
         return None
 
 
-def _fetch_ticker_full(ticker: str) -> dict[str, Any]:
-    """Fetch price + profile + overview + performance in parallel (same as /full)."""
+def _fetch_ticker_full(ticker: str, market: str = "NGX") -> dict[str, Any]:
+    """Fetch price + profile + overview + performance in parallel."""
+    if market == "US":
+        pd = _safe(_yahoo_service.get_price, ticker)
+        price_out = None
+        if pd:
+            price_out = {
+                "symbol": ticker,
+                "price": pd.price,
+                "change": pd.change,
+                "change_pct": pd.change_pct,
+                "volume": pd.volume,
+                "currency": pd.currency,
+            }
+        profile_out = {"name": pd.name} if pd and pd.name else None
+        return {
+            "ticker": ticker,
+            "price": price_out,
+            "profile": profile_out,
+            "overview": None,
+            "performance": None,
+            "cached_at": None,
+        }
+
+    # NGX path
     with ThreadPoolExecutor(max_workers=3) as ex:
         f_profile = ex.submit(_safe, _get_profile, ticker)
         f_overview = ex.submit(_safe, _overview_service.get_overview, ticker)
@@ -124,11 +148,10 @@ def list_watchlist(
         return WatchlistResponse(items=[], count=0)
 
     # Fetch all tickers in parallel (one thread per ticker, max 10)
-    tickers = [r.ticker for r in rows]
     row_map = {r.ticker: r for r in rows}
 
-    with ThreadPoolExecutor(max_workers=min(len(tickers), 10)) as ex:
-        futures = {ex.submit(_fetch_ticker_full, t): t for t in tickers}
+    with ThreadPoolExecutor(max_workers=min(len(rows), 10)) as ex:
+        futures = {ex.submit(_fetch_ticker_full, r.ticker, r.market): r.ticker for r in rows}
         results: dict[str, dict] = {}
         from concurrent.futures import as_completed
 
@@ -170,15 +193,21 @@ def list_watchlist(
 @router.post("/{ticker}", status_code=201)
 def add_watch(
     ticker: str,
+    market: str = Query("NGX", pattern="^(NGX|US)$"),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
     t = ticker.upper()
     if watchlist_has(db, current_user.id, t):
         raise HTTPException(status_code=409, detail=f"{t} is already on your watchlist")
-    pd = _safe(_prices_service.get_price, t)
-    added_price: float | None = pd.price if pd else None
-    row = add_to_watchlist(db, current_user.id, t, added_price=added_price)
+    if market == "US":
+        pd = _safe(_yahoo_service.get_price, t)
+    else:
+        pd = _safe(_prices_service.get_price, t)
+    if pd is None:
+        raise HTTPException(status_code=404, detail=f"{t} not found on {market}")
+    added_price: float | None = pd.price
+    row = add_to_watchlist(db, current_user.id, t, market=market, added_price=added_price)
     return {
         "ticker": row.ticker,
         "market": row.market,

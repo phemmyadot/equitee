@@ -46,6 +46,7 @@ class USPrice(BaseModel):
     low: Optional[float] = None
     volume: Optional[float] = None
     currency: str = "USD"
+    name: Optional[str] = None
 
 
 class NGXPricesResponse(BaseModel):

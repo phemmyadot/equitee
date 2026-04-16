@@ -171,8 +171,8 @@ export const fetchRelativeStrength = (days = 90) =>
 export const fetchWatchlist = () => get<WatchlistResponse>('/watchlist');
 export const fetchWatchlistCheck = (ticker: string) =>
   get<{ ticker: string; watching: boolean }>(`/watchlist/check/${ticker}`);
-export const addToWatchlist = (ticker: string) =>
-  post<{ ticker: string; market: string; added_at: string }>(`/watchlist/${ticker}`);
+export const addToWatchlist = (ticker: string, market: 'NGX' | 'US' = 'NGX') =>
+  post<{ ticker: string; market: string; added_at: string }>(`/watchlist/${ticker}?market=${market}`);
 export const removeFromWatchlist = (ticker: string) =>
   del<{ ticker: string; removed: boolean }>(`/watchlist/${ticker}`);
 
