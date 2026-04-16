@@ -332,7 +332,7 @@ export default function WatchlistPage() {
     setAddBusy(true);
     setAddError(null);
     try {
-      await addToWatchlist(t, tab === 'USD' ? 'US' : 'NGX');
+      await addToWatchlist(t, tab === 'US' ? 'US' : 'NGX');
       setAddInput('');
       load();
     } catch (err: unknown) {
