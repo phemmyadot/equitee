@@ -194,6 +194,76 @@ export const deleteAnalysisById = (id: number) =>
   del<{ deleted: number }>(`/analysis/${id}`);
 
 /**
+ * Opens an SSE stream to POST /analysis/trade-journal.
+ * Calls onChunk for each text token, onDone when complete, onError on failure.
+ * Returns an AbortController — call controller.abort() to cancel.
+ */
+export function streamTradeJournal(
+  onChunk: (text: string) => void,
+  onDone: (tokens: number) => void,
+  onError: (msg: string) => void,
+): AbortController {
+  const controller = new AbortController();
+
+  (async () => {
+    let res: Response;
+    try {
+      res = await fetch(`${BASE}/analysis/trade-journal`, {
+        method: 'POST',
+        cache: 'no-store',
+        signal: controller.signal,
+      });
+      if (res.status === 401) {
+        const refreshed = await tryRefresh();
+        if (!refreshed) { window.location.href = '/login'; return; }
+        res = await fetch(`${BASE}/analysis/trade-journal`, {
+          method: 'POST',
+          cache: 'no-store',
+          signal: controller.signal,
+        });
+      }
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        onError((err as { detail?: string }).detail ?? res.statusText);
+        return;
+      }
+    } catch (e: unknown) {
+      if ((e as { name?: string }).name !== 'AbortError') onError(String(e));
+      return;
+    }
+
+    if (!res.body) { onError('No response body'); return; }
+
+    const reader = res.body.getReader();
+    const decoder = new TextDecoder();
+    let buffer = '';
+    try {
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        buffer += decoder.decode(value, { stream: true });
+        const parts = buffer.split('\n\n');
+        buffer = parts.pop() ?? '';
+        for (const part of parts) {
+          const line = part.trim();
+          if (!line.startsWith('data: ')) continue;
+          try {
+            const data = JSON.parse(line.slice(6)) as { text?: string; done?: boolean; tokens?: number; error?: string };
+            if (data.error) { onError(data.error); return; }
+            if (data.text) onChunk(data.text);
+            if (data.done) onDone(data.tokens ?? 0);
+          } catch { /* malformed chunk */ }
+        }
+      }
+    } catch (e: unknown) {
+      if ((e as { name?: string }).name !== 'AbortError') onError(String(e));
+    }
+  })();
+
+  return controller;
+}
+
+/**
  * Opens an SSE stream to POST /analysis/run.
  * Calls onChunk for each text token, onDone when complete, onError on failure.
  * Returns an AbortController — call controller.abort() to cancel.
