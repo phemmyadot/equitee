@@ -421,23 +421,21 @@ export default function AnalysisPage() {
           </div>
         </div>
 
-        {/* Controls card */}
-        <div className="card px-4 py-4 space-y-4">
-          {/* Mode tabs */}
-          <div className="flex rounded-lg border border-[var(--border)] overflow-hidden">
+        {/* Controls toolbar */}
+        <div className="flex flex-wrap items-center gap-2">
+          {/* Mode */}
+          <div className="flex rounded-lg border border-[var(--border)] overflow-hidden shrink-0">
             {([
-              { key: 'analysis', label: 'Portfolio Analysis' },
-              { key: 'journal',  label: 'Trade Journal' },
+              { key: 'analysis', label: 'Analysis' },
+              { key: 'journal',  label: 'Journal' },
             ] as { key: Mode; label: string }[]).map(m => (
               <button
                 key={m.key}
                 onClick={() => { setMode(m.key); setStreamText(''); setError(null); setTokenInfo(null); setFollowUps([]); setActiveId(null); setActiveDetail(null); }}
                 disabled={streaming}
                 className={[
-                  'flex-1 py-1.5 text-[11px] font-semibold transition-colors disabled:opacity-50',
-                  mode === m.key
-                    ? 'bg-[var(--accent-light)] text-[var(--accent)]'
-                    : 'text-[var(--ink-4)] hover:text-[var(--ink)]',
+                  'px-3 py-1.5 text-[11px] font-semibold transition-colors disabled:opacity-50',
+                  mode === m.key ? 'bg-[var(--accent-light)] text-[var(--accent)]' : 'text-[var(--ink-4)] hover:text-[var(--ink)]',
                 ].join(' ')}
               >
                 {m.label}
@@ -445,66 +443,51 @@ export default function AnalysisPage() {
             ))}
           </div>
 
-          {mode === 'journal' ? (
-            <p className="text-[11px] text-[var(--ink-4)] leading-relaxed">
-              Analyses your full trade history — win rate, commission drag, holding period patterns, and behavioural tendencies. No portfolio positions included.
-            </p>
-          ) : (
+          {mode === 'analysis' && (
             <>
               {/* Scope */}
-              <div>
-                <p className="text-[10px] font-bold uppercase tracking-[0.08em] text-[var(--ink-4)] mb-2">Scope</p>
-                <div className="flex gap-2">
-                  {(['portfolio', 'watchlist', 'combined'] as AnalysisScope[]).map(s => (
-                    <button key={s} onClick={() => setScope(s)} disabled={streaming}
-                      className={`flex-1 text-[12px] font-semibold py-2 rounded-lg border transition-all duration-150 disabled:opacity-50 ${scope === s ? 'bg-[var(--accent)] text-white border-[var(--accent)]' : 'bg-white text-[var(--ink-3)] border-[var(--border)] hover:border-[var(--accent-light)]'}`}>
-                      {SCOPE_LABELS[s]}
-                    </button>
-                  ))}
-                </div>
+              <div className="flex rounded-lg border border-[var(--border)] overflow-hidden shrink-0">
+                {(['portfolio', 'watchlist', 'combined'] as AnalysisScope[]).map(s => (
+                  <button key={s} onClick={() => setScope(s)} disabled={streaming}
+                    className={`px-3 py-1.5 text-[11px] font-semibold transition-colors disabled:opacity-50 capitalize ${scope === s ? 'bg-[var(--accent-light)] text-[var(--accent)]' : 'text-[var(--ink-4)] hover:text-[var(--ink)]'}`}>
+                    {SCOPE_LABELS[s]}
+                  </button>
+                ))}
               </div>
 
               {/* Depth */}
-              <div>
-                <p className="text-[10px] font-bold uppercase tracking-[0.08em] text-[var(--ink-4)] mb-2">Depth</p>
-                <div className="flex gap-2">
-                  {([
-                    { key: 'quick', label: 'Quick · Haiku', active: 'bg-[var(--accent)] text-white border-[var(--accent)]' },
-                    { key: 'deep',  label: 'Deep · Sonnet', active: 'bg-purple-600 text-white border-purple-600' },
-                  ] as { key: AnalysisDepth; label: string; active: string }[]).map(d => (
-                    <button key={d.key} onClick={() => setDepth(d.key)} disabled={streaming}
-                      className={`flex-1 text-[12px] font-semibold py-2 rounded-lg border transition-all duration-150 disabled:opacity-50 ${depth === d.key ? d.active : 'bg-white text-[var(--ink-3)] border-[var(--border)] hover:border-[var(--accent-light)]'}`}>
-                      {d.label}
-                    </button>
-                  ))}
-                </div>
+              <div className="flex rounded-lg border border-[var(--border)] overflow-hidden shrink-0">
+                {([
+                  { key: 'quick', label: 'Haiku' },
+                  { key: 'deep',  label: 'Sonnet' },
+                ] as { key: AnalysisDepth; label: string }[]).map(d => (
+                  <button key={d.key} onClick={() => setDepth(d.key)} disabled={streaming}
+                    className={`px-3 py-1.5 text-[11px] font-semibold transition-colors disabled:opacity-50 ${depth === d.key ? (d.key === 'deep' ? 'bg-purple-100 text-purple-600' : 'bg-[var(--accent-light)] text-[var(--accent)]') : 'text-[var(--ink-4)] hover:text-[var(--ink)]'}`}>
+                    {d.label}
+                  </button>
+                ))}
               </div>
 
-              {/* Custom message */}
-              <div>
-                <p className="text-[10px] font-bold uppercase tracking-[0.08em] text-[var(--ink-4)] mb-2">Focus <span className="font-normal normal-case text-[var(--ink-5)]">— optional</span></p>
-                <textarea
-                  value={initialMessage}
-                  onChange={e => setInitialMessage(e.target.value)}
-                  placeholder="e.g. Focus on my NGX exposure and dividend outlook"
-                  rows={2}
-                  disabled={streaming}
-                  className="w-full resize-none rounded-xl border border-[var(--border)] px-3 py-2 text-[12px] text-[var(--ink)] placeholder:text-[var(--ink-5)] focus:outline-none focus:border-[var(--accent)] bg-white disabled:opacity-50"
-                />
-              </div>
+              {/* Focus input */}
+              <input
+                value={initialMessage}
+                onChange={e => setInitialMessage(e.target.value)}
+                placeholder="Optional focus…"
+                disabled={streaming}
+                className="h-8 flex-1 min-w-[140px] px-3 rounded-lg border border-[var(--border)] text-[11px] text-[var(--ink)] placeholder:text-[var(--ink-5)] focus:outline-none focus:border-[var(--accent)] bg-white disabled:opacity-50"
+              />
             </>
           )}
 
           {/* Run / Stop */}
           {(streaming || followUpStreaming) ? (
-            <button onClick={handleAbort} className="w-full flex items-center justify-center gap-2 py-2.5 rounded-xl text-[13px] font-semibold bg-red-50 text-red-600 border border-red-200 hover:bg-red-100 transition-colors">
-              <IconX width={14} height={14} />
-              Stop
+            <button onClick={handleAbort} className="flex items-center gap-1.5 h-8 px-3 rounded-lg text-[11px] font-semibold bg-red-50 text-red-600 border border-red-200 hover:bg-red-100 transition-colors shrink-0">
+              <IconX width={12} height={12} /> Stop
             </button>
           ) : (
-            <button onClick={() => handleRun()} className="w-full flex items-center justify-center gap-2 py-2.5 rounded-xl text-[13px] font-semibold bg-[var(--accent)] text-white hover:bg-[#17A06B] transition-colors">
-              <IconSparkles width={14} height={14} />
-              {mode === 'journal' ? 'Run Journal' : 'Analyse Now'}
+            <button onClick={() => handleRun()} className="flex items-center gap-1.5 h-8 px-3 rounded-lg text-[11px] font-semibold bg-[var(--accent)] text-white hover:opacity-90 transition-opacity shrink-0">
+              <IconSparkles width={12} height={12} />
+              {mode === 'journal' ? 'Run' : 'Run'}
             </button>
           )}
         </div>
