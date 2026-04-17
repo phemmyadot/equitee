@@ -8,6 +8,7 @@ interface ChartCardProps {
   loading?: boolean;
   children: React.ReactNode;
   className?: string;
+  action?: React.ReactNode;
 }
 
 export default function ChartCard({
@@ -17,12 +18,16 @@ export default function ChartCard({
   loading = false,
   children,
   className = '',
+  action,
 }: ChartCardProps) {
   return (
     <div className={`chart-card ${className}`}>
-      <div className="chart-title">
-        {title}
-        {subtitle && <span>· {subtitle}</span>}
+      <div className="chart-title flex items-center justify-between">
+        <span>
+          {title}
+          {subtitle && <span>· {subtitle}</span>}
+        </span>
+        {action && <span>{action}</span>}
       </div>
       {loading ? (
         <ChartSkeleton height={height} />

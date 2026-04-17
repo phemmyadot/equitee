@@ -7,6 +7,7 @@ import { ChartSkeleton } from '@/components/atoms/Feedback';
 import PlotlyChart from '@/components/molecules/PlotlyChart';
 import { plotlyLayout, COLORS, sectorColor } from '@/utils/theme';
 import { fmtUSD, fmtNGN, fmtPct, isPositive } from '@/utils/formatters';
+import { exportCombinedSnapshot } from '@/utils/csv';
 
 export default function CombinedPage() {
   const { data, loading } = usePortfolio();
@@ -146,6 +147,14 @@ export default function CombinedPage() {
         subtitle="all positions in USD · blue = NGX · teal = US"
         loading={isFirstLoad}
         height={440}
+        action={
+          <button
+            onClick={() => exportCombinedSnapshot(ngx_stocks, us_stocks, usdngn)}
+            className="text-[10px] font-semibold text-[var(--ink-3)] hover:text-[var(--accent)] px-2 py-1 rounded border border-[var(--border)] hover:border-[var(--accent)] transition-colors"
+          >
+            Export CSV
+          </button>
+        }
       >
         <PlotlyChart
           data={[unifiedBar]}

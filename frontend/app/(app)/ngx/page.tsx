@@ -15,6 +15,7 @@ import { fetchNGXTickerData } from '@/services/api';
 import type { StockRow, TickerData } from '@/models';
 import { computeSignal } from '@/components/molecules/Signalscore';
 import { computeTargets } from '@/utils/targets';
+import { exportNGXSnapshot } from '@/utils/csv';
 
 export default function NGXOverviewPage() {
   const { data, loading, dividendsData } = usePortfolio();
@@ -580,7 +581,19 @@ export default function NGXOverviewPage() {
       )}
 
       {/* Holdings table */}
-      <ChartCard title="Holdings Detail" loading={isFirstLoad} height={420}>
+      <ChartCard
+        title="Holdings Detail"
+        loading={isFirstLoad}
+        height={420}
+        action={
+          <button
+            onClick={() => exportNGXSnapshot(active)}
+            className="text-[10px] font-semibold text-[var(--ink-3)] hover:text-[var(--accent)] px-2 py-1 rounded border border-[var(--border)] hover:border-[var(--accent)] transition-colors"
+          >
+            Export CSV
+          </button>
+        }
+      >
         <StockTable rows={active} cols={cols} />
       </ChartCard>
     </div>

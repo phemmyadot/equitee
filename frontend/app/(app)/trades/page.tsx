@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react';
 import { getTrades, getBuys } from '@/services/tradesApi';
 import type { SaleEvent, BuyEvent } from '@/models/trades';
 import { fmtNGN, fmtUSD } from '@/utils/formatters';
+import { exportTrades } from '@/utils/csv';
 
 type Tab = 'sells' | 'buys';
 type Market = 'ngx' | 'us';
@@ -217,6 +218,14 @@ export default function TradesPage() {
         </div>
 
         <div className="flex items-center gap-3">
+          <button
+            onClick={() => exportTrades(sells, buys)}
+            disabled={loading}
+            className="text-[10px] font-semibold text-[var(--ink-3)] hover:text-[var(--accent)] px-2 py-1.5 rounded border border-[var(--border)] hover:border-[var(--accent)] transition-colors disabled:opacity-40"
+          >
+            Export CSV
+          </button>
+
           {/* Sells / Buys tabs */}
           <div className="flex rounded-lg border border-[var(--border)] overflow-hidden">
             {(['sells', 'buys'] as Tab[]).map((t) => (

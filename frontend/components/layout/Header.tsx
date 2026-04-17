@@ -11,6 +11,7 @@ import {
   IconChartLine,
   IconSearch,
   IconGlobe,
+  IconChartPie,
   IconClock,
   IconChartHistory,
   IconSettings,
@@ -44,6 +45,11 @@ const NAV_ITEMS = [
     href: '/us',
     label: 'US',
     icon: <IconGlobe width={14} height={14} />,
+  },
+  {
+    href: '/combined',
+    label: 'Combined',
+    icon: <IconChartPie width={14} height={14} />,
   },
   {
     href: '/dividends',

@@ -10,6 +10,7 @@ import { ChartSkeleton, PriceBanner } from '@/components/atoms/Feedback';
 import PlotlyChart from '@/components/molecules/PlotlyChart';
 import { plotlyLayout, COLORS, sectorColor } from '@/utils/theme';
 import { fmtUSD, fmtPct, fmtPct2, isPositive } from '@/utils/formatters';
+import { exportUSSnapshot } from '@/utils/csv';
 import type { StockRow } from '@/models';
 
 export default function USPortfolioPage() {
@@ -278,7 +279,19 @@ export default function USPortfolioPage() {
         </ChartCard>
       </div>
 
-      <ChartCard title="US Holdings Detail" loading={isFirstLoad} height={360}>
+      <ChartCard
+        title="US Holdings Detail"
+        loading={isFirstLoad}
+        height={360}
+        action={
+          <button
+            onClick={() => exportUSSnapshot(us_stocks)}
+            className="text-[10px] font-semibold text-[var(--ink-3)] hover:text-[var(--accent)] px-2 py-1 rounded border border-[var(--border)] hover:border-[var(--accent)] transition-colors"
+          >
+            Export CSV
+          </button>
+        }
+      >
         <StockTable rows={us_stocks} cols={cols} />
       </ChartCard>
     </div>

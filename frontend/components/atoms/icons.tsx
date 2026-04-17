@@ -432,6 +432,26 @@ export function IconSparkles({ width = 16, height = 16, className, style }: Icon
   );
 }
 
+export function IconChartPie({ width = 16, height = 16, className, style }: IconProps) {
+  return (
+    <svg
+      width={width}
+      height={height}
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      className={className}
+      style={style}
+    >
+      <path d="M21.21 15.89A10 10 0 1 1 8 2.83" />
+      <path d="M22 12A10 10 0 0 0 12 2v10z" />
+    </svg>
+  );
+}
+
 export function IconBookmark({ width = 16, height = 16, className, style }: IconProps) {
   return (
     <svg
