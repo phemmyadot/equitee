@@ -200,7 +200,7 @@ export const deleteAnalysisById = (id: number) =>
  */
 export function streamTradeJournal(
   onChunk: (text: string) => void,
-  onDone: (tokens: number) => void,
+  onDone: (id: number, tokens: number) => void,
   onError: (msg: string) => void,
 ): AbortController {
   const controller = new AbortController();
@@ -248,10 +248,10 @@ export function streamTradeJournal(
           const line = part.trim();
           if (!line.startsWith('data: ')) continue;
           try {
-            const data = JSON.parse(line.slice(6)) as { text?: string; done?: boolean; tokens?: number; error?: string };
+            const data = JSON.parse(line.slice(6)) as { text?: string; done?: boolean; id?: number; tokens?: number; error?: string };
             if (data.error) { onError(data.error); return; }
             if (data.text) onChunk(data.text);
-            if (data.done) onDone(data.tokens ?? 0);
+            if (data.done) onDone(data.id ?? 0, data.tokens ?? 0);
           } catch { /* malformed chunk */ }
         }
       }

@@ -922,7 +922,25 @@ def stream_trade_journal_sse(user_id: int) -> Generator[str, None, None]:
             final = stream.get_final_message()
             tokens_used = final.usage.input_tokens + final.usage.output_tokens
 
-        yield f"data: {json.dumps({'done': True, 'tokens': tokens_used})}\n\n"
+        full_response = "".join(full_chunks)
+        summary = full_response[:200].strip()
+
+        from app.db.crud import save_analysis
+        with SessionLocal() as db:
+            record = save_analysis(
+                db,
+                user_id=user_id,
+                scope="journal",
+                depth="quick",
+                model_used=MODEL_QUICK,
+                summary=summary,
+                full_response=full_response,
+                context_hash="",
+                tokens_used=tokens_used,
+            )
+            record_id = record.id
+
+        yield f"data: {json.dumps({'done': True, 'id': record_id, 'tokens': tokens_used})}\n\n"
 
     except Exception as exc:
         log.exception("Trade journal stream error: %s", exc)

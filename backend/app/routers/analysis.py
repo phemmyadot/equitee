@@ -32,6 +32,8 @@ from app.db.crud import (
     get_analysis_follow_ups,
     get_analysis_history,
     get_latest_analysis,
+    prune_old_analysis,
+    save_analysis,
 )
 from app.services.analysis import (
     build_context,
@@ -202,6 +204,7 @@ def list_history(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
+    prune_old_analysis(db, current_user.id, days=7)
     rows = get_analysis_history(db, current_user.id)
     # Exclude follow-up child rows — they are accessed via parent detail
     return [_to_summary(r) for r in rows if r.parent_id is None]

@@ -28,6 +28,7 @@ const SCOPE_LABELS: Record<string, string> = {
   portfolio: 'Portfolio',
   watchlist: 'Watchlist',
   combined: 'Combined',
+  journal: 'Trade Journal',
 };
 
 function stripMd(text: string): string {
@@ -220,7 +221,7 @@ export default function AnalysisPage() {
     if (mode === 'journal') {
       abortRef.current = streamTradeJournal(
         (chunk) => setStreamText(prev => prev + chunk),
-        (tokens) => { setStreaming(false); setTokenInfo({ tokens, cached: false }); },
+        (id, tokens) => { setStreaming(false); setTokenInfo({ tokens, cached: false }); if (id) { setActiveId(id); loadHistory(); } },
         (msg) => { setStreaming(false); setError(msg); },
       );
     } else {
@@ -265,8 +266,13 @@ export default function AnalysisPage() {
   const handleSelectHistory = useCallback(async (item: AnalysisSummary) => {
     setStreamText(''); setError(null); setTokenInfo(null); setFollowUps([]);
     setActiveId(item.id);
-    setScope(item.scope as AnalysisScope);
-    setDepth(item.depth as AnalysisDepth);
+    if (item.scope === 'journal') {
+      setMode('journal');
+    } else {
+      setMode('analysis');
+      setScope(item.scope as AnalysisScope);
+      setDepth(item.depth as AnalysisDepth);
+    }
     try {
       const detail = await fetchAnalysisById(item.id);
       setActiveDetail(detail);

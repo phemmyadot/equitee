@@ -1208,6 +1208,21 @@ def delete_analysis_history(db: Session, user_id: int) -> int:
     return len(rows)
 
 
+def prune_old_analysis(db: Session, user_id: int, days: int = 7) -> int:
+    """Delete analysis threads older than `days` days for a user."""
+    cutoff = datetime.now(timezone.utc) - timedelta(days=days)
+    stmt = select(AnalysisHistory).where(
+        AnalysisHistory.user_id == user_id,
+        AnalysisHistory.created_at < cutoff,
+    )
+    rows = list(db.scalars(stmt).all())
+    for row in rows:
+        db.delete(row)
+    if rows:
+        db.commit()
+    return len(rows)
+
+
 def delete_analysis_by_id(db: Session, analysis_id: int, user_id: int) -> bool:
     """Delete a single analysis thread (cascades to follow-up children via FK)."""
     row = get_analysis_by_id(db, analysis_id, user_id)
