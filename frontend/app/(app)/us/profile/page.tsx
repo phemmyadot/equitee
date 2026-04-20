@@ -162,7 +162,7 @@ export default function USProfilePage() {
   const change = td?.price?.change ?? null;
   const changePct = td?.price?.change_pct ?? null;
 
-  const sig = td ? computeSignal(ov, perf, price, null, null) : null;
+  const sig = td ? computeSignal(ov, perf, price, null, null, prof?.sector ?? null) : null;
 
   const w52h = n(perf?.week_52_high);
   const w52l = n(perf?.week_52_low);
@@ -345,7 +345,7 @@ export default function USProfilePage() {
       {!loading && td && sig && (
         <div className="card px-5 py-4">
           <SectionLabel>Signal Score</SectionLabel>
-          <SignalScore ov={ov} perf={perf} livePrice={price} posRow={null} dividend={null} loading={false} />
+          <SignalScore ov={ov} perf={perf} livePrice={price} posRow={null} dividend={null} loading={false} sector={prof?.sector ?? null} />
         </div>
       )}
 

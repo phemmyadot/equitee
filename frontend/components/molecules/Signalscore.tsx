@@ -5,11 +5,24 @@
  * ===========
  * Composite buy / accumulate / hold / reduce / sell signal computed entirely
  * from data already fetched on the profile page.
+ *
+ * Special rules (hardcoded constants):
+ *   RSI_ERROR_THRESHOLD = 99   — RSI ≥ 99 is a data error; exclude from composite
+ *   BANK_SECTORS               — use bank_score path instead of F/Z score
+ *   ILLIQUID_FLAG = 5          — position_liquidity_days > 5 → suppress signal label
  */
 
 import type { TickerOverview, TickerPerformance } from '@/models/ticker';
 import type { StockRow } from '@/models/market';
 import type { DividendInfo } from '@/models/dividends';
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Constants
+// ─────────────────────────────────────────────────────────────────────────────
+
+const RSI_ERROR_THRESHOLD = 99.0;
+const BANK_SECTORS = ['Banking', 'Insurance'];
+const ILLIQUID_FLAG = 5.0;
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Helpers
@@ -35,10 +48,27 @@ function scoreMomentum(
 ): {
   score: number;
   signals: string[];
+  flags: string[];
 } {
   const signals: string[] = [];
+  const flags: string[] = [];
   let pts = 0,
     count = 0;
+
+  // RSI — check for data error first
+  const rsi = n(perf.rsi_14);
+  if (rsi !== null) {
+    if (rsi >= RSI_ERROR_THRESHOLD) {
+      flags.push('RSI_DATA_ERROR');
+      signals.push(`RSI ${rsi.toFixed(0)} — data error, excluded`);
+    } else {
+      const s = rsi > 80 ? -1 : rsi > 70 ? -0.5 : rsi > 50 ? 0 : rsi > 30 ? 0.5 : 0.75;
+      pts += s;
+      count++;
+      if (rsi > 70) signals.push(`RSI ${rsi.toFixed(0)} — overbought`);
+      else if (rsi < 30) signals.push(`RSI ${rsi.toFixed(0)} — oversold`);
+    }
+  }
 
   const returns = [n(perf.return_1m), n(perf.return_3m), n(perf.return_6m), n(perf.return_1y)];
   const valid = returns.filter((r): r is number => r !== null);
@@ -69,7 +99,7 @@ function scoreMomentum(
     count += 1;
   }
 
-  return { score: count > 0 ? clamp(pts / count) : 0, signals };
+  return { score: count > 0 ? clamp(pts / count) : 0, signals, flags };
 }
 
 function scoreValuation(
@@ -119,6 +149,7 @@ function scoreValuation(
   return { score: count > 0 ? clamp(pts / count) : 0, signals };
 }
 
+/** Quality scorer for non-financial stocks (uses Piotroski + Altman). */
 function scoreQuality(
   ov: TickerOverview,
   perf: TickerPerformance,
@@ -176,6 +207,102 @@ function scoreQuality(
   return { score: count > 0 ? clamp(pts / count) : 0, signals };
 }
 
+/**
+ * Quality scorer for banking / insurance sectors.
+ * Uses bank_score if pre-computed, otherwise derives from individual metrics.
+ * Replaces Piotroski F-score + Altman Z-score (not valid for financials).
+ */
+function scoreBankQuality(
+  ov: TickerOverview,
+  perf: TickerPerformance,
+): {
+  score: number;
+  signals: string[];
+} {
+  const signals: string[] = [];
+  let pts = 0,
+    count = 0;
+
+  // Use pre-computed bank_score if available (0–5 → normalise to −1..+1)
+  const bs = n(perf.bank_score);
+  if (bs !== null) {
+    const norm = (bs / 5) * 2 - 1; // 0→−1, 2.5→0, 5→+1
+    pts += norm;
+    count++;
+    const bsLabel = bs >= 4 ? 'strong' : bs >= 2 ? 'neutral' : 'weak';
+    signals.push(`Bank score ${bs}/5 — ${bsLabel}`);
+  }
+
+  // NIM — net interest margin
+  const nim = n(perf.nim_pct);
+  if (nim !== null) {
+    const s = nim > 8 ? 1 : nim > 6 ? 0.5 : nim > 4 ? 0 : -0.5;
+    pts += s;
+    count++;
+    if (nim > 8) signals.push(`NIM ${nim.toFixed(1)}% — healthy spread`);
+    else if (nim < 4) signals.push(`NIM ${nim.toFixed(1)}% — thin margin`);
+  }
+
+  // NPL ratio — lower is better
+  const npl = n(perf.npl_pct);
+  if (npl !== null) {
+    const s = npl < 3 ? 1 : npl < 5 ? 0 : npl < 8 ? -0.5 : -1;
+    pts += s;
+    count++;
+    if (npl > 5) signals.push(`NPL ${npl.toFixed(1)}% — above CBN limit`);
+    else if (npl < 3) signals.push(`NPL ${npl.toFixed(1)}% — low credit risk`);
+  }
+
+  // CAR — capital adequacy ratio
+  const car = n(perf.car_pct);
+  if (car !== null) {
+    const s = car > 18 ? 1 : car > 15 ? 0.5 : car > 12 ? 0 : -1;
+    pts += s;
+    count++;
+    if (car < 12) signals.push(`CAR ${car.toFixed(1)}% — near regulatory floor`);
+    else if (car > 18) signals.push(`CAR ${car.toFixed(1)}% — well capitalised`);
+  }
+
+  // CIR — cost-to-income ratio (lower is better)
+  const cir = n(perf.cir_pct);
+  if (cir !== null) {
+    const s = cir < 45 ? 1 : cir < 55 ? 0.5 : cir < 65 ? 0 : -0.5;
+    pts += s;
+    count++;
+    if (cir > 65) signals.push(`CIR ${cir.toFixed(1)}% — high cost base`);
+  }
+
+  // LDR — loan-to-deposit ratio (65–85% is healthy)
+  const ldr = n(perf.ldr_pct);
+  if (ldr !== null) {
+    const s = ldr >= 65 && ldr <= 85 ? 0.5 : ldr > 85 ? -0.5 : 0;
+    pts += s;
+    count++;
+    if (ldr > 85) signals.push(`LDR ${ldr.toFixed(1)}% — liquidity stretch`);
+  }
+
+  // ROE — still relevant for banks
+  const roe = n(ov.roe);
+  if (roe !== null) {
+    const s = roe > 25 ? 1 : roe > 15 ? 0.5 : roe > 5 ? 0 : -0.5;
+    pts += s;
+    count++;
+    if (roe > 20) signals.push(`ROE ${roe.toFixed(1)}% — high return on equity`);
+  }
+
+  // Earnings growth
+  const eg = n(perf.earnings_growth_yoy);
+  if (eg !== null) {
+    const s = eg > 20 ? 1 : eg > 0 ? 0.5 : eg > -10 ? -0.25 : -1;
+    pts += s;
+    count++;
+    if (eg > 20) signals.push(`Earnings +${eg.toFixed(0)}% YoY`);
+    else if (eg < -10) signals.push(`Earnings ${eg.toFixed(0)}% YoY — declining`);
+  }
+
+  return { score: count > 0 ? clamp(pts / count) : 0, signals };
+}
+
 function scoreDividend(
   ov: TickerOverview,
   posRow?: StockRow | null,
@@ -207,6 +334,7 @@ function scoreDividend(
 function scoreRisk(
   ov: TickerOverview,
   perf: TickerPerformance,
+  isBank: boolean,
 ): {
   score: number;
   signals: string[];
@@ -215,14 +343,17 @@ function scoreRisk(
   let pts = 0,
     count = 0;
 
-  const z = n(perf.altman_zscore);
-  if (z !== null && z < 1.81) {
-    pts -= 1;
-    count++;
-    signals.push(`Altman Z ${z.toFixed(2)} — high bankruptcy risk`);
-  } else if (z !== null) {
-    pts += 0.5;
-    count++;
+  // Skip Altman Z for banks (not meaningful)
+  if (!isBank) {
+    const z = n(perf.altman_zscore);
+    if (z !== null && z < 1.81) {
+      pts -= 1;
+      count++;
+      signals.push(`Altman Z ${z.toFixed(2)} — high bankruptcy risk`);
+    } else if (z !== null) {
+      pts += 0.5;
+      count++;
+    }
   }
 
   const md = n(perf.max_drawdown);
@@ -234,12 +365,15 @@ function scoreRisk(
     if (abs > 40) signals.push(`Max drawdown ${abs.toFixed(0)}% — high risk`);
   }
 
-  const de = n(ov.debt_to_equity);
-  if (de !== null && de >= 0) {
-    const s = de < 0.5 ? 0.5 : de < 1.5 ? 0 : de < 2.5 ? -0.5 : -1;
-    pts += s;
-    count++;
-    if (de > 2) signals.push(`High D/E ratio ${de.toFixed(1)}x`);
+  // D/E: for banks this is expected to be high; skip if bank
+  if (!isBank) {
+    const de = n(ov.debt_to_equity);
+    if (de !== null && de >= 0) {
+      const s = de < 0.5 ? 0.5 : de < 1.5 ? 0 : de < 2.5 ? -0.5 : -1;
+      pts += s;
+      count++;
+      if (de > 2) signals.push(`High D/E ratio ${de.toFixed(1)}x`);
+    }
   }
 
   const sharpe = n(perf.sharpe_ratio);
@@ -259,9 +393,10 @@ function scoreRisk(
 
 export interface SignalResult {
   total: number;
-  label: 'Strong Buy' | 'Buy' | 'Accumulate' | 'Hold' | 'Reduce' | 'Sell' | 'Strong Sell';
+  label: 'Strong Buy' | 'Buy' | 'Accumulate' | 'Hold' | 'Reduce' | 'Sell' | 'Strong Sell' | 'Signal Unreliable';
   color: string;
   bg: string;
+  flags: string[];
   dimensions: {
     name: string;
     weight: number;
@@ -278,17 +413,21 @@ export function computeSignal(
   livePrice?: number | null,
   posRow?: StockRow | null,
   dividend?: DividendInfo | null,
+  sector?: string | null,
 ): SignalResult | null {
   if (!ov && !perf) return null;
 
   const safeOv: TickerOverview = ov ?? ({} as TickerOverview);
   const safePerf: TickerPerformance = perf ?? ({} as TickerPerformance);
 
+  const effectiveSector = sector ?? posRow?.Sector ?? null;
+  const isBank = BANK_SECTORS.some((s) => effectiveSector?.toLowerCase().includes(s.toLowerCase()));
+
   const mom = scoreMomentum(safePerf, livePrice);
   const val = scoreValuation(safeOv, safePerf);
-  const qual = scoreQuality(safeOv, safePerf);
+  const qual = isBank ? scoreBankQuality(safeOv, safePerf) : scoreQuality(safeOv, safePerf);
   const div = scoreDividend(safeOv, posRow, dividend);
-  const risk = scoreRisk(safeOv, safePerf);
+  const risk = scoreRisk(safeOv, safePerf, isBank);
 
   const WEIGHTS = { mom: 0.25, val: 0.25, qual: 0.3, div: 0.1, risk: 0.1 };
 
@@ -300,8 +439,16 @@ export function computeSignal(
       risk.score * WEIGHTS.risk) *
     10;
 
-  const label =
-    total > 6
+  const allFlags = [...mom.flags];
+
+  // Illiquidity check — suppress signal label if position takes > 5 days to exit
+  const posLiqDays = n(safePerf.position_liquidity_days);
+  const illiquid = posLiqDays !== null && posLiqDays > ILLIQUID_FLAG;
+  if (illiquid) allFlags.push('ILLIQUID');
+
+  const label: SignalResult['label'] = illiquid
+    ? 'Signal Unreliable'
+    : total > 6
       ? 'Strong Buy'
       : total > 3
         ? 'Buy'
@@ -315,8 +462,9 @@ export function computeSignal(
                 ? 'Sell'
                 : 'Strong Sell';
 
-  const color =
-    total > 3
+  const color = illiquid
+    ? 'var(--ink-4)'
+    : total > 3
       ? 'var(--gain)'
       : total > 1
         ? '#0E7490'
@@ -326,8 +474,9 @@ export function computeSignal(
             ? 'var(--warn)'
             : 'var(--loss)';
 
-  const bg =
-    total > 3
+  const bg = illiquid
+    ? 'var(--canvas)'
+    : total > 3
       ? 'var(--gain-light)'
       : total > 1
         ? '#E0F2F7'
@@ -337,19 +486,14 @@ export function computeSignal(
             ? 'var(--warn-light)'
             : 'var(--loss-light)';
 
-  const allSignals = [
-    ...mom.signals,
-    ...val.signals,
-    ...qual.signals,
-    ...div.signals,
-    ...risk.signals,
-  ];
+  const qualLabel = isBank ? 'Bank Quality' : 'Quality';
 
   return {
     total: parseFloat(total.toFixed(2)),
     label,
     color,
     bg,
+    flags: allFlags,
     dimensions: [
       {
         name: 'Momentum',
@@ -366,7 +510,7 @@ export function computeSignal(
         signals: val.signals,
       },
       {
-        name: 'Quality',
+        name: qualLabel,
         weight: WEIGHTS.qual,
         score: qual.score,
         contrib: qual.score * WEIGHTS.qual * 10,
@@ -387,7 +531,7 @@ export function computeSignal(
         signals: risk.signals,
       },
     ],
-    dataPoints: allSignals.length,
+    dataPoints: [...mom.signals, ...val.signals, ...qual.signals, ...div.signals, ...risk.signals].length,
   };
 }
 
@@ -402,6 +546,7 @@ interface SignalScoreProps {
   posRow?: StockRow | null;
   dividend?: DividendInfo | null;
   loading: boolean;
+  sector?: string | null;
 }
 
 export default function SignalScore({
@@ -411,6 +556,7 @@ export default function SignalScore({
   posRow,
   dividend,
   loading,
+  sector,
 }: SignalScoreProps) {
   if (loading) {
     return (
@@ -426,7 +572,7 @@ export default function SignalScore({
     );
   }
 
-  const result = computeSignal(ov, perf, livePrice, posRow, dividend);
+  const result = computeSignal(ov, perf, livePrice, posRow, dividend, sector);
 
   if (!result) {
     return (
@@ -450,7 +596,7 @@ export default function SignalScore({
     );
   }
 
-  const { total, label, color, bg, dimensions } = result;
+  const { total, label, color, bg, dimensions, flags } = result;
 
   const R = 52;
   const cx = 64,
@@ -491,6 +637,22 @@ export default function SignalScore({
         <div className="flex-1 h-px bg-[var(--border)]" />
         <span className="text-[9px] text-[var(--ink-4)]">{result.dataPoints} data points</span>
       </div>
+
+      {/* Flag warnings */}
+      {flags.length > 0 && (
+        <div className="flex flex-wrap gap-1.5 mb-3">
+          {flags.includes('RSI_DATA_ERROR') && (
+            <span className="text-[9px] font-semibold px-2 py-0.5 rounded-full bg-[var(--warn-light)] text-[var(--warn)]">
+              ⚠ RSI data error — excluded from score
+            </span>
+          )}
+          {flags.includes('ILLIQUID') && (
+            <span className="text-[9px] font-semibold px-2 py-0.5 rounded-full bg-[var(--loss-light)] text-[var(--loss)]">
+              ⚠ Low ADV — signal suppressed
+            </span>
+          )}
+        </div>
+      )}
 
       <div className="flex flex-col sm:flex-row gap-6 items-start">
         <div className="flex flex-col items-center shrink-0 w-[128px]">
@@ -561,7 +723,7 @@ export default function SignalScore({
               <div key={dim.name}>
                 <div className="flex items-center justify-between mb-1">
                   <div className="flex items-center gap-1.5">
-                    <span className="text-[10px] font-semibold text-[var(--ink-3)] w-20">
+                    <span className="text-[10px] font-semibold text-[var(--ink-3)] w-24">
                       {dim.name}
                     </span>
                     <span className="text-[8px] text-[var(--ink-4)]">

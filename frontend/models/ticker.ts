@@ -77,6 +77,16 @@ export interface TickerPerformance {
   ma_50: number | null;
   ma_200: number | null;
   golden_cross: boolean | null;
+  // Bank-specific quality metrics (Banking / Insurance sectors)
+  bank_score: number | null;
+  nim_pct: number | null;
+  npl_pct: number | null;
+  car_pct: number | null;
+  ldr_pct: number | null;
+  cir_pct: number | null;
+  // Liquidity
+  adv_20_ngn: number | null;
+  position_liquidity_days: number | null;
 }
 
 export interface TickerData {

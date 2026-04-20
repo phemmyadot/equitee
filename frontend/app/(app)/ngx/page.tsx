@@ -292,7 +292,7 @@ export default function NGXOverviewPage() {
         const td = tickerMap[row.Ticker];
         if (!td) return <span className="text-[var(--ink-4)] text-[10px]">…</span>;
         const price = td.price?.price ?? row.LivePrice ?? null;
-        const sig = computeSignal(td.overview, td.performance, price, row, null);
+        const sig = computeSignal(td.overview, td.performance, price, row, null, row.Sector || null);
         if (!sig) return <span className="text-[var(--ink-4)] text-[10px]">—</span>;
         const _n = (v: string | number | null | undefined) => {
           if (v == null) return null;

@@ -559,7 +559,7 @@ export default function NGXProfilePage() {
   })();
 
   // Signal + price targets
-  const signalResult = computeSignal(ov, perf, livePrice, posRow, dividend);
+  const signalResult = computeSignal(ov, perf, livePrice, posRow, dividend, sectorName || null);
   const targetResult = computeTargets(
     livePrice ?? null,
     grahamNum ?? null,
@@ -779,6 +779,7 @@ export default function NGXProfilePage() {
         posRow={posRow}
         dividend={dividend}
         loading={loading}
+        sector={sectorName || null}
       />
 
       {/* ── Price Targets ───────────────────────────────────────────────── */}

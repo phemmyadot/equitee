@@ -118,7 +118,7 @@ function _n(v: string | number | null | undefined): number | null {
 }
 
 function SignalPill({ item }: { item: WatchlistItem }) {
-  const sig = computeSignal(item.overview, item.performance, item.price?.price ?? null, null, null);
+  const sig = computeSignal(item.overview, item.performance, item.price?.price ?? null, null, null, item.profile?.sector ?? null);
   if (!sig) return <span className="text-[var(--ink-4)] text-[10px]">—</span>;
 
   const price = item.price?.price ?? null;
@@ -162,7 +162,7 @@ function SignalPill({ item }: { item: WatchlistItem }) {
 function InBuyZone({ item }: { item: WatchlistItem }): boolean {
   const price = item.price?.price;
   if (!price) return false;
-  const sig = computeSignal(item.overview, item.performance, price, null, null);
+  const sig = computeSignal(item.overview, item.performance, price, null, null, item.profile?.sector ?? null);
   if (!sig || sig.total <= 1) return false;
   const eps = _n(item.overview?.eps);
   const bv = _n(item.overview?.book_value);
