@@ -151,6 +151,10 @@ export const fetchPortfolioHistory = (days = 90) =>
 export const fetchPriceHistory = (ticker: string, days = 90) =>
   get<PriceHistory>(`/history/prices/${ticker}?days=${days}`);
 export const fetchNGXProfile = (ticker: string) => get<CompanyProfile>(`/profile/ngx/${ticker}`);
+export const fetchUSTickerData = (ticker: string) =>
+  get<TickerData>(`/profile/us/${ticker}/full`);
+export const fetchUSPriceHistory = (ticker: string, days = 90) =>
+  get<DBPriceHistory>(`/profile/us/${ticker}/price-history?days=${days}`);
 export const fetchNGXTickerData = (ticker: string) =>
   get<TickerData>(`/profile/ngx/${ticker}/full`);
 export const fetchNGXDividend = (ticker: string) =>

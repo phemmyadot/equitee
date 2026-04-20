@@ -43,7 +43,12 @@ def _safe(fn, *args, **kwargs):
 def _fetch_ticker_full(ticker: str, market: str = "NGX") -> dict[str, Any]:
     """Fetch price + profile + overview + performance in parallel."""
     if market == "US":
-        pd = _safe(_yahoo_service.get_price, ticker)
+        with ThreadPoolExecutor(max_workers=2) as ex:
+            f_price = ex.submit(_safe, _yahoo_service.get_price, ticker)
+            f_fund = ex.submit(_safe, _yahoo_service.get_fundamentals, ticker)
+        pd = f_price.result()
+        fund = f_fund.result() or {}
+
         price_out = None
         if pd:
             price_out = {
@@ -54,13 +59,18 @@ def _fetch_ticker_full(ticker: str, market: str = "NGX") -> dict[str, Any]:
                 "volume": pd.volume,
                 "currency": pd.currency,
             }
-        profile_out = {"name": pd.name} if pd and pd.name else None
+
+        prof = fund.get("profile") or {}
+        # Inject live name from price response if not in fundamentals
+        if pd and pd.name and not prof.get("name"):
+            prof = {**prof, "name": pd.name}
+
         return {
             "ticker": ticker,
             "price": price_out,
-            "profile": profile_out,
-            "overview": None,
-            "performance": None,
+            "profile": prof or None,
+            "overview": fund.get("overview"),
+            "performance": fund.get("performance"),
             "cached_at": None,
         }
 

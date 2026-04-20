@@ -185,6 +185,7 @@ from app.services import ngx as _ngx_service
 from app.services import prices as _prices_service
 from app.services import performance as _overview_service
 from app.services import overview as _performance_service
+from app.services import yahoo as _yahoo_service
 from typing import Any
 
 
@@ -391,4 +392,74 @@ def ngx_full(
         overview=ov_out,
         performance=perf_out,
         cached_at=_ngx_service.cache_age(),
+    )
+
+
+# ── US ticker endpoints ────────────────────────────────────────────────────────
+
+
+@router.get("/us/{ticker}/full", response_model=TickerFullResponse)
+def us_full(
+    ticker: str,
+    _: User = Depends(get_current_user),
+):
+    """
+    Comprehensive single-ticker endpoint for US stocks.
+    Combines live price (Yahoo chart API) and fundamentals (Yahoo quoteSummary).
+    """
+    from concurrent.futures import ThreadPoolExecutor
+
+    t = ticker.upper()
+
+    with ThreadPoolExecutor(max_workers=2) as ex:
+        f_price = ex.submit(_safe, _yahoo_service.get_price, t)
+        f_fund = ex.submit(_safe, _yahoo_service.get_fundamentals, t)
+
+    pd = f_price.result()
+    fund = f_fund.result() or {}
+
+    # Price
+    price_out = None
+    if pd:
+        price_out = TickerPriceOut(
+            symbol=pd.symbol,
+            price=pd.price,
+            change=pd.change,
+            change_pct=pd.change_pct,
+            volume=pd.volume,
+        )
+
+    # Profile — inject live name from price response
+    prof = dict(fund.get("profile") or {})
+    if pd and pd.name and not prof.get("name"):
+        prof["name"] = pd.name
+
+    return TickerFullResponse(
+        ticker=t,
+        price=price_out,
+        profile=prof or None,
+        overview=fund.get("overview"),
+        performance=fund.get("performance"),
+        cached_at=None,
+    )
+
+
+@router.get("/us/{ticker}/price-history", response_model=PriceHistoryResponse)
+def us_price_history(
+    ticker: str,
+    days: int = 90,
+    _: User = Depends(get_current_user),
+):
+    """Daily closing price history for a US ticker (sourced from Yahoo chart API)."""
+    t = ticker.upper()
+    rows = _safe(_yahoo_service.get_price_history, t, days) or []
+    if not rows:
+        raise HTTPException(status_code=404, detail="No price history available.")
+    return PriceHistoryResponse(
+        ticker=t,
+        days=days,
+        count=len(rows),
+        dates=[r["ts"] for r in rows],
+        close=[r["price"] for r in rows],
+        change_pct=[r["change_pct"] for r in rows],
     )

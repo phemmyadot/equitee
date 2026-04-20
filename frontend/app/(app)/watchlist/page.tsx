@@ -98,7 +98,7 @@ function WatchlistTable({
   onRemove: (ticker: string) => void;
 }) {
   const ngxCols = ['Ticker', 'Company', 'Sector', 'Price', 'Day %', 'Since Added', 'P/E', 'ROE', '52W Range', 'Signal', '90d', ''];
-  const usCols  = ['Ticker', 'Company', 'Price', 'Day %', 'Since Added', ''];
+  const usCols  = ['Ticker', 'Company', 'Sector', 'Price', 'Day %', 'Since Added', 'P/E', 'ROE', '52W Range', 'Signal', ''];
 
   return (
     <div className="card overflow-hidden">
@@ -135,16 +135,12 @@ function WatchlistTable({
                       {inBuyZone && (
                         <span className="w-1.5 h-1.5 rounded-full bg-[var(--gain)] shrink-0" title="In buy zone" />
                       )}
-                      {isUS ? (
-                        <span className="font-mono font-bold text-[11px] text-[var(--ink)]">{item.ticker}</span>
-                      ) : (
-                        <Link
-                          href={`/ngx/profile?ticker=${item.ticker}`}
-                          className="font-mono font-bold text-[11px] text-[var(--accent)] hover:underline"
-                        >
-                          {item.ticker}
-                        </Link>
-                      )}
+                      <Link
+                        href={isUS ? `/us/profile?ticker=${item.ticker}` : `/ngx/profile?ticker=${item.ticker}`}
+                        className="font-mono font-bold text-[11px] text-[var(--accent)] hover:underline"
+                      >
+                        {item.ticker}
+                      </Link>
                     </div>
                   </td>
 
@@ -202,65 +198,66 @@ function WatchlistTable({
                     )}
                   </td>
 
-                  {/* NGX-only columns */}
+                  {/* P/E — both markets */}
+                  <td className="px-3 py-3 text-right">
+                    <span className="font-mono text-[11px] text-[var(--ink-3)]">
+                      {item.overview?.pe_ratio != null
+                        ? Number(item.overview.pe_ratio).toFixed(1)
+                        : '—'}
+                    </span>
+                  </td>
+
+                  {/* ROE — both markets */}
+                  <td className="px-3 py-3 text-right">
+                    <span className="font-mono text-[11px] text-[var(--ink-3)]">
+                      {item.overview?.roe != null
+                        ? `${Number(item.overview.roe).toFixed(1)}%`
+                        : '—'}
+                    </span>
+                  </td>
+
+                  {/* 52W Range — both markets */}
+                  <td className="px-3 py-3 min-w-[100px]">
+                    {(() => {
+                      const w52l = item.performance?.week_52_low;
+                      const w52h = item.performance?.week_52_high;
+                      const lo = w52l == null ? null : typeof w52l === 'number' ? w52l : parseFloat(String(w52l).replace(/[^0-9.]/g, ''));
+                      const hi = w52h == null ? null : typeof w52h === 'number' ? w52h : parseFloat(String(w52h).replace(/[^0-9.]/g, ''));
+                      const rangePct = lo && hi && hi > lo && price
+                        ? Math.max(0, Math.min(100, ((price - lo) / (hi - lo)) * 100))
+                        : null;
+                      return rangePct != null ? (
+                        <div className="flex flex-col gap-0.5">
+                          <div className="relative h-1.5 rounded-full overflow-hidden bg-[var(--border)] w-[80px]">
+                            <div
+                              className="absolute left-0 top-0 h-full rounded-full"
+                              style={{
+                                width: `${rangePct}%`,
+                                background: rangePct > 70 ? 'var(--gain)' : rangePct > 35 ? 'var(--accent)' : 'var(--loss)',
+                                opacity: 0.7,
+                              }}
+                            />
+                          </div>
+                          <span className="text-[8px] font-mono text-[var(--ink-4)]">
+                            {isUS ? `$${lo!.toFixed(0)}` : fmtNGN(lo)} – {isUS ? `$${hi!.toFixed(0)}` : fmtNGN(hi)}
+                          </span>
+                        </div>
+                      ) : (
+                        <span className="text-[var(--ink-4)]">—</span>
+                      );
+                    })()}
+                  </td>
+
+                  {/* Signal — both markets */}
+                  <td className="px-3 py-3">
+                    <SignalPill item={item} />
+                  </td>
+
+                  {/* Sparkline — NGX only */}
                   {!isUS && (
-                    <>
-                      {/* P/E */}
-                      <td className="px-3 py-3 text-right">
-                        <span className="font-mono text-[11px] text-[var(--ink-3)]">
-                          {item.overview?.pe_ratio ?? '—'}
-                        </span>
-                      </td>
-
-                      {/* ROE */}
-                      <td className="px-3 py-3 text-right">
-                        <span className="font-mono text-[11px] text-[var(--ink-3)]">
-                          {item.overview?.roe ?? '—'}
-                        </span>
-                      </td>
-
-                      {/* 52W Range bar */}
-                      <td className="px-3 py-3 min-w-[100px]">
-                        {(() => {
-                          const w52l = item.performance?.week_52_low;
-                          const w52h = item.performance?.week_52_high;
-                          const lo = w52l == null ? null : typeof w52l === 'number' ? w52l : parseFloat(String(w52l).replace(/[^0-9.]/g, ''));
-                          const hi = w52h == null ? null : typeof w52h === 'number' ? w52h : parseFloat(String(w52h).replace(/[^0-9.]/g, ''));
-                          const rangePct = lo && hi && hi > lo && price
-                            ? Math.max(0, Math.min(100, ((price - lo) / (hi - lo)) * 100))
-                            : null;
-                          return rangePct != null ? (
-                            <div className="flex flex-col gap-0.5">
-                              <div className="relative h-1.5 rounded-full overflow-hidden bg-[var(--border)] w-[80px]">
-                                <div
-                                  className="absolute left-0 top-0 h-full rounded-full"
-                                  style={{
-                                    width: `${rangePct}%`,
-                                    background: rangePct > 70 ? 'var(--gain)' : rangePct > 35 ? 'var(--accent)' : 'var(--loss)',
-                                    opacity: 0.7,
-                                  }}
-                                />
-                              </div>
-                              <span className="text-[8px] font-mono text-[var(--ink-4)]">
-                                {fmtNGN(lo)} – {fmtNGN(hi)}
-                              </span>
-                            </div>
-                          ) : (
-                            <span className="text-[var(--ink-4)]">—</span>
-                          );
-                        })()}
-                      </td>
-
-                      {/* Signal */}
-                      <td className="px-3 py-3">
-                        <SignalPill item={item} />
-                      </td>
-
-                      {/* Sparkline */}
-                      <td className="px-3 py-3">
-                        <Sparkline ticker={item.ticker} />
-                      </td>
-                    </>
+                    <td className="px-3 py-3">
+                      <Sparkline ticker={item.ticker} />
+                    </td>
                   )}
 
                   {/* Remove */}
@@ -281,7 +278,7 @@ function WatchlistTable({
         </table>
       </div>
 
-      {!isUS && items.some((i) => InBuyZone({ item: i })) && (
+      {items.some((i) => InBuyZone({ item: i })) && (
         <div className="px-4 py-2.5 border-t border-[var(--border)] bg-[var(--gain-light)]">
           <span className="text-[9.5px] font-semibold text-[var(--gain)] flex items-center gap-1.5">
             <span className="w-1.5 h-1.5 rounded-full bg-[var(--gain)]" />

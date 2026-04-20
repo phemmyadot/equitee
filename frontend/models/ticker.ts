@@ -82,10 +82,7 @@ export interface TickerPerformance {
 export interface TickerData {
   ticker: string;
   price: TickerPrice | null;
-  profile: Pick<
-    CompanyProfile,
-    'symbol' | 'name' | 'sector' | 'industry' | 'website' | 'founded'
-  > | null;
+  profile: CompanyProfile | null;
   overview: TickerOverview | null;
   performance: TickerPerformance | null;
   cached_at: number | null;
