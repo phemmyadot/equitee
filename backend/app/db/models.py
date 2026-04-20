@@ -431,3 +431,32 @@ class AnalysisHistory(Base):
     follow_up_question: Mapped[str] = mapped_column(Text, nullable=True)
 
     __table_args__ = (Index("ix_analysis_history_user_id", "user_id"),)
+
+
+# ── price_alerts ───────────────────────────────────────────────────────────────
+
+
+class PriceAlert(Base):
+    """User-defined price threshold alerts for watched tickers."""
+
+    __tablename__ = "price_alerts"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    user_id: Mapped[int] = mapped_column(
+        Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False
+    )
+    ticker: Mapped[str] = mapped_column(String, nullable=False)
+    market: Mapped[str] = mapped_column(String, nullable=False)  # 'NGX' | 'US'
+    threshold_price: Mapped[float] = mapped_column(Float, nullable=False)
+    direction: Mapped[str] = mapped_column(String, nullable=False)  # 'above' | 'below'
+    is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
+    triggered_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    note: Mapped[Optional[str]] = mapped_column(String, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now)
+
+    __table_args__ = (
+        Index("ix_price_alerts_user_id", "user_id"),
+        Index("ix_price_alerts_user_ticker", "user_id", "ticker"),
+    )

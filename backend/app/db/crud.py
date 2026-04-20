@@ -28,6 +28,7 @@ from app.db.models import (
     DailyPriceHistory,
     Watchlist,
     AnalysisHistory,
+    PriceAlert,
 )
 
 log = logging.getLogger(__name__)
@@ -1231,3 +1232,94 @@ def delete_analysis_by_id(db: Session, analysis_id: int, user_id: int) -> bool:
     db.delete(row)
     db.commit()
     return True
+
+
+# ── Price Alerts ──────────────────────────────────────────────────────────────
+
+
+def get_alerts(db: Session, user_id: int) -> list[PriceAlert]:
+    """Return all price alerts for user (active and triggered)."""
+    stmt = (
+        select(PriceAlert)
+        .where(PriceAlert.user_id == user_id)
+        .order_by(PriceAlert.created_at.desc())
+    )
+    return list(db.scalars(stmt).all())
+
+
+def get_active_alerts(db: Session, user_id: int) -> list[PriceAlert]:
+    """Return only active (not yet triggered) alerts for user."""
+    stmt = (
+        select(PriceAlert)
+        .where(PriceAlert.user_id == user_id, PriceAlert.is_active == True)
+        .order_by(PriceAlert.created_at.desc())
+    )
+    return list(db.scalars(stmt).all())
+
+
+def create_alert(
+    db: Session,
+    user_id: int,
+    ticker: str,
+    market: str,
+    threshold_price: float,
+    direction: str,
+    note: Optional[str] = None,
+) -> PriceAlert:
+    """Create a new price alert."""
+    alert = PriceAlert(
+        user_id=user_id,
+        ticker=ticker.upper(),
+        market=market,
+        threshold_price=threshold_price,
+        direction=direction,
+        note=note,
+    )
+    db.add(alert)
+    db.commit()
+    db.refresh(alert)
+    return alert
+
+
+def delete_alert(db: Session, user_id: int, alert_id: int) -> bool:
+    """Delete a price alert by id (user-scoped)."""
+    stmt = select(PriceAlert).where(
+        PriceAlert.id == alert_id, PriceAlert.user_id == user_id
+    )
+    row = db.scalars(stmt).first()
+    if not row:
+        return False
+    db.delete(row)
+    db.commit()
+    return True
+
+
+def check_and_trigger_alerts(
+    db: Session, user_id: int, ticker_prices: dict[str, float | None]
+) -> list[PriceAlert]:
+    """
+    Check active alerts against current prices. Trigger matching ones.
+    Returns list of newly triggered alerts.
+    ticker_prices: {TICKER: current_price_or_None}
+    """
+    now = datetime.now(timezone.utc)
+    active = get_active_alerts(db, user_id)
+    triggered = []
+
+    for alert in active:
+        price = ticker_prices.get(alert.ticker)
+        if price is None:
+            continue
+        hit = (
+            (alert.direction == "above" and price >= alert.threshold_price)
+            or (alert.direction == "below" and price <= alert.threshold_price)
+        )
+        if hit:
+            alert.is_active = False
+            alert.triggered_at = now
+            triggered.append(alert)
+
+    if triggered:
+        db.commit()
+
+    return triggered

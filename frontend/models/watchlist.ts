@@ -12,7 +12,53 @@ export interface WatchlistItem {
   performance: TickerPerformance | null;
 }
 
+export interface PriceAlert {
+  id: number;
+  ticker: string;
+  market: string;
+  threshold_price: number;
+  direction: 'above' | 'below';
+  is_active: boolean;
+  triggered_at: string | null;
+  note: string | null;
+  created_at: string;
+}
+
+export interface TriggeredAlert {
+  id: number;
+  ticker: string;
+  market: string;
+  threshold_price: number;
+  direction: 'above' | 'below';
+  triggered_at: string | null;
+  note: string | null;
+}
+
 export interface WatchlistResponse {
   items: WatchlistItem[];
   count: number;
+  triggered_alerts: TriggeredAlert[];
+}
+
+export interface ScreenerItem {
+  ticker: string;
+  name: string | null;
+  sector: string | null;
+  price: number | null;
+  change_pct: number | null;
+  volume: number | null;
+  market_cap: number | null;
+  pe_ratio: number | null;
+  roe: number | null;
+  eps: number | null;
+  dividend_yield: number | null;
+  week_52_high: number | null;
+  week_52_low: number | null;
+  week_52_change: number | null;
+  return_1y: number | null;
+}
+
+export interface ScreenerResponse {
+  count: number;
+  tickers: ScreenerItem[];
 }

@@ -2,16 +2,112 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import Link from 'next/link';
-import { fetchWatchlist, addToWatchlist, removeFromWatchlist } from '@/services/api';
-import type { WatchlistItem } from '@/models';
+import { fetchWatchlist, addToWatchlist, removeFromWatchlist, fetchAlerts, createAlert, deleteAlert } from '@/services/api';
+import type { WatchlistItem, TriggeredAlert, PriceAlert } from '@/models';
 import { computeSignal } from '@/components/molecules/Signalscore';
 import { computeTargets } from '@/utils/targets';
 import Sparkline from '@/components/atoms/Sparkline';
 import { fmtNGNFull, fmtNGN, fmtUSD, fmtPct2, isPositive } from '@/utils/formatters';
 import { sectorColor } from '@/utils/theme';
-import { IconBookmark, IconX } from '@/components/atoms/icons';
+import { IconBookmark, IconX, IconBell } from '@/components/atoms/icons';
 
 type Tab = 'NGX' | 'US';
+
+// ── AlertRow ──────────────────────────────────────────────────────────────────
+
+function AlertRow({
+  alert,
+  onDelete,
+}: {
+  alert: PriceAlert;
+  onDelete: (id: number) => void;
+}) {
+  return (
+    <div className="flex items-center gap-2 text-[10px]">
+      <span
+        className={`px-1.5 py-0.5 rounded font-bold font-mono text-[9px] ${alert.direction === 'above' ? 'bg-[var(--gain-light)] text-[var(--gain)]' : 'bg-[var(--loss-light)] text-[var(--loss)]'}`}
+      >
+        {alert.direction === 'above' ? '↑' : '↓'} {alert.market === 'US' ? `$${alert.threshold_price.toFixed(2)}` : fmtNGNFull(alert.threshold_price)}
+      </span>
+      {alert.note && <span className="text-[var(--ink-4)] truncate max-w-[100px]">{alert.note}</span>}
+      <button
+        onClick={() => onDelete(alert.id)}
+        className="flex items-center justify-center w-4 h-4 rounded text-[var(--ink-4)] hover:text-[var(--loss)] transition-colors"
+      >
+        <IconX width={9} height={9} />
+      </button>
+    </div>
+  );
+}
+
+// ── AlertSetForm ──────────────────────────────────────────────────────────────
+
+function AlertSetForm({
+  ticker,
+  market,
+  currentPrice,
+  onCreated,
+  onClose,
+}: {
+  ticker: string;
+  market: string;
+  currentPrice: number | null;
+  onCreated: () => void;
+  onClose: () => void;
+}) {
+  const [price, setPrice] = useState(currentPrice?.toFixed(market === 'US' ? 2 : 0) ?? '');
+  const [direction, setDirection] = useState<'above' | 'below'>('above');
+  const [busy, setBusy] = useState(false);
+
+  const submit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const p = parseFloat(price);
+    if (!p || isNaN(p)) return;
+    setBusy(true);
+    try {
+      await createAlert(ticker, market as 'NGX' | 'US', p, direction);
+      onCreated();
+      onClose();
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <form onSubmit={submit} className="flex items-center gap-1.5 mt-1">
+      <select
+        value={direction}
+        onChange={(e) => setDirection(e.target.value as 'above' | 'below')}
+        className="h-6 px-1.5 rounded border border-[var(--border)] bg-[var(--canvas)] text-[10px] text-[var(--ink)] focus:outline-none focus:border-[var(--accent)]"
+      >
+        <option value="above">Above</option>
+        <option value="below">Below</option>
+      </select>
+      <input
+        value={price}
+        onChange={(e) => setPrice(e.target.value)}
+        placeholder="Price"
+        type="number"
+        step="any"
+        className="h-6 px-1.5 rounded border border-[var(--border)] bg-[var(--canvas)] text-[10px] font-mono text-[var(--ink)] focus:outline-none focus:border-[var(--accent)] w-20"
+      />
+      <button
+        type="submit"
+        disabled={busy || !price}
+        className="h-6 px-2 rounded bg-[var(--accent)] text-white text-[10px] font-semibold disabled:opacity-40"
+      >
+        Set
+      </button>
+      <button
+        type="button"
+        onClick={onClose}
+        className="h-6 px-1.5 rounded border border-[var(--border)] text-[10px] text-[var(--ink-4)] hover:text-[var(--ink)]"
+      >
+        ✕
+      </button>
+    </form>
+  );
+}
 
 // ── helpers ───────────────────────────────────────────────────────────────────
 
@@ -91,14 +187,22 @@ function WatchlistTable({
   isUS,
   removing,
   onRemove,
+  alerts,
+  onAlertCreated,
+  onAlertDeleted,
 }: {
   items: WatchlistItem[];
   isUS: boolean;
   removing: string | null;
   onRemove: (ticker: string) => void;
+  alerts: PriceAlert[];
+  onAlertCreated: () => void;
+  onAlertDeleted: (id: number) => void;
 }) {
-  const ngxCols = ['Ticker', 'Company', 'Sector', 'Price', 'Day %', 'Since Added', 'P/E', 'ROE', '52W Range', 'Signal', '90d', ''];
-  const usCols  = ['Ticker', 'Company', 'Sector', 'Price', 'Day %', 'Since Added', 'P/E', 'ROE', '52W Range', 'Signal', ''];
+  const [alertFormTicker, setAlertFormTicker] = useState<string | null>(null);
+
+  const ngxCols = ['Ticker', 'Company', 'Sector', 'Price', 'Day %', 'Since Added', 'P/E', 'ROE', '52W Range', 'Signal', '90d', 'Alerts', ''];
+  const usCols  = ['Ticker', 'Company', 'Sector', 'Price', 'Day %', 'Since Added', 'P/E', 'ROE', '52W Range', 'Signal', 'Alerts', ''];
 
   return (
     <div className="card overflow-hidden">
@@ -151,19 +255,17 @@ function WatchlistTable({
                     </span>
                   </td>
 
-                  {/* Sector (NGX only) */}
-                  {!isUS && (
-                    <td className="px-3 py-3">
-                      {sector ? (
-                        <span className="flex items-center gap-1 text-[10px] text-[var(--ink-3)] whitespace-nowrap">
-                          <span className="w-1.5 h-1.5 rounded-full shrink-0" style={{ background: sCol }} />
-                          {sector}
-                        </span>
-                      ) : (
-                        <span className="text-[var(--ink-4)]">—</span>
-                      )}
-                    </td>
-                  )}
+                  {/* Sector */}
+                  <td className="px-3 py-3">
+                    {sector ? (
+                      <span className="flex items-center gap-1 text-[10px] text-[var(--ink-3)] whitespace-nowrap">
+                        <span className="w-1.5 h-1.5 rounded-full shrink-0" style={{ background: sCol }} />
+                        {sector}
+                      </span>
+                    ) : (
+                      <span className="text-[var(--ink-4)]">—</span>
+                    )}
+                  </td>
 
                   {/* Price */}
                   <td className="px-3 py-3 text-right">
@@ -260,6 +362,34 @@ function WatchlistTable({
                     </td>
                   )}
 
+                  {/* Alerts */}
+                  <td className="px-3 py-3 min-w-[120px]">
+                    <div className="flex flex-col gap-1">
+                      {alerts
+                        .filter((a) => a.ticker === item.ticker && a.is_active)
+                        .map((a) => (
+                          <AlertRow key={a.id} alert={a} onDelete={onAlertDeleted} />
+                        ))}
+                      {alertFormTicker === item.ticker ? (
+                        <AlertSetForm
+                          ticker={item.ticker}
+                          market={item.market}
+                          currentPrice={item.price?.price ?? null}
+                          onCreated={onAlertCreated}
+                          onClose={() => setAlertFormTicker(null)}
+                        />
+                      ) : (
+                        <button
+                          onClick={() => setAlertFormTicker(item.ticker)}
+                          className="flex items-center gap-1 text-[9.5px] text-[var(--ink-4)] hover:text-[var(--accent)] transition-colors w-fit"
+                        >
+                          <IconBell width={10} height={10} />
+                          Add alert
+                        </button>
+                      )}
+                    </div>
+                  </td>
+
                   {/* Remove */}
                   <td className="px-3 py-3">
                     <button
@@ -300,14 +430,25 @@ export default function WatchlistPage() {
   const [addInput, setAddInput] = useState('');
   const [addBusy, setAddBusy] = useState(false);
   const [addError, setAddError] = useState<string | null>(null);
+  const [alerts, setAlerts] = useState<PriceAlert[]>([]);
+  const [triggeredAlerts, setTriggeredAlerts] = useState<TriggeredAlert[]>([]);
+  const [dismissedAlertIds, setDismissedAlertIds] = useState<Set<number>>(new Set());
+
+  const loadAlerts = useCallback(() => {
+    fetchAlerts().then((r) => setAlerts(r.alerts)).catch(() => {});
+  }, []);
 
   const load = useCallback(() => {
     setLoading(true);
     fetchWatchlist()
-      .then((r) => setItems(r.items))
+      .then((r) => {
+        setItems(r.items);
+        setTriggeredAlerts(r.triggered_alerts ?? []);
+      })
       .catch(() => setItems([]))
       .finally(() => setLoading(false));
-  }, []);
+    loadAlerts();
+  }, [loadAlerts]);
 
   useEffect(() => { load(); }, [load]);
 
@@ -349,11 +490,55 @@ export default function WatchlistPage() {
     }
   };
 
+  const handleAlertDeleted = async (id: number) => {
+    await deleteAlert(id);
+    setAlerts((prev) => prev.filter((a) => a.id !== id));
+  };
+
   const isUS = tab === 'US';
   const filtered = items.filter((i) => (isUS ? i.market === 'US' : i.market !== 'US'));
 
+  const visibleTriggered = triggeredAlerts.filter((a) => !dismissedAlertIds.has(a.id));
+
   return (
     <div className="space-y-5">
+      {/* Triggered alerts banner */}
+      {visibleTriggered.length > 0 && (
+        <div className="rounded-xl border border-[var(--accent)] bg-[var(--accent-light)] px-4 py-3 space-y-2">
+          <div className="flex items-center justify-between">
+            <span className="text-[11px] font-bold text-[var(--accent)] flex items-center gap-1.5">
+              <IconBell width={12} height={12} />
+              {visibleTriggered.length} price alert{visibleTriggered.length > 1 ? 's' : ''} triggered
+            </span>
+            <button
+              onClick={() => setDismissedAlertIds(new Set(visibleTriggered.map((a) => a.id)))}
+              className="text-[9.5px] text-[var(--accent)] hover:underline"
+            >
+              Dismiss all
+            </button>
+          </div>
+          {visibleTriggered.map((a) => (
+            <div key={a.id} className="flex items-center justify-between gap-3">
+              <span className="text-[11px] text-[var(--ink)]">
+                <span className="font-mono font-bold">{a.ticker}</span>
+                {' '}crossed{' '}
+                <span className="font-mono font-semibold">
+                  {a.market === 'US' ? `$${a.threshold_price.toFixed(2)}` : fmtNGNFull(a.threshold_price)}
+                </span>
+                {' '}({a.direction})
+                {a.note && <span className="text-[var(--ink-4)]"> · {a.note}</span>}
+              </span>
+              <button
+                onClick={() => setDismissedAlertIds((prev) => new Set([...prev, a.id]))}
+                className="flex items-center justify-center w-5 h-5 rounded text-[var(--ink-4)] hover:text-[var(--loss)] shrink-0"
+              >
+                <IconX width={10} height={10} />
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
+
       {/* Header */}
       <div className="flex items-center justify-between flex-wrap gap-3">
         <div className="flex items-center gap-2.5">
@@ -454,6 +639,9 @@ export default function WatchlistPage() {
           isUS={isUS}
           removing={removing}
           onRemove={handleRemove}
+          alerts={alerts}
+          onAlertCreated={loadAlerts}
+          onAlertDeleted={handleAlertDeleted}
         />
       )}
     </div>

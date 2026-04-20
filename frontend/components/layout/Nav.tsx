@@ -15,11 +15,13 @@ import {
   IconBookmark,
   IconSparkles,
   IconTrendingUp,
+  IconFilter,
 } from '@/components/atoms/icons';
 
 const NAV_ITEMS = [
   { href: '/ngx', label: 'NGX', exact: true, icon: <IconChartLine width={20} height={20} /> },
   { href: '/ngx/advanced', label: 'Advanced', icon: <IconSearch width={20} height={20} /> },
+  { href: '/ngx/screener', label: 'Screener', icon: <IconFilter width={20} height={20} /> },
   { href: '/us', label: 'US Market', icon: <IconGlobe width={20} height={20} /> },
   { href: '/combined', label: 'Combined', icon: <IconChartPie width={20} height={20} /> },
   { href: '/dividends', label: 'Dividends', icon: <IconClock width={20} height={20} /> },

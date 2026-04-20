@@ -44,7 +44,7 @@ export type {
   RelativeStrengthData,
 } from '@/models/analytics';
 
-export type { WatchlistItem, WatchlistResponse } from '@/models/watchlist';
+export type { WatchlistItem, WatchlistResponse, PriceAlert, TriggeredAlert, ScreenerItem, ScreenerResponse } from '@/models/watchlist';
 
 export type {
   AnalysisContext,
@@ -138,6 +138,8 @@ import type {
   AnalysisContextResponse,
   AnalysisSummary,
   AnalysisDetail,
+  PriceAlert,
+  ScreenerResponse,
 } from '@/models';
 
 export const fetchPortfolioData = () => get<PortfolioData>('/data');
@@ -179,6 +181,28 @@ export const addToWatchlist = (ticker: string, market: 'NGX' | 'US' = 'NGX') =>
   post<{ ticker: string; market: string; added_at: string }>(`/watchlist/${ticker}?market=${market}`);
 export const removeFromWatchlist = (ticker: string) =>
   del<{ ticker: string; removed: boolean }>(`/watchlist/${ticker}`);
+
+// ── Screener ──────────────────────────────────────────────────────────────────
+
+export const fetchNGXScreener = () => get<ScreenerResponse>('/screener/ngx');
+
+// ── Alerts ────────────────────────────────────────────────────────────────────
+
+export const fetchAlerts = () => get<{ alerts: PriceAlert[] }>('/alerts');
+
+export const createAlert = (
+  ticker: string,
+  market: 'NGX' | 'US',
+  threshold_price: number,
+  direction: 'above' | 'below',
+  note?: string,
+) =>
+  post<PriceAlert>(
+    `/alerts?ticker=${ticker}&market=${market}&threshold_price=${threshold_price}&direction=${direction}${note ? `&note=${encodeURIComponent(note)}` : ''}`,
+  );
+
+export const deleteAlert = (alert_id: number) =>
+  del<{ id: number; removed: boolean }>(`/alerts/${alert_id}`);
 
 // ── Analysis ──────────────────────────────────────────────────────────────────
 

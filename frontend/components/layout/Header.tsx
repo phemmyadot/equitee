@@ -19,6 +19,7 @@ import {
   IconBookmark,
   IconSparkles,
   IconTrendingUp,
+  IconFilter,
 } from '@/components/atoms/icons';
 
 interface HeaderProps {
@@ -40,6 +41,11 @@ const NAV_ITEMS = [
     href: '/ngx/advanced',
     label: 'Advanced',
     icon: <IconSearch width={14} height={14} />,
+  },
+  {
+    href: '/ngx/screener',
+    label: 'Screener',
+    icon: <IconFilter width={14} height={14} />,
   },
   {
     href: '/us',

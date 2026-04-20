@@ -20,6 +20,8 @@ from app.db.crud import (
     watchlist_has,
     add_to_watchlist,
     remove_from_watchlist,
+    check_and_trigger_alerts,
+    get_alerts,
 )
 from app.auth.dependencies import get_current_user
 
@@ -123,9 +125,20 @@ class WatchlistItem(BaseModel):
     performance: Optional[dict[str, Any]] = None
 
 
+class TriggeredAlert(BaseModel):
+    id: int
+    ticker: str
+    market: str
+    threshold_price: float
+    direction: str
+    triggered_at: Optional[str] = None
+    note: Optional[str] = None
+
+
 class WatchlistResponse(BaseModel):
     items: list[WatchlistItem]
     count: int
+    triggered_alerts: list[TriggeredAlert] = []
 
 
 class WatchCheckResponse(BaseModel):
@@ -196,8 +209,32 @@ def list_watchlist(
             )
         )
 
+    # ── Passive alert check ───────────────────────────────────────────────────
+    ticker_prices: dict[str, float | None] = {}
+    for r in rows:
+        price_val = (results.get(r.ticker) or {}).get("price") or {}
+        ticker_prices[r.ticker] = price_val.get("price") if isinstance(price_val, dict) else None
+
+    newly_triggered = check_and_trigger_alerts(db, current_user.id, ticker_prices)
+
+    # Also collect alerts that were already triggered (not yet seen by UI)
+    all_alerts = get_alerts(db, current_user.id)
+    triggered_out = [
+        TriggeredAlert(
+            id=a.id,
+            ticker=a.ticker,
+            market=a.market,
+            threshold_price=a.threshold_price,
+            direction=a.direction,
+            triggered_at=a.triggered_at.isoformat() if a.triggered_at else None,
+            note=a.note,
+        )
+        for a in all_alerts
+        if not a.is_active and a.triggered_at is not None
+    ]
+
     db.commit()
-    return WatchlistResponse(items=items, count=len(items))
+    return WatchlistResponse(items=items, count=len(items), triggered_alerts=triggered_out)
 
 
 @router.post("/{ticker}", status_code=201)
