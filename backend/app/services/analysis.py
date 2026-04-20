@@ -41,7 +41,7 @@ MODEL_QUICK = "claude-haiku-4-5-20251001"
 MODEL_DEEP = "claude-sonnet-4-6"
 
 _BANK_SECTORS = {"banking", "insurance"}
-_RSI_ERROR_THRESHOLD = 100.1
+_RSI_ERROR_THRESHOLD = 99.9
 _ILLIQUID_DAYS = 5.0
 
 

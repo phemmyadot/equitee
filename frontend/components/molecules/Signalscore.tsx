@@ -20,7 +20,7 @@ import type { DividendInfo } from '@/models/dividends';
 // Constants
 // ─────────────────────────────────────────────────────────────────────────────
 
-const RSI_ERROR_THRESHOLD = 100.1;
+const RSI_ERROR_THRESHOLD = 99.9;
 const BANK_SECTORS = ['Banking', 'Insurance'];
 const ILLIQUID_FLAG = 5.0;
 

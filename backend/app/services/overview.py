@@ -177,14 +177,21 @@ def _calculate_from_history(ticker: str) -> dict:
                 max_dd = dd
         result["max_drawdown"] = round(-max_dd, 2)  # negative = drawdown
 
-    # RSI-14 (Wilder's simple average over last 14 periods)
-    if len(prices) >= 15:
+    # RSI-14 using Wilder's smoothed moving average.
+    # Requires 28+ bars: first 14 seed the averages, the rest apply EMA smoothing.
+    # Simple-average RSI produces avg_loss=0 when all recent bars are up,
+    # yielding the impossible RSI=100. Wilder's smoothing prevents this.
+    if len(prices) >= 28:
         deltas = [prices[i] - prices[i - 1] for i in range(1, len(prices))]
-        last14 = deltas[-14:]
-        avg_gain = sum(max(d, 0) for d in last14) / 14
-        avg_loss = sum(max(-d, 0) for d in last14) / 14
+        gains  = [max(d, 0.0) for d in deltas]
+        losses = [max(-d, 0.0) for d in deltas]
+        avg_gain = sum(gains[:14]) / 14
+        avg_loss = sum(losses[:14]) / 14
+        for i in range(14, len(deltas)):
+            avg_gain = (avg_gain * 13 + gains[i]) / 14
+            avg_loss = (avg_loss * 13 + losses[i]) / 14
         if avg_loss == 0:
-            result["rsi_14"] = 100.0
+            result["rsi_14"] = 99.9
         else:
             rs = avg_gain / avg_loss
             result["rsi_14"] = round(100 - 100 / (1 + rs), 1)
