@@ -7,7 +7,7 @@
  * from data already fetched on the profile page.
  *
  * Special rules (hardcoded constants):
- *   RSI_ERROR_THRESHOLD = 99   — RSI ≥ 99 is a data error; exclude from composite
+ *   RSI_ERROR_THRESHOLD = 100.1 — RSI > 100 is a data error; exclude from composite
  *   BANK_SECTORS               — use bank_score path instead of F/Z score
  *   ILLIQUID_FLAG = 5          — position_liquidity_days > 5 → suppress signal label
  */
@@ -20,7 +20,7 @@ import type { DividendInfo } from '@/models/dividends';
 // Constants
 // ─────────────────────────────────────────────────────────────────────────────
 
-const RSI_ERROR_THRESHOLD = 99.0;
+const RSI_ERROR_THRESHOLD = 100.1;
 const BANK_SECTORS = ['Banking', 'Insurance'];
 const ILLIQUID_FLAG = 5.0;
 

@@ -1,12 +1,16 @@
 /**
  * Price Target Computation
  * ========================
- * Derives buy / sell price zones from fundamental and technical anchors.
+ * Derives buy / sell price zones from fundamental and technical anchors,
+ * then adjusts them by the composite signal score.
  *
- * The Graham Number is a useful fair-value anchor but is unreliable for
- * financial stocks (banks, insurance) where high leverage is structural —
- * resulting in a Graham Number many times the market price. The logic below
- * handles three cases:
+ * Signal bias (signalTotal: -10 … +10):
+ *   Positive → buy zone shifts closer to current price (less discount needed),
+ *              sell zone shifts higher (more upside expected).
+ *   Negative → buy zone shifts lower (wider margin of safety required),
+ *              sell zone shifts lower (take profits sooner).
+ *
+ * Graham Number cases (for the base zones):
  *
  *   Case A — deeply undervalued (price < Graham × 0.75):
  *     Buy zone  → anchored to current price / MA support (stock is already cheap)
@@ -57,7 +61,7 @@ export function computeTargets(
 
   const tech = ma200 ?? ma50; // prefer MA-200 as support anchor
 
-  // ── Buy zone ───────────────────────────────────────────────────────────────
+  // ── Base buy zone ──────────────────────────────────────────────────────────
   let buy_low: number | null = null;
   let buy_high: number | null = null;
 
@@ -93,7 +97,7 @@ export function computeTargets(
 
   if (buy_high !== null && buy_low !== null && buy_high <= buy_low) buy_high = r2(buy_low * 1.08);
 
-  // ── Sell zone ──────────────────────────────────────────────────────────────
+  // ── Base sell zone ─────────────────────────────────────────────────────────
   let sell_low: number | null = null;
   let sell_high: number | null = null;
 
@@ -127,6 +131,32 @@ export function computeTargets(
     sell_high = r2(Math.max(sell_high ?? price * 1.25, price * 1.25));
   }
 
+  if (sell_high !== null && sell_low !== null && sell_high <= sell_low)
+    sell_high = r2(sell_low * 1.15);
+
+  // ── Signal adjustment ─────────────────────────────────────────────────────
+  // bias: -1 … +1 (linear from signalTotal / 10)
+  // Buy zones shift by ±8%: positive signal → less discount needed
+  // Sell zones shift by ±12% / ±15%: positive signal → higher upside target
+  if (signalTotal != null && signalTotal !== 0) {
+    const bias = signalTotal / 10; // -1 … +1
+
+    if (buy_low !== null) buy_low = r2(buy_low * (1 + bias * 0.08));
+    if (buy_high !== null) buy_high = r2(buy_high * (1 + bias * 0.08));
+    if (sell_low !== null) sell_low = r2(sell_low * (1 + bias * 0.12));
+    if (sell_high !== null) sell_high = r2(sell_high * (1 + bias * 0.15));
+
+    const direction_word = bias > 0 ? 'lifts' : 'lowers';
+    const abs = Math.abs(signalTotal).toFixed(1);
+    if (Math.abs(bias) >= 0.2) {
+      rationale.push(
+        `Signal ${signalTotal > 0 ? '+' : ''}${signalTotal.toFixed(1)} ${direction_word} targets (${(Math.abs(bias) * (bias > 0 ? 8 : 8)).toFixed(0)}% buy / ${(Math.abs(bias) * (bias > 0 ? 15 : 15)).toFixed(0)}% sell)`,
+      );
+    }
+  }
+
+  // Re-validate bounds after signal shift
+  if (buy_high !== null && buy_low !== null && buy_high <= buy_low) buy_high = r2(buy_low * 1.08);
   if (sell_high !== null && sell_low !== null && sell_high <= sell_low)
     sell_high = r2(sell_low * 1.15);
 

@@ -40,6 +40,139 @@ log = logging.getLogger(__name__)
 MODEL_QUICK = "claude-haiku-4-5-20251001"
 MODEL_DEEP = "claude-sonnet-4-6"
 
+_BANK_SECTORS = {"banking", "insurance"}
+_RSI_ERROR_THRESHOLD = 100.1
+_ILLIQUID_DAYS = 5.0
+
+
+def _compute_signal(sector: str, fund: dict) -> Optional[dict]:
+    """
+    Python port of the frontend computeSignal function.
+    Returns {"score": float, "label": str, "flags": list[str], "is_bank": bool}
+    or None if there's insufficient data (< 2 data points).
+    """
+    if not fund:
+        return None
+
+    def _clamp(x: float) -> float:
+        return max(-1.0, min(1.0, x))
+
+    is_bank = sector.strip().lower() in _BANK_SECTORS
+    flags: list[str] = []
+
+    # ── Momentum ──────────────────────────────────────────────────────────────
+    mom_pts, mom_n = 0.0, 0
+    rsi = fund.get("rsi_14")
+    if rsi is not None:
+        if rsi >= _RSI_ERROR_THRESHOLD:
+            flags.append("RSI_DATA_ERROR")
+        else:
+            s = (-1 if rsi > 80 else -0.5 if rsi > 70 else 0 if rsi > 50 else 0.5 if rsi > 30 else 0.75)
+            mom_pts += s; mom_n += 1
+
+    valid_rets = [v for v in (fund.get(k) for k in ("return_1m", "return_3m", "return_6m", "return_1y")) if v is not None]
+    if valid_rets:
+        pos = sum(1 for r in valid_rets if r > 0)
+        mom_pts += _clamp((pos / len(valid_rets) - 0.5) * 4)
+        mom_n += 1
+
+    mom_score = _clamp(mom_pts / mom_n) if mom_n else 0.0
+
+    # ── Valuation ─────────────────────────────────────────────────────────────
+    val_pts, val_n = 0.0, 0
+    pe = fund.get("pe_ratio")
+    if pe and pe > 0:
+        val_pts += (1 if pe < 10 else 0.5 if pe < 15 else 0 if pe < 25 else -0.5 if pe < 35 else -1)
+        val_n += 1
+    pb = fund.get("price_to_book")
+    if pb and pb > 0:
+        val_pts += (1 if pb < 1 else 0.5 if pb < 2 else 0 if pb < 4 else -0.5)
+        val_n += 1
+    fcf_y = fund.get("fcf_yield")
+    if fcf_y is not None:
+        val_pts += (1 if fcf_y > 8 else 0.5 if fcf_y > 4 else 0 if fcf_y > 0 else -0.5)
+        val_n += 1
+    val_score = _clamp(val_pts / val_n) if val_n else 0.0
+
+    # ── Quality (bank path vs non-financial) ─────────────────────────────────
+    qual_pts, qual_n = 0.0, 0
+    if not is_bank:
+        pio = fund.get("piotroski_score")
+        if pio is not None:
+            qual_pts += (1 if pio >= 7 else 0 if pio >= 4 else -1); qual_n += 1
+        z = fund.get("altman_zscore")
+        if z is not None:
+            qual_pts += (0.75 if z >= 3 else 0 if z >= 1.81 else -1); qual_n += 1
+    else:
+        bs = fund.get("bank_score")
+        if bs is not None:
+            qual_pts += (bs / 5) * 2 - 1; qual_n += 1
+        npl = fund.get("npl_pct")
+        if npl is not None:
+            qual_pts += (1 if npl < 3 else 0 if npl < 5 else -0.5 if npl < 8 else -1); qual_n += 1
+        car = fund.get("car_pct")
+        if car is not None:
+            qual_pts += (1 if car > 18 else 0.5 if car > 15 else 0 if car > 12 else -1); qual_n += 1
+        nim = fund.get("nim_pct")
+        if nim is not None:
+            qual_pts += (1 if nim > 8 else 0.5 if nim > 6 else 0 if nim > 4 else -0.5); qual_n += 1
+
+    roe = fund.get("roe")
+    if roe is not None:
+        qual_pts += (1 if roe > 25 else 0.5 if roe > 15 else 0 if roe > 5 else -0.5); qual_n += 1
+    if not is_bank:
+        roic = fund.get("roic")
+        if roic is not None:
+            qual_pts += (1 if roic > 20 else 0.5 if roic > 10 else 0 if roic > 0 else -0.5); qual_n += 1
+    eg = fund.get("earnings_growth_yoy")
+    if eg is not None:
+        qual_pts += (1 if eg > 20 else 0.5 if eg > 0 else -0.25 if eg > -10 else -1); qual_n += 1
+    qual_score = _clamp(qual_pts / qual_n) if qual_n else 0.0
+
+    # ── Dividend ──────────────────────────────────────────────────────────────
+    div_pts, div_n = 0.0, 0
+    dy = fund.get("dividend_yield")
+    if dy and dy > 0:
+        div_pts += (1 if dy > 8 else 0.5 if dy > 4 else 0 if dy > 1 else -0.25); div_n += 1
+    div_score = _clamp(div_pts / div_n) if div_n else 0.0
+
+    # ── Risk ──────────────────────────────────────────────────────────────────
+    risk_pts, risk_n = 0.0, 0
+    if not is_bank:
+        z = fund.get("altman_zscore")
+        if z is not None:
+            if z < 1.81: risk_pts -= 1; risk_n += 1
+            else: risk_pts += 0.5; risk_n += 1
+        de = fund.get("debt_to_equity")
+        if de is not None and de >= 0:
+            risk_pts += (0.5 if de < 0.5 else 0 if de < 1.5 else -0.5 if de < 2.5 else -1); risk_n += 1
+    sharpe = fund.get("sharpe_ratio")
+    if sharpe is not None:
+        risk_pts += (0.75 if sharpe > 1 else 0.25 if sharpe > 0.5 else -0.25 if sharpe > 0 else -0.75); risk_n += 1
+    risk_score = _clamp(risk_pts / risk_n) if risk_n else 0.0
+
+    total = (mom_score * 0.25 + val_score * 0.25 + qual_score * 0.3 + div_score * 0.1 + risk_score * 0.1) * 10
+
+    # Minimum data threshold
+    data_pts = mom_n + val_n + qual_n + div_n + risk_n
+    if data_pts < 2:
+        return None
+
+    # Illiquidity override
+    liq_days = fund.get("position_liquidity_days")
+    if liq_days is not None and liq_days > _ILLIQUID_DAYS:
+        flags.append("ILLIQUID")
+        label = "Signal Unreliable"
+    elif total > 6: label = "Strong Buy"
+    elif total > 3: label = "Buy"
+    elif total > 1: label = "Accumulate"
+    elif total > -1: label = "Hold"
+    elif total > -3: label = "Reduce"
+    elif total > -6: label = "Sell"
+    else: label = "Strong Sell"
+
+    return {"score": round(total, 2), "label": label, "flags": flags, "is_bank": is_bank}
+
 _ANALYST_PERSONA = (
     "You are a seasoned equity analyst with 20+ years specialising in frontier and "
     "emerging markets, Nigerian Exchange (NGX) equities, and US growth stocks. "
@@ -53,6 +186,10 @@ _ANALYST_PERSONA = (
     "You will receive: active holdings, closed positions, recent trade history (buys and sells "
     "with commission), cash balances (NGN and USD), realized P&L by position, "
     "watchlist, dividends, and prior analyses. "
+    "Each holding may include a composite Signal score (-10 to +10) with label "
+    "(Strong Buy → Strong Sell) computed from momentum, valuation, quality, dividend, and risk dimensions. "
+    "Where a Signal is provided, reference it in your analysis — especially for action items. "
+    "Flags such as RSI_DATA_ERROR or ILLIQUID indicate unreliable data; treat Signal Unreliable holdings with caution. "
     "Use ALL of this data — especially the trade history and realized P&L — to inform your analysis. "
     "Comment on trading behaviour (e.g. frequent partial sells, commission drag, holding period). "
     "Factor in available cash when recommending buys."
@@ -169,24 +306,59 @@ def _get_cached_fundamentals(ticker: str) -> dict:
     """
     result: dict = {}
 
-    # Valuation / quality from performance.py cache
+    # Valuation / quality from performance.py cache (confusingly named _overview_cache)
     ov = _perf_svc._overview_cache.get(ticker.upper())
     if ov:
         for k in ("pe_ratio", "roe", "debt_to_equity", "dividend_yield", "eps"):
             if ov.get(k) is not None:
                 result[k] = ov[k]
 
-    # Returns / technicals from overview.py cache
+    # Returns / technicals from overview.py cache (confusingly named _performance_cache)
     perf = _overview_svc._performance_cache.get(ticker.upper())
     if perf:
         for k in (
             "return_1m", "return_3m", "return_6m", "return_1y",
             "rsi_14", "piotroski_score", "altman_zscore",
             "price_to_book", "ev_ebitda", "fcf_yield", "roic",
-            "sharpe_ratio", "volatility",
+            "sharpe_ratio", "volatility", "earnings_growth_yoy",
+            # Bank-specific quality metrics
+            "bank_score", "nim_pct", "npl_pct", "car_pct", "ldr_pct", "cir_pct",
+            # Liquidity
+            "adv_20_ngn", "position_liquidity_days",
         ):
             if perf.get(k) is not None:
                 result[k] = perf[k]
+
+    return result
+
+
+def _get_cached_us_fundamentals(ticker: str) -> dict:
+    """
+    Pull US fundamentals from the Yahoo Finance in-memory cache (no new fetch).
+    Returns an empty dict if not yet cached.
+    """
+    cached = _yahoo_svc._fund_cache.get(ticker.upper())
+    if not cached:
+        return {}
+
+    data = cached.get("data") or {}
+    result: dict = {}
+
+    ov = data.get("overview") or {}
+    for k in ("pe_ratio", "roe", "debt_to_equity", "dividend_yield", "eps",
+              "gross_margin", "net_margin", "operating_margin", "revenue_growth",
+              "earnings_growth", "roa", "price_to_book", "ev_ebitda", "forward_pe"):
+        if ov.get(k) is not None:
+            result[k] = ov[k]
+    # Normalise Yahoo naming to match NGX convention
+    if ov.get("earnings_growth") is not None:
+        result["earnings_growth_yoy"] = ov["earnings_growth"]
+
+    perf = data.get("performance") or {}
+    for k in ("beta", "week_52_high", "week_52_low", "week_52_change",
+              "return_1y", "ma_50", "ma_200"):
+        if perf.get(k) is not None:
+            result[k] = perf[k]
 
     return result
 
@@ -239,10 +411,13 @@ def build_context(db: Session, user_id: int, scope: str = "portfolio") -> dict:
         if live and live.change is not None:
             row["change_today"] = round(live.change, 2)
 
-        # Non-blocking fundamentals from cache
+        # Non-blocking fundamentals + signal from cache
         fundamentals = _get_cached_fundamentals(h.ticker)
         if fundamentals:
             row["fundamentals"] = fundamentals
+            signal = _compute_signal(h.sector or "", fundamentals)
+            if signal:
+                row["signal"] = signal
 
         ngx_rows.append(row)
 
@@ -276,6 +451,14 @@ def build_context(db: Session, user_id: int, scope: str = "portfolio") -> dict:
             row["change_pct_today"] = round(yp.change_pct, 2)
         if yp and yp.change is not None:
             row["change_today"] = round(yp.change, 2)
+
+        us_fund = _get_cached_us_fundamentals(h.ticker)
+        if us_fund:
+            row["fundamentals"] = us_fund
+            signal = _compute_signal(h.sector or "", us_fund)
+            if signal:
+                row["signal"] = signal
+
         us_rows.append(row)
 
     # Token-efficiency: if > 15 holdings, keep top 10 by equity + worst performer
@@ -331,6 +514,18 @@ def build_context(db: Session, user_id: int, scope: str = "portfolio") -> dict:
                     wl_row["change_pct_today"] = round(yp.change_pct, 2)
                 if w.added_price and yp.price:
                     wl_row["vs_entry_pct"] = round((yp.price / w.added_price - 1) * 100, 1)
+
+        # Signal enrichment (cache-only, no scrape)
+        if w.market.lower() == "ngx":
+            wl_fund = _get_cached_fundamentals(w.ticker)
+        else:
+            wl_fund = _get_cached_us_fundamentals(w.ticker)
+        if wl_fund:
+            sector = getattr(w, "sector", None) or ""
+            sig = _compute_signal(sector, wl_fund)
+            if sig:
+                wl_row["signal"] = sig
+
         wl_rows.append(wl_row)
 
     ngx_gain_pct = (
@@ -549,6 +744,16 @@ def _format_holdings(rows: list[dict], currency: str, equity_key: str, pl_key: s
             if parts:
                 lines.append(f"    {'  '.join(parts)}")
 
+        sig = r.get("signal")
+        if sig:
+            _flag_labels = {
+                "RSI_DATA_ERROR": "RSI data error — excluded from score",
+                "ILLIQUID": "Low ADV — signal suppressed",
+            }
+            readable_flags: list[str] = [_flag_labels.get(f) or f for f in (sig.get("flags") or [])]
+            flag_str = f"  ⚠ {', '.join(readable_flags)}" if readable_flags else ""
+            lines.append(f"    Signal: {sig['label']} ({sig['score']:+.1f}){flag_str}")
+
     return "\n".join(lines) + "\n"
 
 
@@ -600,6 +805,15 @@ def build_user_prompt(ctx: dict, scope: str) -> str:
                 if w.get("vs_entry_pct") is not None:
                     parts.append(f"[{w['vs_entry_pct']:+.1f}% vs entry]")
             lines.append("  ".join(parts))
+            sig = w.get("signal")
+            if sig:
+                _flag_labels = {
+                    "RSI_DATA_ERROR": "RSI data error — excluded from score",
+                    "ILLIQUID": "Low ADV — signal suppressed",
+                }
+                readable_flags: list[str] = [_flag_labels.get(f) or f for f in (sig.get("flags") or [])]
+                flag_str = f"  ⚠ {', '.join(readable_flags)}" if readable_flags else ""
+                lines.append(f"    Signal: {sig['label']} ({sig['score']:+.1f}){flag_str}")
         lines.append("")
 
     div_income = k.get("dividend_income_ngn", 0)
