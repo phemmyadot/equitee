@@ -305,6 +305,7 @@ export function streamAnalysis(
   followUp?: string,
   followUpAnalysisId?: number,
   initialMessage?: string,
+  onStatus?: (status: string) => void,
 ): AbortController {
   const controller = new AbortController();
   const body = {
@@ -379,11 +380,13 @@ export function streamAnalysis(
               tokens?: number;
               cached?: boolean;
               error?: string;
+              status?: string;
             };
             if (data.error) {
               onError(data.error);
               return;
             }
+            if (data.status) onStatus?.(data.status);
             if (data.text) onChunk(data.text);
             if (data.done) onDone(data.id ?? 0, data.tokens ?? 0, data.cached ?? false);
           } catch {

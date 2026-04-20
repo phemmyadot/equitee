@@ -52,6 +52,7 @@ export const createHolding = (body: {
   avg_cost: number;
   commission?: number;
   purchase_date?: string;
+  use_cash?: boolean;
 }) => request<HoldingRecord>('/holdings', 'POST', body);
 
 export const updateHolding = (

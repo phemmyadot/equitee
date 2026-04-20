@@ -625,6 +625,7 @@ export default function SettingsPage() {
       {modal?.type === 'add' && (
         <AddModal
           holdings={holdings}
+          cash={cash}
           onClose={() => setModal(null)}
           onDone={() => {
             reload();
@@ -760,10 +761,12 @@ export default function SettingsPage() {
 
 function AddModal({
   holdings,
+  cash,
   onClose,
   onDone,
 }: {
   holdings: HoldingRecord[];
+  cash: CashBalance;
   onClose: () => void;
   onDone: () => void;
 }) {
@@ -772,10 +775,13 @@ function AddModal({
   const [shares, setShares] = useState('');
   const [price, setPrice] = useState('');
   const [commission, setCommission] = useState('');
+  const [useCash, setUseCash] = useState(false);
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [busy, setBusy] = useState(false);
 
   const cur = market === 'ngx' ? '₦' : '$';
+  const availCash = market === 'ngx' ? cash.ngn : cash.usd;
+  const fmtCash = market === 'ngx' ? fmtNGN : fmtUSD;
 
   // Detect if ticker already has an existing position (local — no extra fetch)
   const existing = ticker.trim()
@@ -787,6 +793,7 @@ function AddModal({
   const commNum = Number(commission) || 0;
   const gross = sharesNum > 0 && priceNum > 0 ? sharesNum * priceNum : null;
   const total = gross !== null ? gross + commNum : null;
+  const insufficientCash = useCash && total !== null && total > availCash;
 
   const validate = () => {
     const e: Record<string, string> = {};
@@ -799,6 +806,10 @@ function AddModal({
 
   const submit = async () => {
     if (!validate()) return;
+    if (insufficientCash) {
+      setErrors({ _: `Insufficient cash — available: ${fmtCash(availCash)}` });
+      return;
+    }
     setBusy(true);
     try {
       await createHolding({
@@ -807,6 +818,7 @@ function AddModal({
         shares: sharesNum,
         avg_cost: priceNum,
         ...(commNum > 0 ? { commission: commNum } : {}),
+        use_cash: useCash,
       });
       onDone();
     } catch (e: any) {
@@ -857,9 +869,23 @@ function AddModal({
         <Input type="number" min="0" step="any" value={commission} onChange={e => setCommission(e.target.value)} placeholder="0.00" />
       </Field>
 
+      {/* Fund source toggle */}
+      <label className="flex items-center gap-2 cursor-pointer select-none">
+        <input
+          type="checkbox"
+          checked={useCash}
+          onChange={(e) => setUseCash(e.target.checked)}
+          className="rounded border-[var(--border)] accent-[var(--accent)]"
+          disabled={availCash <= 0}
+        />
+        <span className="text-[11px] text-[var(--ink-3)]">
+          Fund from cash balance{availCash > 0 ? ` (${fmtCash(availCash)} available)` : ' (no cash)'}
+        </span>
+      </label>
+
       {/* Cost summary */}
       {total !== null && (
-        <div className="bg-[var(--canvas)] rounded-lg px-3 py-2 text-[11px] font-mono space-y-0.5">
+        <div className={`rounded-lg px-3 py-2 text-[11px] font-mono space-y-0.5 ${insufficientCash ? 'bg-[var(--loss-light)]' : 'bg-[var(--canvas)]'}`}>
           {commNum > 0 && (
             <>
               <div className="flex justify-between text-[var(--ink-4)]"><span>Gross</span><span>{cur}{gross!.toLocaleString(undefined, { maximumFractionDigits: 2 })}</span></div>
@@ -867,8 +893,8 @@ function AddModal({
             </>
           )}
           <div className="flex justify-between font-semibold">
-            <span className="text-[var(--ink-3)]">Total cost</span>
-            <span className="text-[var(--ink)]">{cur}{total.toLocaleString(undefined, { maximumFractionDigits: 2 })}</span>
+            <span className="text-[var(--ink-3)]">{useCash ? 'Total debit' : 'Total cost'}</span>
+            <span className={insufficientCash ? 'text-[var(--loss)]' : 'text-[var(--ink)]'}>{cur}{total.toLocaleString(undefined, { maximumFractionDigits: 2 })}</span>
           </div>
         </div>
       )}

@@ -80,6 +80,7 @@ class CreateHoldingBody(BaseModel):
     avg_cost: float = Field(..., gt=0)
     commission: float = Field(0.0, ge=0)
     purchase_date: Optional[date] = None
+    use_cash: bool = Field(False, description="Deduct purchase cost from cash balance")
 
 
 class UpdateHoldingBody(BaseModel):
@@ -220,6 +221,17 @@ def add_holding(
             sector = ap.get("sector") or ap.get("industry") or "Other"
         except Exception:
             pass
+
+    # Deduct from cash balance if requested
+    if body.use_cash:
+        cost = body.shares * body.avg_cost + (body.commission or 0.0)
+        if not debit_cash(db, current_user.id, market, cost):
+            bal = get_cash_balance(db, current_user.id)
+            avail = bal["ngn"] if market == "ngx" else bal["usd"]
+            raise HTTPException(
+                status_code=400,
+                detail=f"Insufficient cash balance — available: {avail:.2f}",
+            )
 
     # If ticker already exists, add to existing position
     existing = get_holding_by_ticker(db, ticker, market, current_user.id)

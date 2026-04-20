@@ -51,6 +51,40 @@ function Cursor() {
   );
 }
 
+// ── Thinking animation ────────────────────────────────────────────────────────
+function ThinkingAnimation({ depth }: { depth: string }) {
+  const [elapsed, setElapsed] = useState(0);
+  useEffect(() => {
+    const t = setInterval(() => setElapsed(s => s + 1), 1000);
+    return () => clearInterval(t);
+  }, []);
+
+  const steps = depth === 'deep'
+    ? ['Reading portfolio…', 'Evaluating signals…', 'Reasoning through positions…', 'Formulating analysis…']
+    : ['Reading portfolio…', 'Evaluating signals…', 'Writing analysis…'];
+
+  const step = steps[Math.min(Math.floor(elapsed / 4), steps.length - 1)];
+
+  return (
+    <div className="flex flex-col items-center justify-center gap-4 py-10">
+      {/* Animated orbs */}
+      <div className="flex items-center gap-1.5">
+        {[0, 1, 2, 3].map(i => (
+          <span
+            key={i}
+            className="w-2 h-2 rounded-full bg-[var(--accent)] opacity-80"
+            style={{ animation: `bounce 1.2s ease-in-out ${i * 0.15}s infinite` }}
+          />
+        ))}
+      </div>
+      <div className="text-center space-y-1">
+        <p className="text-[12px] font-semibold text-[var(--ink-2)]">{step}</p>
+        <p className="text-[10px] text-[var(--ink-4)] tabular-nums">{elapsed}s elapsed{depth === 'deep' ? ' · deep mode' : ''}</p>
+      </div>
+    </div>
+  );
+}
+
 // ── Collapsible sections ──────────────────────────────────────────────────────
 function CollapsibleSections({ markdown }: { markdown: string }) {
   const sections = useMemo(() => {
@@ -181,6 +215,7 @@ export default function AnalysisPage() {
   const [initialMessage, setInitialMessage] = useState('');
 
   const [streaming, setStreaming] = useState(false);
+  const [thinking, setThinking] = useState(false);
   const [streamText, setStreamText] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [tokenInfo, setTokenInfo] = useState<{ tokens: number; cached: boolean } | null>(null);
@@ -211,6 +246,7 @@ export default function AnalysisPage() {
 
   const handleRun = useCallback(() => {
     setStreaming(true);
+    setThinking(false);
     setStreamText('');
     setError(null);
     setTokenInfo(null);
@@ -228,10 +264,11 @@ export default function AnalysisPage() {
       const msg = initialMessage.trim() || undefined;
       abortRef.current = streamAnalysis(
         scope, depth,
-        (chunk) => setStreamText(prev => prev + chunk),
-        (id, tokens, cached) => { setStreaming(false); setTokenInfo({ tokens, cached }); if (id) { setActiveId(id); loadHistory(); } },
-        (msg) => { setStreaming(false); setError(msg); },
+        (chunk) => { setThinking(false); setStreamText(prev => prev + chunk); },
+        (id, tokens, cached) => { setStreaming(false); setThinking(false); setTokenInfo({ tokens, cached }); if (id) { setActiveId(id); loadHistory(); } },
+        (msg) => { setStreaming(false); setThinking(false); setError(msg); },
         undefined, undefined, msg,
+        (status) => { if (status === 'thinking') setThinking(true); },
       );
     }
   }, [mode, scope, depth, initialMessage, loadHistory]);
@@ -529,8 +566,9 @@ export default function AnalysisPage() {
                 </div>
               )}
 
+              {streaming && !streamText && <ThinkingAnimation depth={depth} />}
               {streaming && streamText && <MarkdownViewer>{streamText}</MarkdownViewer>}
-              {streaming && <Cursor />}
+              {streaming && streamText && <Cursor />}
 
               {!streaming && displayText && (
                 <>

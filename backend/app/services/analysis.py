@@ -967,6 +967,9 @@ def stream_analysis_sse(
     if is_deep:
         stream_kwargs["thinking"] = {"type": "enabled", "budget_tokens": 8000}
 
+    # Immediate feedback — client shows thinking animation before first token
+    yield f"data: {json.dumps({'status': 'thinking'})}\n\n"
+
     try:
         with client.messages.stream(**stream_kwargs) as stream:
             # text_stream automatically skips thinking blocks — only text deltas
