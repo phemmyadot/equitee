@@ -248,10 +248,22 @@ export default function AnalysisPage() {
   const [followUpPreview, setFollowUpPreview] = useState(false);
   const followUpStreaming = followUps.some(f => !f.done);
 
+  const [atBottom, setAtBottom] = useState(true);
+
   const abortRef = useRef<AbortController | null>(null);
   const viewerRef = useRef<HTMLDivElement>(null);
   const followUpRef = useRef<HTMLTextAreaElement>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
+
+  const scrollToBottom = useCallback((behavior: ScrollBehavior = 'smooth') => {
+    bottomRef.current?.scrollIntoView({ behavior, block: 'end' });
+  }, []);
+
+  const handleViewerScroll = useCallback(() => {
+    const el = viewerRef.current;
+    if (!el) return;
+    setAtBottom(el.scrollHeight - el.scrollTop - el.clientHeight < 60);
+  }, []);
 
   const insertMarkdown = useCallback((wrap: [string, string] | string) => {
     const el = followUpRef.current;
@@ -285,9 +297,12 @@ export default function AnalysisPage() {
 
   useEffect(() => { loadHistory(); }, [loadHistory]);
 
+  useEffect(() => { scrollToBottom('smooth'); }, [streamText, followUps, scrollToBottom]);
+
+  // Scroll to bottom instantly when a historical thread finishes loading
   useEffect(() => {
-    bottomRef.current?.scrollIntoView({ behavior: 'smooth', block: 'end' });
-  }, [streamText, followUps]);
+    if (activeDetail) scrollToBottom('instant');
+  }, [activeDetail, scrollToBottom]);
 
   const handleRun = useCallback(() => {
     setStreaming(true);
@@ -444,7 +459,10 @@ export default function AnalysisPage() {
   );
 
   return (
-    <div className="flex flex-col gap-4 sm:flex-row sm:items-start">
+    <div
+      className="flex flex-col gap-4 sm:flex-row"
+      style={{ height: 'calc(100dvh - var(--header-h) - var(--nav-h) - 56px)' }}
+    >
 
       {/* ── Mobile bottom-sheet overlay ── */}
       {sidebarOpen && (
@@ -468,7 +486,7 @@ export default function AnalysisPage() {
       )}
 
       {/* ── Desktop threads sidebar ── */}
-      <div className="hidden sm:block w-48 shrink-0 space-y-1.5">
+      <div className="hidden sm:flex flex-col w-48 shrink-0 overflow-y-auto space-y-1.5">
         <div className="flex items-center justify-between px-0.5 mb-2">
           <span className="text-[10px] font-bold uppercase tracking-[0.08em] text-[var(--ink-4)]">Threads</span>
           {history.length > 0 && (
@@ -479,7 +497,7 @@ export default function AnalysisPage() {
       </div>
 
       {/* ── Main content ── */}
-      <div className="flex-1 min-w-0 space-y-4">
+      <div className="flex-1 min-w-0 min-h-0 flex flex-col gap-4">
 
         {/* Header */}
         <div className="flex items-center justify-between flex-wrap gap-3">
@@ -583,7 +601,7 @@ export default function AnalysisPage() {
 
         {/* Result viewer */}
         {(displayText || streaming || error) && (
-          <div className="card overflow-hidden">
+          <div className="card overflow-hidden flex-1 flex flex-col min-h-0">
             {(activeDetail || tokenInfo) && (
               <div className="flex flex-wrap items-center gap-2 px-4 py-2.5 border-b border-[var(--border)] bg-[var(--sidebar)]">
                 {(() => {
@@ -604,7 +622,17 @@ export default function AnalysisPage() {
               </div>
             )}
 
-            <div ref={viewerRef} className="px-4 py-4">
+            <div className="relative flex-1 min-h-0">
+              {!atBottom && (
+                <button
+                  onClick={() => scrollToBottom('smooth')}
+                  className="absolute bottom-3 right-3 z-10 w-7 h-7 flex items-center justify-center rounded-full bg-[var(--accent)] text-white shadow-md hover:bg-[#17A06B] transition-colors"
+                  title="Scroll to bottom"
+                >
+                  <svg width="12" height="12" viewBox="0 0 12 12" fill="none"><path d="M6 2v8M2.5 7.5 6 11l3.5-3.5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/></svg>
+                </button>
+              )}
+            <div ref={viewerRef} onScroll={handleViewerScroll} className="h-full overflow-y-auto px-4 py-4">
               {error && (
                 <div className="rounded-xl bg-red-50 border border-red-200 px-4 py-3">
                   <p className="text-[13px] font-semibold text-red-700 mb-0.5">Analysis failed</p>
@@ -635,72 +663,73 @@ export default function AnalysisPage() {
                   {!f.done && f.answer && <Cursor />}
                 </div>
               ))}
+              <div ref={bottomRef} />
             </div>
+          </div>
 
-            {/* Follow-up input — analysis mode only */}
-            {!streaming && displayText && mode === 'analysis' && (
-              <div className="px-4 pb-4 pt-2 border-t border-[var(--border)]">
-                <div className="rounded-xl border border-[var(--border)] overflow-hidden focus-within:border-[var(--accent)] transition-colors">
-                  {/* Tab bar */}
-                  <div className="flex items-center border-b border-[var(--border)] bg-[var(--canvas)]">
-                    <button type="button" onClick={() => setFollowUpPreview(false)}
-                      className={`px-3 py-1.5 text-[11px] font-medium transition-colors ${!followUpPreview ? 'text-[var(--ink-1)] border-b-2 border-[var(--accent)] -mb-px bg-white' : 'text-[var(--ink-4)] hover:text-[var(--ink-2)]'}`}>
-                      Write
-                    </button>
-                    <button type="button" onClick={() => setFollowUpPreview(true)} disabled={!followUpText.trim()}
-                      className={`px-3 py-1.5 text-[11px] font-medium transition-colors disabled:opacity-30 ${followUpPreview ? 'text-[var(--ink-1)] border-b-2 border-[var(--accent)] -mb-px bg-white' : 'text-[var(--ink-4)] hover:text-[var(--ink-2)]'}`}>
-                      Preview
-                    </button>
-                    {!followUpPreview && (
-                      <div className="ml-auto flex items-center gap-0.5 pr-2">
-                        {([
-                          { label: 'B', title: 'Bold', wrap: ['**', '**'] as [string,string], cls: 'font-bold' },
-                          { label: 'I', title: 'Italic', wrap: ['*', '*'] as [string,string], cls: 'italic' },
-                          { label: '<>', title: 'Inline code', wrap: ['`', '`'] as [string,string], cls: 'font-mono text-[10px]' },
-                          { label: '❝', title: 'Blockquote', wrap: '> ', cls: '' },
-                          { label: '•', title: 'Bullet list', wrap: '- ', cls: 'text-base leading-none' },
-                          { label: '1.', title: 'Ordered list', wrap: '1. ', cls: 'font-mono text-[10px]' },
-                        ] as const).map(({ label, title, wrap, cls }) => (
-                          <button key={title} type="button" title={title}
-                            onMouseDown={e => { e.preventDefault(); insertMarkdown(wrap); }}
-                            disabled={followUpStreaming}
-                            className={`w-6 h-6 flex items-center justify-center rounded text-[11px] text-[var(--ink-3)] hover:bg-[var(--border)] hover:text-[var(--ink-1)] transition-colors disabled:opacity-30 ${cls}`}>
-                            {label}
-                          </button>
-                        ))}
-                      </div>
-                    )}
-                  </div>
-                  {/* Write / Preview body */}
-                  {followUpPreview ? (
-                    <div className="min-h-[64px] px-3 py-2 text-[12px] bg-white">
-                      <MarkdownViewer breaks>{followUpText}</MarkdownViewer>
+          {/* Follow-up input — fixed at bottom of card, does not scroll */}
+          {!streaming && displayText && mode === 'analysis' && (
+            <div className="px-4 pb-4 pt-2 border-t border-[var(--border)]">
+              <div className="rounded-xl border border-[var(--border)] overflow-hidden focus-within:border-[var(--accent)] transition-colors">
+                {/* Tab bar */}
+                <div className="flex items-center border-b border-[var(--border)] bg-[var(--canvas)]">
+                  <button type="button" onClick={() => setFollowUpPreview(false)}
+                    className={`px-3 py-1.5 text-[11px] font-medium transition-colors ${!followUpPreview ? 'text-[var(--ink-1)] border-b-2 border-[var(--accent)] -mb-px bg-white' : 'text-[var(--ink-4)] hover:text-[var(--ink-2)]'}`}>
+                    Write
+                  </button>
+                  <button type="button" onClick={() => setFollowUpPreview(true)} disabled={!followUpText.trim()}
+                    className={`px-3 py-1.5 text-[11px] font-medium transition-colors disabled:opacity-30 ${followUpPreview ? 'text-[var(--ink-1)] border-b-2 border-[var(--accent)] -mb-px bg-white' : 'text-[var(--ink-4)] hover:text-[var(--ink-2)]'}`}>
+                    Preview
+                  </button>
+                  {!followUpPreview && (
+                    <div className="ml-auto flex items-center gap-0.5 pr-2">
+                      {([
+                        { label: 'B', title: 'Bold', wrap: ['**', '**'] as [string,string], cls: 'font-bold' },
+                        { label: 'I', title: 'Italic', wrap: ['*', '*'] as [string,string], cls: 'italic' },
+                        { label: '<>', title: 'Inline code', wrap: ['`', '`'] as [string,string], cls: 'font-mono text-[10px]' },
+                        { label: '❝', title: 'Blockquote', wrap: '> ', cls: '' },
+                        { label: '•', title: 'Bullet list', wrap: '- ', cls: 'text-base leading-none' },
+                        { label: '1.', title: 'Ordered list', wrap: '1. ', cls: 'font-mono text-[10px]' },
+                      ] as const).map(({ label, title, wrap, cls }) => (
+                        <button key={title} type="button" title={title}
+                          onMouseDown={e => { e.preventDefault(); insertMarkdown(wrap); }}
+                          disabled={followUpStreaming}
+                          className={`w-6 h-6 flex items-center justify-center rounded text-[11px] text-[var(--ink-3)] hover:bg-[var(--border)] hover:text-[var(--ink-1)] transition-colors disabled:opacity-30 ${cls}`}>
+                          {label}
+                        </button>
+                      ))}
                     </div>
-                  ) : (
-                    <textarea
-                      ref={followUpRef}
-                      value={followUpText}
-                      onChange={e => setFollowUpText(e.target.value)}
-                      onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleFollowUp(); } }}
-                      placeholder="Ask a follow-up question… (markdown supported)"
-                      rows={2}
-                      disabled={followUpStreaming}
-                      className="w-full resize-none px-3 py-2 text-[12px] text-[var(--ink)] placeholder:text-[var(--ink-5)] focus:outline-none bg-white disabled:opacity-50"
-                    />
                   )}
-                  {/* Footer row */}
-                  <div className="flex items-center justify-between px-3 py-1.5 bg-[var(--canvas)] border-t border-[var(--border)]">
-                    <span className="text-[10px] text-[var(--ink-5)]">Markdown supported · Enter to send · Shift+Enter for newline</span>
-                    <button onClick={handleFollowUp} disabled={!followUpText.trim() || followUpStreaming}
-                      className="h-7 px-3 rounded-lg text-[11px] font-semibold bg-[var(--accent)] text-white hover:bg-[#17A06B] transition-colors disabled:opacity-40">
-                      Ask
-                    </button>
+                </div>
+                {/* Write / Preview body */}
+                {followUpPreview ? (
+                  <div className="min-h-[64px] px-3 py-2 text-[12px] bg-white">
+                    <MarkdownViewer breaks>{followUpText}</MarkdownViewer>
                   </div>
+                ) : (
+                  <textarea
+                    ref={followUpRef}
+                    value={followUpText}
+                    onChange={e => setFollowUpText(e.target.value)}
+                    onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleFollowUp(); } }}
+                    placeholder="Ask a follow-up question… (markdown supported)"
+                    rows={2}
+                    disabled={followUpStreaming}
+                    className="w-full resize-none px-3 py-2 text-[12px] text-[var(--ink)] placeholder:text-[var(--ink-5)] focus:outline-none bg-white disabled:opacity-50"
+                  />
+                )}
+                {/* Footer row */}
+                <div className="flex items-center justify-between px-3 py-1.5 bg-[var(--canvas)] border-t border-[var(--border)]">
+                  <span className="text-[10px] text-[var(--ink-5)]">Markdown supported · Enter to send · Shift+Enter for newline</span>
+                  <button onClick={handleFollowUp} disabled={!followUpText.trim() || followUpStreaming}
+                    className="h-7 px-3 rounded-lg text-[11px] font-semibold bg-[var(--accent)] text-white hover:bg-[#17A06B] transition-colors disabled:opacity-40">
+                    Ask
+                  </button>
                 </div>
               </div>
-            )}
-            <div ref={bottomRef} />
-          </div>
+            </div>
+          )}
+        </div>
         )}
 
         {/* Empty state */}

@@ -34,6 +34,7 @@ from app.services import performance as _perf_svc
 from app.services import overview as _overview_svc
 from app.services import prices as _ngx_prices_svc
 from app.services import yahoo as _yahoo_svc
+from app.services import news as _news_svc
 
 log = logging.getLogger(__name__)
 
@@ -363,7 +364,7 @@ def _get_cached_us_fundamentals(ticker: str) -> dict:
     return result
 
 
-def build_context(db: Session, user_id: int, scope: str = "portfolio") -> dict:
+def build_context(db: Session, user_id: int, scope: str = "portfolio", depth: str = "quick") -> dict:
     """
     Assemble a compact portfolio snapshot from the DB.
     Returns a dict that can be serialised to JSON and hashed.
@@ -681,6 +682,18 @@ def build_context(db: Session, user_id: int, scope: str = "portfolio") -> dict:
         "prior_analyses": prior_analyses,
     }
 
+    # Fetch news for top holdings — deep (Sonnet) analyses only
+    if depth == "deep":
+        news: dict = {}
+        if scope in ("portfolio", "combined"):
+            ngx_news = _news_svc.fetch_news_for_holdings(ctx["ngx"], "ngx", top_n=3)
+            us_news  = _news_svc.fetch_news_for_holdings(ctx["us"],  "us",  top_n=2)
+            news.update(ngx_news)
+            news.update(us_news)
+        ctx["news"] = {t: h for t, h in news.items() if h}
+
+    return ctx
+
 
 def compute_context_hash(ctx: dict) -> str:
     payload = json.dumps(ctx, sort_keys=True, default=str)
@@ -873,6 +886,20 @@ def build_user_prompt(ctx: dict, scope: str) -> str:
                 f"  {c['closed_at']}  {c['ticker']:<8} [{c['market']}]  "
                 f"realized P&L: {c['realized_pl']:+,.2f}"
             )
+        lines.append("")
+
+    # News headlines (deep analyses only)
+    news = ctx.get("news", {})
+    if news:
+        lines.append("## Recent News Headlines\n")
+        for ticker, headlines in news.items():
+            if not headlines:
+                continue
+            lines.append(f"**{ticker}:**")
+            for h in headlines:
+                age = f" ({h['age']})" if h.get("age") else ""
+                src = f" — {h['publisher']}" if h.get("publisher") else ""
+                lines.append(f"  • {h['title']}{src}{age}")
         lines.append("")
 
     lines.append("Provide your analysis now.")

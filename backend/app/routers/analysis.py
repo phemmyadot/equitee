@@ -154,7 +154,7 @@ def run_analysis(
     initial_message = (body.initial_message or "").strip() or None
     follow_up_analysis_id = body.follow_up_analysis_id
 
-    ctx = build_context(db, current_user.id, scope=scope)
+    ctx = build_context(db, current_user.id, scope=scope, depth=depth)
     ctx_hash = compute_context_hash(ctx)
 
     # Resolve prior response for follow-up conversations
