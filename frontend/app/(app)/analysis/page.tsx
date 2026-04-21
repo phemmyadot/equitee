@@ -611,7 +611,7 @@ export default function AnalysisPage() {
                 <div key={i} className="mt-5 pt-4 border-t border-[var(--border)]">
                   <div className="flex items-start gap-2 mb-3">
                     <span className="shrink-0 mt-0.5 text-[10px] font-bold uppercase tracking-[0.08em] text-[var(--ink-4)] bg-[var(--canvas)] border border-[var(--border)] rounded px-1.5 py-0.5">You</span>
-                    <div className="text-[13px] text-[var(--ink)] leading-snug"><MarkdownViewer>{f.question}</MarkdownViewer></div>
+                    <div className="text-[13px] text-[var(--ink)] leading-snug"><MarkdownViewer breaks>{f.question}</MarkdownViewer></div>
                   </div>
                   {f.answer && <MarkdownViewer>{f.answer}</MarkdownViewer>}
                   {!f.done && <Cursor />}
@@ -656,7 +656,7 @@ export default function AnalysisPage() {
                   {/* Write / Preview body */}
                   {followUpPreview ? (
                     <div className="min-h-[64px] px-3 py-2 text-[12px] bg-white">
-                      <MarkdownViewer>{followUpText}</MarkdownViewer>
+                      <MarkdownViewer breaks>{followUpText}</MarkdownViewer>
                     </div>
                   ) : (
                     <textarea

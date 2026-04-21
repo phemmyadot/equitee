@@ -2,6 +2,7 @@
 
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
+import remarkBreaks from 'remark-breaks';
 import type { Components } from 'react-markdown';
 
 const components: Components = {
@@ -120,12 +121,14 @@ const components: Components = {
 interface MarkdownViewerProps {
   children: string;
   className?: string;
+  breaks?: boolean;
 }
 
-export default function MarkdownViewer({ children, className = '' }: MarkdownViewerProps) {
+export default function MarkdownViewer({ children, className = '', breaks = false }: MarkdownViewerProps) {
+  const plugins = breaks ? [remarkGfm, remarkBreaks] : [remarkGfm];
   return (
     <div className={`text-sm ${className}`}>
-      <ReactMarkdown remarkPlugins={[remarkGfm]} components={components}>
+      <ReactMarkdown remarkPlugins={plugins} components={components}>
         {children}
       </ReactMarkdown>
     </div>
