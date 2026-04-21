@@ -228,10 +228,38 @@ export default function AnalysisPage() {
   type FollowUpEntry = AnalysisFollowUp & { done: boolean };
   const [followUps, setFollowUps] = useState<FollowUpEntry[]>([]);
   const [followUpText, setFollowUpText] = useState('');
+  const [followUpPreview, setFollowUpPreview] = useState(false);
   const followUpStreaming = followUps.some(f => !f.done);
 
   const abortRef = useRef<AbortController | null>(null);
   const viewerRef = useRef<HTMLDivElement>(null);
+  const followUpRef = useRef<HTMLTextAreaElement>(null);
+
+  const insertMarkdown = useCallback((wrap: [string, string] | string) => {
+    const el = followUpRef.current;
+    if (!el) return;
+    const { selectionStart: s, selectionEnd: e, value } = el;
+    const selected = value.slice(s, e);
+    let replacement: string;
+    let cursor: number;
+    if (typeof wrap === 'string') {
+      // line prefix (blockquote, list)
+      replacement = selected
+        ? selected.split('\n').map(l => wrap + l).join('\n')
+        : wrap;
+      cursor = s + replacement.length;
+    } else {
+      const [before, after] = wrap;
+      replacement = before + (selected || '') + after;
+      cursor = selected ? s + replacement.length : s + before.length;
+    }
+    const next = value.slice(0, s) + replacement + value.slice(e);
+    setFollowUpText(next);
+    requestAnimationFrame(() => {
+      el.focus();
+      el.setSelectionRange(cursor, selected ? cursor : cursor);
+    });
+  }, []);
 
   const loadHistory = useCallback(async () => {
     try { setHistory(await fetchAnalysisHistory()); } catch { /* silent */ }
@@ -279,6 +307,7 @@ export default function AnalysisPage() {
     const id = activeId ?? undefined;
     const idx = followUps.length;
     setFollowUpText('');
+    setFollowUpPreview(false);
     setFollowUps(prev => [...prev, { question: text, answer: '', done: false }]);
     abortRef.current = streamAnalysis(
       scope, depth,
@@ -582,7 +611,7 @@ export default function AnalysisPage() {
                 <div key={i} className="mt-5 pt-4 border-t border-[var(--border)]">
                   <div className="flex items-start gap-2 mb-3">
                     <span className="shrink-0 mt-0.5 text-[10px] font-bold uppercase tracking-[0.08em] text-[var(--ink-4)] bg-[var(--canvas)] border border-[var(--border)] rounded px-1.5 py-0.5">You</span>
-                    <p className="text-[13px] text-[var(--ink)] leading-snug">{f.question}</p>
+                    <div className="text-[13px] text-[var(--ink)] leading-snug"><MarkdownViewer>{f.question}</MarkdownViewer></div>
                   </div>
                   {f.answer && <MarkdownViewer>{f.answer}</MarkdownViewer>}
                   {!f.done && <Cursor />}
@@ -593,20 +622,62 @@ export default function AnalysisPage() {
             {/* Follow-up input — analysis mode only */}
             {!streaming && displayText && mode === 'analysis' && (
               <div className="px-4 pb-4 pt-2 border-t border-[var(--border)]">
-                <div className="flex gap-2 items-end">
-                  <textarea
-                    value={followUpText}
-                    onChange={e => setFollowUpText(e.target.value)}
-                    onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleFollowUp(); } }}
-                    placeholder="Ask a follow-up question…"
-                    rows={2}
-                    disabled={followUpStreaming}
-                    className="flex-1 resize-none rounded-xl border border-[var(--border)] px-3 py-2 text-[12px] text-[var(--ink)] placeholder:text-[var(--ink-5)] focus:outline-none focus:border-[var(--accent)] bg-white disabled:opacity-50"
-                  />
-                  <button onClick={handleFollowUp} disabled={!followUpText.trim() || followUpStreaming}
-                    className="h-10 px-4 rounded-xl text-[12px] font-semibold bg-[var(--accent)] text-white hover:bg-[#17A06B] transition-colors disabled:opacity-40 shrink-0">
-                    Ask
-                  </button>
+                <div className="rounded-xl border border-[var(--border)] overflow-hidden focus-within:border-[var(--accent)] transition-colors">
+                  {/* Tab bar */}
+                  <div className="flex items-center border-b border-[var(--border)] bg-[var(--canvas)]">
+                    <button type="button" onClick={() => setFollowUpPreview(false)}
+                      className={`px-3 py-1.5 text-[11px] font-medium transition-colors ${!followUpPreview ? 'text-[var(--ink-1)] border-b-2 border-[var(--accent)] -mb-px bg-white' : 'text-[var(--ink-4)] hover:text-[var(--ink-2)]'}`}>
+                      Write
+                    </button>
+                    <button type="button" onClick={() => setFollowUpPreview(true)} disabled={!followUpText.trim()}
+                      className={`px-3 py-1.5 text-[11px] font-medium transition-colors disabled:opacity-30 ${followUpPreview ? 'text-[var(--ink-1)] border-b-2 border-[var(--accent)] -mb-px bg-white' : 'text-[var(--ink-4)] hover:text-[var(--ink-2)]'}`}>
+                      Preview
+                    </button>
+                    {!followUpPreview && (
+                      <div className="ml-auto flex items-center gap-0.5 pr-2">
+                        {([
+                          { label: 'B', title: 'Bold', wrap: ['**', '**'] as [string,string], cls: 'font-bold' },
+                          { label: 'I', title: 'Italic', wrap: ['*', '*'] as [string,string], cls: 'italic' },
+                          { label: '<>', title: 'Inline code', wrap: ['`', '`'] as [string,string], cls: 'font-mono text-[10px]' },
+                          { label: '❝', title: 'Blockquote', wrap: '> ', cls: '' },
+                          { label: '•', title: 'Bullet list', wrap: '- ', cls: 'text-base leading-none' },
+                          { label: '1.', title: 'Ordered list', wrap: '1. ', cls: 'font-mono text-[10px]' },
+                        ] as const).map(({ label, title, wrap, cls }) => (
+                          <button key={title} type="button" title={title}
+                            onMouseDown={e => { e.preventDefault(); insertMarkdown(wrap); }}
+                            disabled={followUpStreaming}
+                            className={`w-6 h-6 flex items-center justify-center rounded text-[11px] text-[var(--ink-3)] hover:bg-[var(--border)] hover:text-[var(--ink-1)] transition-colors disabled:opacity-30 ${cls}`}>
+                            {label}
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                  {/* Write / Preview body */}
+                  {followUpPreview ? (
+                    <div className="min-h-[64px] px-3 py-2 text-[12px] bg-white">
+                      <MarkdownViewer>{followUpText}</MarkdownViewer>
+                    </div>
+                  ) : (
+                    <textarea
+                      ref={followUpRef}
+                      value={followUpText}
+                      onChange={e => setFollowUpText(e.target.value)}
+                      onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleFollowUp(); } }}
+                      placeholder="Ask a follow-up question… (markdown supported)"
+                      rows={2}
+                      disabled={followUpStreaming}
+                      className="w-full resize-none px-3 py-2 text-[12px] text-[var(--ink)] placeholder:text-[var(--ink-5)] focus:outline-none bg-white disabled:opacity-50"
+                    />
+                  )}
+                  {/* Footer row */}
+                  <div className="flex items-center justify-between px-3 py-1.5 bg-[var(--canvas)] border-t border-[var(--border)]">
+                    <span className="text-[10px] text-[var(--ink-5)]">Markdown supported · Enter to send · Shift+Enter for newline</span>
+                    <button onClick={handleFollowUp} disabled={!followUpText.trim() || followUpStreaming}
+                      className="h-7 px-3 rounded-lg text-[11px] font-semibold bg-[var(--accent)] text-white hover:bg-[#17A06B] transition-colors disabled:opacity-40">
+                      Ask
+                    </button>
+                  </div>
                 </div>
               </div>
             )}
