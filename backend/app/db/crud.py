@@ -204,12 +204,15 @@ def add_shares(
     obj = get_holding_by_id(db, holding_id, user_id)
     if obj is None:
         return None
+    reopening = obj.shares == 0
     old_cost_basis = obj.shares * obj.avg_cost
     new_cost_basis = new_shares * buy_price
     total_shares = obj.shares + new_shares
     obj.avg_cost = (old_cost_basis + new_cost_basis) / total_shares
     obj.shares = total_shares
     obj.is_active = True
+    if reopening:
+        obj.realized_pl = 0.0
     db.commit()
     db.refresh(obj)
     log.info(
@@ -388,7 +391,7 @@ def record_sale(
 
     shares_sold = min(shares_sold, obj.shares)
     gross_proceeds = shares_sold * sale_price
-    realized_pl = (sale_price - obj.avg_cost) * shares_sold
+    realized_pl = (sale_price - obj.avg_cost) * shares_sold - commission
     proceeds = gross_proceeds - commission
     obj.shares = round(obj.shares - shares_sold, 8)
     obj.realized_pl = round((obj.realized_pl or 0.0) + realized_pl, 4)

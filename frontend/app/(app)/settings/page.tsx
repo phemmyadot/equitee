@@ -1196,7 +1196,7 @@ function SellModal({
   const grossProceeds = sharesNum > 0 && salePriceNum > 0 ? sharesNum * salePriceNum : null;
   const projPL =
     grossProceeds !== null
-      ? (salePriceNum - holding.avg_cost) * sharesNum
+      ? (salePriceNum - holding.avg_cost) * sharesNum - commissionNum
       : null;
   const fullSale = sharesNum >= holding.shares;
 

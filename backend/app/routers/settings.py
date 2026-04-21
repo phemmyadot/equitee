@@ -352,7 +352,7 @@ def sell_shares(
             detail=f"Cannot sell {body.shares_sold} shares — only {holding.shares} held",
         )
 
-    realized_pl = (body.sale_price - holding.avg_cost) * body.shares_sold
+    realized_pl = (body.sale_price - holding.avg_cost) * body.shares_sold - body.commission
     obj, closed = record_sale(
         db, holding_id, current_user.id, body.shares_sold, body.sale_price, body.commission
     )
