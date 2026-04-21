@@ -52,7 +52,7 @@ function Cursor() {
 }
 
 // ── Thinking animation ────────────────────────────────────────────────────────
-function ThinkingAnimation({ depth }: { depth: string }) {
+function ThinkingAnimation({ depth, compact = false }: { depth: string; compact?: boolean }) {
   const [elapsed, setElapsed] = useState(0);
   useEffect(() => {
     const t = setInterval(() => setElapsed(s => s + 1), 1000);
@@ -64,6 +64,23 @@ function ThinkingAnimation({ depth }: { depth: string }) {
     : ['Reading portfolio…', 'Evaluating signals…', 'Writing analysis…'];
 
   const step = steps[Math.min(Math.floor(elapsed / 4), steps.length - 1)];
+
+  if (compact) {
+    return (
+      <div className="flex items-center gap-2 py-2">
+        <div className="flex items-center gap-1">
+          {[0, 1, 2].map(i => (
+            <span
+              key={i}
+              className="w-1.5 h-1.5 rounded-full bg-[var(--accent)] opacity-80"
+              style={{ animation: `bounce 1.2s ease-in-out ${i * 0.15}s infinite` }}
+            />
+          ))}
+        </div>
+        <span className="text-[11px] text-[var(--ink-4)]">{step}</span>
+      </div>
+    );
+  }
 
   return (
     <div className="flex flex-col items-center justify-center gap-4 py-10">
@@ -234,6 +251,7 @@ export default function AnalysisPage() {
   const abortRef = useRef<AbortController | null>(null);
   const viewerRef = useRef<HTMLDivElement>(null);
   const followUpRef = useRef<HTMLTextAreaElement>(null);
+  const bottomRef = useRef<HTMLDivElement>(null);
 
   const insertMarkdown = useCallback((wrap: [string, string] | string) => {
     const el = followUpRef.current;
@@ -268,9 +286,8 @@ export default function AnalysisPage() {
   useEffect(() => { loadHistory(); }, [loadHistory]);
 
   useEffect(() => {
-    if (streaming && viewerRef.current)
-      viewerRef.current.scrollIntoView({ behavior: 'smooth', block: 'end' });
-  }, [streamText, streaming]);
+    bottomRef.current?.scrollIntoView({ behavior: 'smooth', block: 'end' });
+  }, [streamText, followUps]);
 
   const handleRun = useCallback(() => {
     setStreaming(true);
@@ -613,8 +630,9 @@ export default function AnalysisPage() {
                     <span className="shrink-0 mt-0.5 text-[10px] font-bold uppercase tracking-[0.08em] text-[var(--ink-4)] bg-[var(--canvas)] border border-[var(--border)] rounded px-1.5 py-0.5">You</span>
                     <div className="text-[13px] text-[var(--ink)] leading-snug"><MarkdownViewer breaks>{f.question}</MarkdownViewer></div>
                   </div>
+                  {!f.done && !f.answer && <ThinkingAnimation depth={depth} compact />}
                   {f.answer && <MarkdownViewer>{f.answer}</MarkdownViewer>}
-                  {!f.done && <Cursor />}
+                  {!f.done && f.answer && <Cursor />}
                 </div>
               ))}
             </div>
@@ -681,6 +699,7 @@ export default function AnalysisPage() {
                 </div>
               </div>
             )}
+            <div ref={bottomRef} />
           </div>
         )}
 
