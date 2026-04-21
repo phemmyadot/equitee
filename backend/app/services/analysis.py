@@ -654,7 +654,7 @@ def build_context(db: Session, user_id: int, scope: str = "portfolio", depth: st
             entry["summary"] = h.summary or ""
         prior_analyses.append(entry)
 
-    return {
+    ctx = {
         "date": date.today().isoformat(),
         "ngx": ngx_rows,
         "us": us_rows,
