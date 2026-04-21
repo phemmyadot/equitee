@@ -205,7 +205,7 @@ def add_shares(
     if obj is None:
         return None
     old_cost_basis = obj.shares * obj.avg_cost
-    new_cost_basis = new_shares * buy_price + (commission or 0.0)
+    new_cost_basis = new_shares * buy_price
     total_shares = obj.shares + new_shares
     obj.avg_cost = (old_cost_basis + new_cost_basis) / total_shares
     obj.shares = total_shares
@@ -388,7 +388,7 @@ def record_sale(
 
     shares_sold = min(shares_sold, obj.shares)
     gross_proceeds = shares_sold * sale_price
-    realized_pl = (sale_price - obj.avg_cost) * shares_sold - commission
+    realized_pl = (sale_price - obj.avg_cost) * shares_sold
     proceeds = gross_proceeds - commission
     obj.shares = round(obj.shares - shares_sold, 8)
     obj.realized_pl = round((obj.realized_pl or 0.0) + realized_pl, 4)

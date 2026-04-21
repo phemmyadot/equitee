@@ -1038,7 +1038,7 @@ function BuyModal({
   const totalCost = grossCost !== null ? grossCost + commNum : null;
   const newAvg =
     sharesNum > 0 && priceNum > 0
-      ? (holding.shares * holding.avg_cost + sharesNum * priceNum + commNum) / (holding.shares + sharesNum)
+      ? (holding.shares * holding.avg_cost + sharesNum * priceNum) / (holding.shares + sharesNum)
       : null;
   const insufficientCash = useCash && totalCost !== null && totalCost > availCash;
 
@@ -1196,7 +1196,7 @@ function SellModal({
   const grossProceeds = sharesNum > 0 && salePriceNum > 0 ? sharesNum * salePriceNum : null;
   const projPL =
     grossProceeds !== null
-      ? (salePriceNum - holding.avg_cost) * sharesNum - commissionNum
+      ? (salePriceNum - holding.avg_cost) * sharesNum
       : null;
   const fullSale = sharesNum >= holding.shares;
 

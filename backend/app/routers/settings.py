@@ -251,7 +251,7 @@ def add_holding(
     # New position — create it
     try:
         commission = body.commission or 0.0
-        effective_avg_cost = (body.shares * body.avg_cost + commission) / body.shares
+        effective_avg_cost = body.avg_cost
         return create_holding(
             db,
             ticker=ticker,
@@ -352,7 +352,7 @@ def sell_shares(
             detail=f"Cannot sell {body.shares_sold} shares — only {holding.shares} held",
         )
 
-    realized_pl = (body.sale_price - holding.avg_cost) * body.shares_sold - body.commission
+    realized_pl = (body.sale_price - holding.avg_cost) * body.shares_sold
     obj, closed = record_sale(
         db, holding_id, current_user.id, body.shares_sold, body.sale_price, body.commission
     )
