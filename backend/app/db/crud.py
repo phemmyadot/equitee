@@ -10,7 +10,7 @@ import logging
 from datetime import datetime, timezone, timedelta
 from typing import Optional
 
-from sqlalchemy import select, desc
+from sqlalchemy import select, desc, func
 from sqlalchemy.orm import Session
 
 from app.db.models import (
@@ -1152,6 +1152,22 @@ def get_analysis_follow_ups(
         .order_by(AnalysisHistory.created_at)
     )
     return list(db.scalars(stmt).all())
+
+
+def get_child_token_totals(db: Session, user_id: int) -> dict[int, int]:
+    """Return {parent_id: sum_of_children_tokens} for all threads belonging to user."""
+    rows = db.execute(
+        select(
+            AnalysisHistory.parent_id,
+            func.coalesce(func.sum(AnalysisHistory.tokens_used), 0).label("child_tokens"),
+        )
+        .where(
+            AnalysisHistory.user_id == user_id,
+            AnalysisHistory.parent_id.is_not(None),
+        )
+        .group_by(AnalysisHistory.parent_id)
+    ).all()
+    return {row.parent_id: row.child_tokens for row in rows}
 
 
 def get_analysis_history(

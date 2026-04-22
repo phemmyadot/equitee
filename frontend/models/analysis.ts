@@ -43,17 +43,20 @@ export interface AnalysisSummary {
   model_used: string;
   summary: string | null;
   tokens_used: number | null;
+  total_tokens: number | null;
 }
 
 export interface AnalysisFollowUp {
   question: string;
   answer: string;
+  tokens_used?: number | null;
 }
 
 export interface AnalysisDetail extends AnalysisSummary {
   full_response: string | null;
   context_hash: string | null;
   follow_ups: AnalysisFollowUp[];
+  thread_tokens: number | null;
 }
 
 export interface AnalysisContextResponse {

@@ -35,6 +35,7 @@ from app.db.crud import (
     get_analysis_by_id,
     get_analysis_follow_ups,
     get_analysis_history,
+    get_child_token_totals,
     get_latest_analysis,
     prune_old_analysis,
 )
@@ -70,23 +71,27 @@ class AnalysisSummary(BaseModel):
     model_used: str
     summary: str | None
     tokens_used: int | None
+    total_tokens: int | None = None  # parent + all follow-up tokens for this thread
 
 
 class FollowUpOut(BaseModel):
     question: str
     answer: str
+    tokens_used: int | None = None
 
 
 class AnalysisDetail(AnalysisSummary):
     full_response: str | None
     context_hash: str | None
     follow_ups: list[FollowUpOut] = []
+    thread_tokens: int | None = None  # sum of all tokens in this thread
 
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
 
 
-def _to_summary(row) -> AnalysisSummary:
+def _to_summary(row, child_tokens: int = 0) -> AnalysisSummary:
+    own = row.tokens_used or 0
     return AnalysisSummary(
         id=row.id,
         created_at=row.created_at.isoformat(),
@@ -95,10 +100,14 @@ def _to_summary(row) -> AnalysisSummary:
         model_used=row.model_used,
         summary=row.summary,
         tokens_used=row.tokens_used,
+        total_tokens=(own + child_tokens) or None,
     )
 
 
 def _to_detail(row, follow_ups=None) -> AnalysisDetail:
+    fu_list = follow_ups or []
+    child_tokens = sum(f.tokens_used or 0 for f in fu_list)
+    own = row.tokens_used or 0
     return AnalysisDetail(
         id=row.id,
         created_at=row.created_at.isoformat(),
@@ -109,9 +118,15 @@ def _to_detail(row, follow_ups=None) -> AnalysisDetail:
         full_response=row.full_response,
         context_hash=row.context_hash,
         tokens_used=row.tokens_used,
+        total_tokens=(own + child_tokens) or None,
+        thread_tokens=(own + child_tokens) or None,
         follow_ups=[
-            FollowUpOut(question=f.follow_up_question or "", answer=f.full_response or "")
-            for f in (follow_ups or [])
+            FollowUpOut(
+                question=f.follow_up_question or "",
+                answer=f.full_response or "",
+                tokens_used=f.tokens_used,
+            )
+            for f in fu_list
         ],
     )
 
@@ -211,8 +226,11 @@ def list_history(
 ):
     prune_old_analysis(db, current_user.id, days=7)
     rows = get_analysis_history(db, current_user.id)
-    # Exclude follow-up child rows — they are accessed via parent detail
-    return [_to_summary(r) for r in rows if r.parent_id is None]
+    child_totals = get_child_token_totals(db, current_user.id)
+    return [
+        _to_summary(r, child_totals.get(r.id, 0))
+        for r in rows if r.parent_id is None
+    ]
 
 
 @router.get("/{analysis_id}", response_model=AnalysisDetail)

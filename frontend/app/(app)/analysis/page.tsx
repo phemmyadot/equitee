@@ -452,6 +452,11 @@ export default function AnalysisPage() {
                 {item.depth === 'quick' ? 'Compact' : item.depth === 'deep' ? 'Detailed' : 'Default'}
               </span>
               <span className="text-[9px] text-[var(--ink-5)]">{label} {time}</span>
+              {item.total_tokens != null && item.total_tokens > 0 && (
+                <span className="ml-auto text-[9px] text-[var(--ink-5)] tabular-nums">
+                  ~{item.total_tokens >= 1000 ? `${(item.total_tokens / 1000).toFixed(1)}k` : item.total_tokens}
+                </span>
+              )}
             </div>
             {item.summary && (
               <p className="text-[10px] text-[var(--ink-4)] mt-1 line-clamp-2 leading-relaxed">
@@ -623,8 +628,10 @@ export default function AnalysisPage() {
                   const s = activeDetail?.scope ?? scope;
                   const d = activeDetail?.depth ?? depth;
                   const ts = activeDetail ? new Date(activeDetail.created_at).toLocaleString() : null;
-                  const tok = activeDetail?.tokens_used ?? tokenInfo?.tokens;
+                  // thread_tokens = parent + all follow-ups; fall back to single-run tokenInfo
+                  const tok = activeDetail?.thread_tokens ?? tokenInfo?.tokens;
                   const cached = tokenInfo?.cached;
+                  const hasFollowUps = (activeDetail?.follow_ups?.length ?? 0) > 0;
                   return (
                     <>
                       <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded bg-[var(--ink-6)] text-[var(--ink-3)]">{SCOPE_LABELS[s] ?? s}</span>
@@ -634,7 +641,12 @@ export default function AnalysisPage() {
                         : 'bg-[var(--accent-light)] text-[var(--accent)]'
                       }`}>{d === 'quick' ? 'Compact' : d === 'deep' ? 'Detailed' : 'Default'}</span>
                       {cached && <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded bg-[var(--ink-6)] text-[var(--ink-4)]">cached</span>}
-                      <span className="sm:ml-auto text-[10px] text-[var(--ink-4)] whitespace-nowrap">{ts ?? ''}{tok != null && tok > 0 ? ` · ~${tok} tokens` : ''}</span>
+                      <span className="sm:ml-auto text-[10px] text-[var(--ink-4)] whitespace-nowrap tabular-nums">
+                        {ts ?? ''}
+                        {tok != null && tok > 0
+                          ? ` · ~${tok >= 1000 ? `${(tok / 1000).toFixed(1)}k` : tok} tokens${hasFollowUps ? ' total' : ''}`
+                          : ''}
+                      </span>
                     </>
                   );
                 })()}

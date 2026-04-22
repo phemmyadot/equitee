@@ -661,7 +661,7 @@ def build_context(db: Session, user_id: int, scope: str = "portfolio", depth: st
                 AnalysisHistory.scope == scope,
             )
             .order_by(desc(AnalysisHistory.created_at))
-            .limit(3)
+            .limit(2)
         )
         .scalars()
         .all()
@@ -673,10 +673,9 @@ def build_context(db: Session, user_id: int, scope: str = "portfolio", depth: st
             "depth": h.depth,
         }
         if i == 0:
-            # Most recent: include full response (truncated to keep tokens manageable)
-            entry["response"] = (h.full_response or "")[:1800]
+            # Most recent: include truncated response for continuity
+            entry["response"] = (h.full_response or "")[:600]
         else:
-            # Older entries: summary only
             entry["summary"] = h.summary or ""
         prior_analyses.append(entry)
 
@@ -1010,7 +1009,8 @@ def stream_analysis_sse(
     if follow_up and prior_response:
         messages: list[MessageParam] = [
             {"role": "user", "content": [portfolio_block]},
-            {"role": "assistant", "content": prior_response},
+            # Truncate prior response so multi-turn threads don't balloon input tokens
+            {"role": "assistant", "content": prior_response[:2000]},
             {"role": "user", "content": follow_up},
         ]
     else:
@@ -1020,10 +1020,11 @@ def stream_analysis_sse(
     full_chunks: list[str] = []
     tokens_used = 0
 
-    # ── Extended thinking (deep mode only) ───────────────────────────────────
-    # budget_tokens gives the model reasoning space before composing the response.
-    # max_tokens must exceed budget_tokens; we allocate 8 k thinking + 2 k output.
-    max_tokens = 10048 if is_deep else 2048
+    # ── Token budgets ─────────────────────────────────────────────────────────
+    # deep:    thinking budget 4k + output 2k = 6048 max_tokens
+    # default: Sonnet, no thinking, 1500 output
+    # quick:   Haiku, 1000 output
+    max_tokens = 6048 if is_deep else (1500 if is_default else 1000)
     stream_kwargs: dict = {
         "model": model,
         "max_tokens": max_tokens,
@@ -1031,7 +1032,7 @@ def stream_analysis_sse(
         "messages": messages,
     }
     if is_deep:
-        stream_kwargs["thinking"] = {"type": "enabled", "budget_tokens": 8000}
+        stream_kwargs["thinking"] = {"type": "enabled", "budget_tokens": 4000}
 
     # Immediate feedback — client shows thinking animation before first token
     yield f"data: {json.dumps({'status': 'thinking'})}\n\n"
