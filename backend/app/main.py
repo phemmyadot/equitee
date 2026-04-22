@@ -77,6 +77,11 @@ async def lifespan(app: FastAPI):
         db.close()
 
     log.info("DB ready.")
+
+    # Warm screener fundamentals cache for all NGX tickers (once per day, background)
+    from app.services.screener_warmup import start_background_warmup
+    start_background_warmup()
+
     yield
     # ── Shutdown (nothing to do) ──────────────────────────────────────────────
 

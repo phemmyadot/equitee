@@ -1,18 +1,18 @@
 """
 Screener Router
 ===============
-GET /api/screener/ngx — return all NGX tickers with prices + cached fundamentals.
-No new scraping is triggered — only tickers already in the in-memory caches are enriched.
+GET /api/screener/ngx        — all NGX tickers with prices + cached fundamentals
+POST /api/screener/ngx/warm  — (admin) force a full cache warm-up now
 """
 
 import logging
 from fastapi import APIRouter, Depends
 
-from app.auth.dependencies import get_current_user
+from app.auth.dependencies import get_current_user, get_current_admin
 from app.db.models import User
 from app.services import ngx as _ngx_service
-from app.services.performance import _overview_cache   # fundamentals: P/E, ROE
-from app.services.overview import _performance_cache   # returns: 52W high/low/change
+from app.services.performance import _overview_cache   # P/E, ROE, market_cap, eps
+from app.services.overview import _performance_cache   # 52W high/low/change, return_1y
 from app.services.profile import _profile_cache        # name, sector
 
 log = logging.getLogger(__name__)
@@ -57,3 +57,15 @@ def ngx_screener(
 
     rows.sort(key=lambda r: r["ticker"])
     return {"count": len(rows), "tickers": rows}
+
+
+@router.post("/ngx/warm")
+def warm_screener_cache(
+    _admin: User = Depends(get_current_admin),
+):
+    """Force a full screener cache warm-up (admin only). Runs in background."""
+    from app.services.screener_warmup import warm_screener
+    import threading
+    t = threading.Thread(target=lambda: warm_screener(force=True), daemon=True)
+    t.start()
+    return {"status": "warm-up started"}
