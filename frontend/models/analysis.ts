@@ -62,4 +62,4 @@ export interface AnalysisContextResponse {
 }
 
 export type AnalysisScope = 'portfolio' | 'watchlist' | 'combined';
-export type AnalysisDepth = 'quick' | 'deep';
+export type AnalysisDepth = 'quick' | 'deep' | 'default';

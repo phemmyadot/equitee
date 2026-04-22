@@ -61,6 +61,8 @@ function ThinkingAnimation({ depth, compact = false }: { depth: string; compact?
 
   const steps = depth === 'deep'
     ? ['Reading portfolio…', 'Evaluating signals…', 'Reasoning through positions…', 'Formulating analysis…']
+    : depth === 'default'
+    ? ['Reading market data…', 'Checking global cues…', 'Reviewing watchlist…', 'Writing briefing…']
     : ['Reading portfolio…', 'Evaluating signals…', 'Writing analysis…'];
 
   const step = steps[Math.min(Math.floor(elapsed / 4), steps.length - 1)];
@@ -228,7 +230,7 @@ export default function AnalysisPage() {
   const { data: portfolioData } = usePortfolio();
   const [mode, setMode] = useState<Mode>('analysis');
   const [scope, setScope] = useState<AnalysisScope>('portfolio');
-  const [depth, setDepth] = useState<AnalysisDepth>('quick');
+  const [depth, setDepth] = useState<AnalysisDepth>('default');
   const [initialMessage, setInitialMessage] = useState('');
 
   const [streaming, setStreaming] = useState(false);
@@ -442,8 +444,12 @@ export default function AnalysisPage() {
               </button>
             </div>
             <div className="flex items-center gap-1.5">
-              <span className={`text-[9px] font-semibold px-1 py-0.5 rounded ${item.depth === 'deep' ? 'bg-purple-100 text-purple-600' : 'bg-[var(--accent-light)] text-[var(--accent)]'}`}>
-                {item.depth === 'quick' ? 'Haiku' : 'Sonnet'}
+              <span className={`text-[9px] font-semibold px-1 py-0.5 rounded ${
+                item.depth === 'deep' ? 'bg-purple-100 text-purple-600'
+                : item.depth === 'default' ? 'bg-emerald-100 text-emerald-700'
+                : 'bg-[var(--accent-light)] text-[var(--accent)]'
+              }`}>
+                {item.depth === 'quick' ? 'Compact' : item.depth === 'deep' ? 'Detailed' : 'Default'}
               </span>
               <span className="text-[9px] text-[var(--ink-5)]">{label} {time}</span>
             </div>
@@ -565,11 +571,20 @@ export default function AnalysisPage() {
               {/* Depth */}
               <div className="flex rounded-lg border border-[var(--border)] overflow-hidden shrink-0">
                 {([
-                  { key: 'quick', label: 'Haiku' },
-                  { key: 'deep',  label: 'Sonnet' },
+                  { key: 'default', label: 'Default' },
+                  { key: 'quick',   label: 'Compact' },
+                  { key: 'deep',    label: 'Detailed' },
                 ] as { key: AnalysisDepth; label: string }[]).map(d => (
                   <button key={d.key} onClick={() => setDepth(d.key)} disabled={streaming}
-                    className={`px-3 py-1.5 text-[11px] font-semibold transition-colors disabled:opacity-50 ${depth === d.key ? (d.key === 'deep' ? 'bg-purple-100 text-purple-600' : 'bg-[var(--accent-light)] text-[var(--accent)]') : 'text-[var(--ink-4)] hover:text-[var(--ink)]'}`}>
+                    className={`px-3 py-1.5 text-[11px] font-semibold transition-colors disabled:opacity-50 ${
+                      depth === d.key
+                        ? d.key === 'deep'
+                          ? 'bg-purple-100 text-purple-600'
+                          : d.key === 'default'
+                          ? 'bg-emerald-100 text-emerald-700'
+                          : 'bg-[var(--accent-light)] text-[var(--accent)]'
+                        : 'text-[var(--ink-4)] hover:text-[var(--ink)]'
+                    }`}>
                     {d.label}
                   </button>
                 ))}
@@ -613,9 +628,13 @@ export default function AnalysisPage() {
                   return (
                     <>
                       <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded bg-[var(--ink-6)] text-[var(--ink-3)]">{SCOPE_LABELS[s] ?? s}</span>
-                      <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded ${d === 'deep' ? 'bg-purple-100 text-purple-700' : 'bg-[var(--accent-light)] text-[var(--accent)]'}`}>{d === 'quick' ? 'Haiku' : 'Sonnet'}</span>
+                      <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded ${
+                        d === 'deep' ? 'bg-purple-100 text-purple-700'
+                        : d === 'default' ? 'bg-emerald-100 text-emerald-700'
+                        : 'bg-[var(--accent-light)] text-[var(--accent)]'
+                      }`}>{d === 'quick' ? 'Compact' : d === 'deep' ? 'Detailed' : 'Default'}</span>
                       {cached && <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded bg-[var(--ink-6)] text-[var(--ink-4)]">cached</span>}
-                      <span className="sm:ml-auto text-[10px] text-[var(--ink-4)] whitespace-nowrap">{ts ?? ''}{tok ? ` · ~${tok} tokens` : ''}</span>
+                      <span className="sm:ml-auto text-[10px] text-[var(--ink-4)] whitespace-nowrap">{ts ?? ''}{tok != null && tok > 0 ? ` · ~${tok} tokens` : ''}</span>
                     </>
                   );
                 })()}

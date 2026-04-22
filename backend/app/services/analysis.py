@@ -274,6 +274,32 @@ _FOLLOWUP_INSTRUCTIONS = (
 )
 
 
+_DAILY_BRIEFING_SYSTEM = (
+    "You are a personal Nigerian stock market analyst delivering a structured daily briefing. "
+    "Today's date and the user's portfolio/watchlist data are provided below.\n\n"
+    "Respond using exactly these five sections:\n"
+    "## 1. Global Cues\n"
+    "— Brent crude price and direction (use latest knowledge; flag if uncertain)\n"
+    "— USD/NGN exchange rate from the portfolio context and any notable CBN activity\n"
+    "— Overnight US market performance (S&P 500, Dow) and what it signals for NGX today\n"
+    "## 2. NGX Pre-Market Outlook\n"
+    "— Expected market sentiment (Bullish / Bearish / Neutral) and why\n"
+    "— Any corporate announcements, earnings, or dividend declarations worth noting\n"
+    "— Sector(s) to watch and why\n"
+    "## 3. Watchlist & Holdings Update\n"
+    "For each ticker in the user's watchlist and top holdings: one-line update covering "
+    "current price level, any recent news, and signal (use provided Signal scores where available). "
+    "Flag any price levels or patterns worth acting on.\n"
+    "## 4. ETF Check\n"
+    "Brief update on VG 30 ETF and Vetiva Banking ETF performance relative to recent trend.\n"
+    "## 5. Today's Trading Plan\n"
+    "— One or two actionable ideas (entry levels, what to watch for)\n"
+    "— Key risks to be aware of today\n\n"
+    "Style: concise, factual, actionable. Lead with numbers. Flag anything requiring urgent attention. "
+    "Use **bold** for tickers and key figures. No disclaimers. Under 700 words total."
+)
+
+
 def build_system_prompt(scope: str, is_follow_up: bool = False) -> str:
     if is_follow_up:
         return f"{_ANALYST_PERSONA}\n\n{_FOLLOWUP_INSTRUCTIONS}"
@@ -682,14 +708,23 @@ def build_context(db: Session, user_id: int, scope: str = "portfolio", depth: st
         "prior_analyses": prior_analyses,
     }
 
-    # Fetch news for top holdings — deep (Sonnet) analyses only
-    if depth == "deep":
+    # Fetch news for top holdings — deep (Detailed) and default (Daily Briefing) modes
+    if depth in ("deep", "default"):
         news: dict = {}
         if scope in ("portfolio", "combined"):
             ngx_news = _news_svc.fetch_news_for_holdings(ctx["ngx"], "ngx", top_n=3)
             us_news  = _news_svc.fetch_news_for_holdings(ctx["us"],  "us",  top_n=2)
             news.update(ngx_news)
             news.update(us_news)
+        # Also fetch news for watchlist items in default mode
+        if depth == "default" and ctx.get("watchlist"):
+            for w in ctx["watchlist"][:5]:
+                ticker = w["ticker"]
+                if ticker not in news:
+                    market = w.get("market", "ngx")
+                    items = _news_svc.fetch_news(ticker, w.get("name", ticker), market, n=2)
+                    if items:
+                        news[ticker] = items
         ctx["news"] = {t: h for t, h in news.items() if h}
 
     return ctx
@@ -944,10 +979,13 @@ def stream_analysis_sse(
     from app.db.engine import SessionLocal
     from app.db.crud import save_analysis
 
-    model = MODEL_QUICK if depth == "quick" else MODEL_DEEP
+    model = MODEL_QUICK if depth == "quick" else MODEL_DEEP  # default + deep both use Sonnet
     is_deep = depth == "deep"
+    is_default = depth == "default"
     prompt = build_user_prompt(ctx, scope)
-    if initial_message:
+    if is_default:
+        prompt += "\n\nGive me today's NGX Daily Market Analysis briefing now."
+    elif initial_message:
         prompt += f"\n\n---\nSpecific focus for this analysis: {initial_message}"
     ctx_hash = compute_context_hash(ctx)
 
@@ -955,10 +993,11 @@ def stream_analysis_sse(
     # System and portfolio context are the largest, most-repeated inputs.
     # cache_control: ephemeral pins them in the 5-min cache window so each
     # follow-up or re-run only charges for the new tokens.
+    system_text = _DAILY_BRIEFING_SYSTEM if is_default else build_system_prompt(scope, is_follow_up=bool(follow_up))
     system_content: list[TextBlockParam] = [
         TextBlockParam(
             type="text",
-            text=build_system_prompt(scope, is_follow_up=bool(follow_up)),
+            text=system_text,
             cache_control={"type": "ephemeral"},
         )
     ]

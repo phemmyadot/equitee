@@ -138,11 +138,11 @@ def run_analysis(
 
     if scope not in ("portfolio", "watchlist", "combined"):
         raise HTTPException(status_code=400, detail="scope must be portfolio, watchlist, or combined")
-    if depth not in ("quick", "deep"):
-        raise HTTPException(status_code=400, detail="depth must be quick or deep")
+    if depth not in ("quick", "deep", "default"):
+        raise HTTPException(status_code=400, detail="depth must be quick, deep, or default")
 
     # Rate-limit deep analyses
-    if depth == "deep":
+    if depth in ("deep", "default"):
         count = count_deep_analyses_today(db, current_user.id)
         if count >= settings.ANALYSIS_DAILY_DEEP_LIMIT:
             raise HTTPException(
