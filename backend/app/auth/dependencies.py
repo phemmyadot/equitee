@@ -2,17 +2,18 @@
 FastAPI dependencies for authentication.
 """
 
-from fastapi import Request, HTTPException, Depends, status
-from sqlalchemy.orm import Session
+from fastapi import Depends, Request, HTTPException, status
 
-from app.db.engine import get_db
+from app.db.engine import SessionLocal
 from app.db.models import User
 from app.auth.security import decode_access_token
 
 
-def get_current_user(request: Request, db: Session = Depends(get_db)) -> User:
+def get_current_user(request: Request) -> User:
     """
     Reads access token from httpOnly cookie, validates it, and returns the User.
+    Opens its own short-lived session so the connection is released immediately —
+    not held open for the lifetime of the response (critical for streaming endpoints).
     Raises HTTP 401 if missing/invalid, HTTP 403 if account is inactive.
     """
     token = request.cookies.get("access_token")
@@ -22,7 +23,9 @@ def get_current_user(request: Request, db: Session = Depends(get_db)) -> User:
         )
 
     user_id = decode_access_token(token)
-    user = db.get(User, user_id)
+    with SessionLocal() as db:
+        user = db.get(User, user_id)
+
     if user is None:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED, detail="User not found"

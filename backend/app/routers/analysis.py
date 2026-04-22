@@ -22,8 +22,12 @@ from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
 from app.auth.dependencies import get_current_user
-from app.db.engine import get_db
+from app.db.engine import get_db, SessionLocal
 from app.db.models import User
+
+# Alias used in streaming endpoints: opens a session, closes it on exit,
+# returning the connection to the pool before the long stream begins.
+get_db_session = SessionLocal
 from app.db.crud import (
     count_deep_analyses_today,
     delete_analysis_by_id,
@@ -33,7 +37,6 @@ from app.db.crud import (
     get_analysis_history,
     get_latest_analysis,
     prune_old_analysis,
-    save_analysis,
 )
 from app.services.analysis import (
     build_context,
@@ -130,7 +133,6 @@ def get_context(
 @router.post("/run")
 def run_analysis(
     body: RunAnalysisRequest,
-    db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
     scope = body.scope.lower()
@@ -141,47 +143,50 @@ def run_analysis(
     if depth not in ("quick", "deep", "default"):
         raise HTTPException(status_code=400, detail="depth must be quick, deep, or default")
 
-    # Rate-limit deep analyses
-    if depth in ("deep", "default"):
-        count = count_deep_analyses_today(db, current_user.id)
-        if count >= settings.ANALYSIS_DAILY_DEEP_LIMIT:
-            raise HTTPException(
-                status_code=429,
-                detail=f"Daily limit of {settings.ANALYSIS_DAILY_DEEP_LIMIT} deep analyses reached. Try again tomorrow.",
-            )
-
     follow_up = (body.follow_up or "").strip() or None
     initial_message = (body.initial_message or "").strip() or None
     follow_up_analysis_id = body.follow_up_analysis_id
-
-    ctx = build_context(db, current_user.id, scope=scope, depth=depth)
-    ctx_hash = compute_context_hash(ctx)
-
-    # Resolve prior response for follow-up conversations
     prior_response: str | None = None
-    if follow_up and follow_up_analysis_id:
-        prior_row = get_analysis_by_id(db, follow_up_analysis_id, current_user.id)
-        prior_response = prior_row.full_response if prior_row else None
+    cached_replay: tuple[str, int] | None = None  # (text, id) if cache hit
 
-    # Return cached result for quick analyses when context hasn't changed (skip for follow-ups)
-    if depth == "quick" and not follow_up:
-        latest = get_latest_analysis(db, current_user.id, scope)
-        if latest and latest.context_hash == ctx_hash and latest.full_response:
-            log.info("Returning cached analysis for user %s scope=%s", current_user.id, scope)
+    # All DB work is scoped here — session closes before StreamingResponse begins,
+    # so the connection is returned to the pool before the long-running stream starts.
+    with get_db_session() as db:
+        if depth in ("deep", "default"):
+            count = count_deep_analyses_today(db, current_user.id)
+            if count >= settings.ANALYSIS_DAILY_DEEP_LIMIT:
+                raise HTTPException(
+                    status_code=429,
+                    detail=f"Daily limit of {settings.ANALYSIS_DAILY_DEEP_LIMIT} deep analyses reached. Try again tomorrow.",
+                )
 
-            def _replay():
-                # Stream cached text in chunks to match SSE format
-                text = latest.full_response or ""
-                chunk_size = 80
-                for i in range(0, len(text), chunk_size):
-                    yield f"data: {json.dumps({'text': text[i:i + chunk_size]})}\n\n"
-                yield f"data: {json.dumps({'done': True, 'id': latest.id, 'tokens': 0, 'cached': True})}\n\n"
+        ctx = build_context(db, current_user.id, scope=scope, depth=depth)
+        ctx_hash = compute_context_hash(ctx)
 
-            return StreamingResponse(
-                _replay(),
-                media_type="text/event-stream",
-                headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
-            )
+        if follow_up and follow_up_analysis_id:
+            prior_row = get_analysis_by_id(db, follow_up_analysis_id, current_user.id)
+            prior_response = prior_row.full_response if prior_row else None
+
+        if depth == "quick" and not follow_up:
+            latest = get_latest_analysis(db, current_user.id, scope)
+            if latest and latest.context_hash == ctx_hash and latest.full_response:
+                log.info("Returning cached analysis for user %s scope=%s", current_user.id, scope)
+                cached_replay = (latest.full_response, latest.id)
+
+    if cached_replay:
+        text, cached_id = cached_replay
+
+        def _replay():
+            chunk_size = 80
+            for i in range(0, len(text), chunk_size):
+                yield f"data: {json.dumps({'text': text[i:i + chunk_size]})}\n\n"
+            yield f"data: {json.dumps({'done': True, 'id': cached_id, 'tokens': 0, 'cached': True})}\n\n"
+
+        return StreamingResponse(
+            _replay(),
+            media_type="text/event-stream",
+            headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
+        )
 
     return StreamingResponse(
         stream_analysis_sse(

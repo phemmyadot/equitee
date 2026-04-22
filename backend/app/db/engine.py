@@ -66,6 +66,11 @@ engine = create_engine(
     _db_url,
     connect_args={"check_same_thread": False} if _is_sqlite else {},
     echo=False,
+    # pool_pre_ping issues a lightweight SELECT 1 before handing out a connection,
+    # preventing "server closed the connection unexpectedly" errors on idle pools.
+    pool_pre_ping=True,
+    # Recycle connections after 30 min to avoid hitting DB-side idle timeouts.
+    pool_recycle=1800,
 )
 
 SessionLocal = sessionmaker(bind=engine, autocommit=False, autoflush=False)
