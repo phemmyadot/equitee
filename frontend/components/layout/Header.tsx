@@ -36,12 +36,11 @@ const NAV_ITEMS = [
 ] as const;
 
 const JOB_INTERVAL_SEC = 3600;
-const BUFFER_SEC = 120;
 
 export default function Header() {
   const [now, setNow] = useState<Date | null>(null);
   const pathname = usePathname();
-  const { nextRefreshIn, isBuffering, lastUpdated } = usePortfolio();
+  const { nextRefreshIn, isJobRunning, lastUpdated } = usePortfolio();
   const { user, logout } = useAuth();
 
   useEffect(() => {
@@ -58,11 +57,10 @@ export default function Header() {
     return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;
   };
 
-  // Ring drains over the full job interval; during buffer it drains over BUFFER_SEC
+  // Ring drains over the full job interval
   const r = 7;
   const circ = 2 * Math.PI * r;
-  const totalSec = isBuffering ? BUFFER_SEC : JOB_INTERVAL_SEC;
-  const dash = nextRefreshIn != null ? circ * (nextRefreshIn / totalSec) : 0;
+  const dash = nextRefreshIn != null ? circ * (nextRefreshIn / JOB_INTERVAL_SEC) : 0;
 
   const isActive = (href: string, exact?: boolean) =>
     exact ? pathname === href : pathname.startsWith(href);
@@ -104,44 +102,56 @@ export default function Header() {
           </span>
         )}
 
-        {/* Job countdown ring */}
-        {nextRefreshIn !== null && (
+        {/* Job status: in-progress spinner or countdown ring */}
+        {(isJobRunning || nextRefreshIn !== null) && (
           <div
             className="hidden sm:flex items-center gap-1.5 h-8 px-2.5 rounded-lg border border-[var(--border)] bg-[var(--canvas)] shrink-0"
-            title={
-              isBuffering
-                ? 'Fetching fresh data…'
-                : `Next data update in ${fmtCountdown(nextRefreshIn)}`
-            }
+            title={isJobRunning ? 'Job running — fetching fresh data…' : `Next data update in ${fmtCountdown(nextRefreshIn!)}`}
           >
-            <IconClock
-              width={11}
-              height={11}
-              className="shrink-0"
-              style={{ stroke: isBuffering ? 'var(--gain)' : 'var(--ink-4)' }}
-            />
-            <svg width="18" height="18" viewBox="0 0 18 18" style={{ transform: 'rotate(-90deg)' }}>
-              <circle cx="9" cy="9" r={r} fill="none" stroke="#E4E7EC" strokeWidth="2.5" />
-              <circle
-                cx="9"
-                cy="9"
-                r={r}
-                fill="none"
-                stroke={isBuffering ? 'var(--gain)' : 'var(--accent)'}
-                strokeWidth="2.5"
-                strokeDasharray={`${dash} ${circ}`}
-                strokeLinecap="round"
-                style={{ transition: 'stroke-dasharray 1s linear' }}
-                suppressHydrationWarning
-              />
-            </svg>
-            <span
-              className="font-mono text-[10px] font-medium tabular-nums"
-              style={{ color: isBuffering ? 'var(--gain)' : 'var(--ink-3)' }}
-              suppressHydrationWarning
-            >
-              {isBuffering ? fmtCountdown(nextRefreshIn) : fmtCountdown(nextRefreshIn)}
-            </span>
+            {isJobRunning ? (
+              <>
+                <svg
+                  className="animate-spin shrink-0"
+                  width="12"
+                  height="12"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="var(--accent)"
+                  strokeWidth="2.5"
+                >
+                  <path d="M21 12a9 9 0 1 1-6.219-8.56" />
+                </svg>
+                <span className="font-mono text-[10px] font-medium" style={{ color: 'var(--accent)' }}>
+                  In progress
+                </span>
+              </>
+            ) : (
+              <>
+                <IconClock width={11} height={11} className="shrink-0" style={{ stroke: 'var(--ink-4)' }} />
+                <svg width="18" height="18" viewBox="0 0 18 18" style={{ transform: 'rotate(-90deg)' }}>
+                  <circle cx="9" cy="9" r={r} fill="none" stroke="#E4E7EC" strokeWidth="2.5" />
+                  <circle
+                    cx="9"
+                    cy="9"
+                    r={r}
+                    fill="none"
+                    stroke="var(--accent)"
+                    strokeWidth="2.5"
+                    strokeDasharray={`${dash} ${circ}`}
+                    strokeLinecap="round"
+                    style={{ transition: 'stroke-dasharray 1s linear' }}
+                    suppressHydrationWarning
+                  />
+                </svg>
+                <span
+                  className="font-mono text-[10px] font-medium tabular-nums"
+                  style={{ color: 'var(--ink-3)' }}
+                  suppressHydrationWarning
+                >
+                  {fmtCountdown(nextRefreshIn!)}
+                </span>
+              </>
+            )}
           </div>
         )}
 
