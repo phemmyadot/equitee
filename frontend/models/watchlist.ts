@@ -1,4 +1,5 @@
 import type { TickerPrice, CompanyProfile, TickerOverview, TickerPerformance } from './ticker';
+import type { NgxSparklinePoint } from './portfolio';
 
 export interface WatchlistItem {
   ticker: string;
@@ -40,6 +41,7 @@ export interface WatchlistResponse {
   triggered_alerts: TriggeredAlert[];
   alerts: PriceAlert[];
   last_updated: string | null;
+  price_histories: Record<string, NgxSparklinePoint[]>;
 }
 
 export interface ScreenerItem {

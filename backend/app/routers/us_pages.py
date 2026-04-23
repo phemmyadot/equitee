@@ -16,7 +16,7 @@ from sqlalchemy.orm import Session
 
 from app.db.engine import get_db
 from app.db.models import User
-from app.db.crud import watchlist_has
+from app.db.crud import watchlist_has, get_price_history
 from app.auth.dependencies import get_current_user
 from app.services import yahoo as _yahoo
 from app.services.portfolio import (
@@ -30,6 +30,12 @@ router = APIRouter(prefix="/api/us", tags=["us-pages"])
 
 # ── Response models ────────────────────────────────────────────────────────────
 
+class SparklinePoint(BaseModel):
+    ts: str
+    price: Optional[float] = None
+    change_pct: Optional[float] = None
+
+
 class UsHomeMeta(BaseModel):
     prices_live: int
     prices_total: int
@@ -42,6 +48,7 @@ class UsHomeResponse(BaseModel):
     stocks: list[StockRow]
     sectors: list[SectorRow]
     meta: UsHomeMeta
+    price_histories: dict[str, list[SparklinePoint]] = {}
 
 
 class UsTickerPrice(BaseModel):
@@ -94,6 +101,18 @@ def us_home(
         positions=sum(1 for s in stocks if s.CurrentEquity is not None),
     )
 
+    price_histories: dict[str, list[SparklinePoint]] = {}
+    for h in holdings["us"]:
+        t = h["ticker"]
+        try:
+            rows = get_price_history(db, ticker=t, days=90, user_id=current_user.id)
+            price_histories[t] = [
+                SparklinePoint(ts=r["ts"], price=r.get("price"), change_pct=r.get("change_pct"))
+                for r in rows
+            ]
+        except Exception:
+            price_histories[t] = []
+
     return UsHomeResponse(
         kpis=kpis,
         stocks=stocks,
@@ -104,6 +123,7 @@ def us_home(
             price_source="Yahoo Finance",
             price_age=_yahoo.cache_age(),
         ),
+        price_histories=price_histories,
     )
 
 

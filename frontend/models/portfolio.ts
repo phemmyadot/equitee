@@ -143,6 +143,7 @@ export interface UsHomeResponse {
   stocks: StockRow[];
   sectors: SectorRow[];
   meta: UsHomeMeta;
+  price_histories: Record<string, NgxSparklinePoint[]>;
 }
 
 // ── Combined home response ────────────────────────────────────────────────────

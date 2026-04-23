@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect } from 'react';
 import { fetchPortfolioHistory, fetchPriceHistory } from '@/services/api';
 import type { PortfolioHistory, PriceHistory } from '@/models';
 
@@ -10,12 +10,8 @@ export function usePortfolioHistory(days = 90) {
   const [data, setData] = useState<PortfolioHistory | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const lastFetchedDays = useRef<number | null>(null);
 
   useEffect(() => {
-    if (lastFetchedDays.current === days) return;
-    lastFetchedDays.current = days;
-
     let cancelled = false;
     setLoading(true);
     setError(null);

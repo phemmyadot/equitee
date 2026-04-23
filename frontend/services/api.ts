@@ -173,8 +173,7 @@ export const fetchPortfolioHistory = (days = 90) =>
   get<PortfolioHistory>(`/history/portfolio?days=${days}`);
 export const fetchPriceHistory = (ticker: string, days = 90) =>
   get<PriceHistory>(`/history/prices/${ticker}?days=${days}`);
-export const fetchDividends = (force = false) =>
-  get<DividendsResponse>(`/dividends${force ? '?force=true' : ''}`);
+export const fetchDividends = () => get<DividendsResponse>('/dividends');
 export const fetchCorrelation = (days = 90) =>
   get<CorrelationData>(`/history/correlation?days=${days}`);
 export const fetchAnalytics = (days = 180) => get<AnalyticsData>(`/history/analytics?days=${days}`);

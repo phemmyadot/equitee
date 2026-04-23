@@ -5,6 +5,7 @@ GET /api/dividends  — all dividend data for the dividends page (one call, all 
 """
 
 import logging
+from datetime import datetime, timezone
 from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException
@@ -15,6 +16,7 @@ from app.db.engine import get_db
 from app.db.models import User
 from app.auth.dependencies import get_current_user
 from app.services import dividends as dividends_service
+from app.services import ngx_job as _ngx_job
 from app.services.portfolio import load_holdings_from_db
 from app.models import DividendInfo
 
@@ -62,15 +64,28 @@ class DividendsResponse(BaseModel):
 
 @router.get("", response_model=DividendsResponse)
 async def get_dividends(
-    force: bool = False,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
     try:
         holdings = load_holdings_from_db(db, current_user.id)
         ngx = holdings["ngx"]
-        tickers = [h["ticker"] for h in ngx]
-        div_map = dividends_service.get_dividends(tickers, force=force)
+
+        # Read dividend data from the NGX job's DB cache (populated by background job)
+        # and fall back to the dividend scraper cache for tickers not yet in the job cache.
+        def _div_from_cache(ticker: str) -> Optional[DividendInfo]:
+            row = _ngx_job.get_ticker(ticker)
+            if row and row.get("dividend_amount"):
+                return DividendInfo(
+                    symbol=ticker,
+                    ex_dividend_date=row.get("dividend_ex_date"),
+                    record_date=None,
+                    pay_date=row.get("dividend_pay_date"),
+                    cash_amount=row["dividend_amount"],
+                    currency="NGN",
+                    timestamp=None,
+                )
+            return None
 
         result: list[DividendHolding] = []
         total_payout: float = 0.0
@@ -80,7 +95,7 @@ async def get_dividends(
             shares = float(h["shares"])
             avg_cost = float(h["avg_cost"])
             cost_basis = shares * avg_cost
-            div = div_map.get(ticker)
+            div = _div_from_cache(ticker)
 
             projected = None
             yoc = None
@@ -141,9 +156,12 @@ async def get_dividends(
                 blended_yield_pct=blended_yield,
             )
 
+        last_updated_ts = _ngx_job.last_updated()
+        cache_age = int((datetime.now(timezone.utc) - last_updated_ts).total_seconds()) if last_updated_ts else None
+
         return DividendsResponse(
             holdings=result,
-            cache_age_sec=dividends_service.cache_age(),
+            cache_age_sec=cache_age,
             total_projected_payout=round(total_payout, 2) if total_payout else None,
             portfolio_drip=portfolio_drip,
         )

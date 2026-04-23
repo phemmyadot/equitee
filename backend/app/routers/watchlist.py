@@ -22,6 +22,7 @@ from app.db.crud import (
     remove_from_watchlist,
     check_and_trigger_alerts,
     get_alerts,
+    get_daily_price_history,
 )
 from app.auth.dependencies import get_current_user
 
@@ -107,6 +108,12 @@ def _fetch_ticker_full(ticker: str, market: str = "NGX") -> dict[str, Any]:
 # ── Response models ────────────────────────────────────────────────────────────
 
 
+class SparklinePoint(BaseModel):
+    ts: str
+    price: Optional[float] = None
+    change_pct: Optional[float] = None
+
+
 class WatchlistItem(BaseModel):
     ticker: str
     market: str
@@ -147,6 +154,7 @@ class WatchlistResponse(BaseModel):
     triggered_alerts: list[TriggeredAlert] = []
     alerts: list[AlertOut] = []
     last_updated: Optional[str] = None
+    price_histories: dict[str, list[SparklinePoint]] = {}
 
 
 class WatchCheckResponse(BaseModel):
@@ -267,6 +275,19 @@ def list_watchlist(
         for a in all_alerts
     ]
 
+    # ── Price histories for NGX sparklines (from DB, no extra HTTP calls) ────
+    price_histories: dict[str, list[SparklinePoint]] = {}
+    for r in rows:
+        if r.market == "NGX":
+            try:
+                ph_rows = get_daily_price_history(db, r.ticker, 90)
+                price_histories[r.ticker] = [
+                    SparklinePoint(ts=row["ts"], price=row.get("price"), change_pct=row.get("change_pct"))
+                    for row in ph_rows
+                ]
+            except Exception:
+                price_histories[r.ticker] = []
+
     db.commit()
     return WatchlistResponse(
         items=items,
@@ -274,6 +295,7 @@ def list_watchlist(
         triggered_alerts=triggered_out,
         alerts=alerts_out,
         last_updated=(_ngx_job.last_updated().isoformat() if _ngx_job.last_updated() else None),
+        price_histories=price_histories,
     )
 
 

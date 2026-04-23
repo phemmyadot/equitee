@@ -342,9 +342,9 @@ export default function DividendsPage() {
   const hasFetched = useRef(false);
   const { refreshKey } = usePortfolio();
 
-  const load = useCallback(async (force = false) => {
+  const load = useCallback(async () => {
     setLoading(true);
-    try { setResp(await fetchDividends(force)); } catch { /* silent */ } finally { setLoading(false); }
+    try { setResp(await fetchDividends()); } catch { /* silent */ } finally { setLoading(false); }
   }, []);
 
   useEffect(() => {
@@ -388,7 +388,7 @@ export default function DividendsPage() {
           </p>
         </div>
         <button
-          onClick={() => load(true)}
+          onClick={() => load()}
           disabled={loading}
           className="flex items-center gap-1.5 h-8 px-3 text-[11px] font-semibold bg-[var(--accent)] text-white rounded-lg hover:bg-[#17A06B] disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
         >

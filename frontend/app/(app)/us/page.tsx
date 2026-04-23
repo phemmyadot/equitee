@@ -221,7 +221,7 @@ export default function USPortfolioPage() {
     {
       key: 'sparkline',
       label: '90d',
-      render: (_: unknown, row: StockRow) => <Sparkline ticker={row.Ticker} />,
+      render: (_: unknown, row: StockRow) => <Sparkline ticker={row.Ticker} points={data?.price_histories?.[row.Ticker]} />,
     },
   ];
 

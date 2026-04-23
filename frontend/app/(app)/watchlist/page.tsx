@@ -201,6 +201,7 @@ function WatchlistTable({
   alerts,
   onAlertCreated,
   onAlertDeleted,
+  priceHistories,
 }: {
   items: WatchlistItem[];
   isUS: boolean;
@@ -209,6 +210,7 @@ function WatchlistTable({
   alerts: PriceAlert[];
   onAlertCreated: () => void;
   onAlertDeleted: (id: number) => void;
+  priceHistories: Record<string, { ts: string; price: number | null; change_pct: number | null }[]>;
 }) {
   const [alertFormTicker, setAlertFormTicker] = useState<string | null>(null);
 
@@ -369,7 +371,7 @@ function WatchlistTable({
                   {/* Sparkline — NGX only */}
                   {!isUS && (
                     <td className="px-3 py-3">
-                      <Sparkline ticker={item.ticker} />
+                      <Sparkline ticker={item.ticker} points={priceHistories[item.ticker]} />
                     </td>
                   )}
 
@@ -445,6 +447,7 @@ export default function WatchlistPage() {
   const [alerts, setAlerts] = useState<PriceAlert[]>([]);
   const [triggeredAlerts, setTriggeredAlerts] = useState<TriggeredAlert[]>([]);
   const [dismissedAlertIds, setDismissedAlertIds] = useState<Set<number>>(new Set());
+  const [priceHistories, setPriceHistories] = useState<Record<string, { ts: string; price: number | null; change_pct: number | null }[]>>({});
   const hasFetched = useRef(false);
   const { refreshKey } = usePortfolio();
 
@@ -456,6 +459,7 @@ export default function WatchlistPage() {
         setTriggeredAlerts(r.triggered_alerts ?? []);
         setAlerts(r.alerts ?? []);
         setLastUpdated(r.last_updated ?? null);
+        setPriceHistories(r.price_histories ?? {});
       })
       .catch(() => setItems([]))
       .finally(() => setLoading(false));
@@ -665,6 +669,7 @@ export default function WatchlistPage() {
           alerts={alerts}
           onAlertCreated={load}
           onAlertDeleted={handleAlertDeleted}
+          priceHistories={priceHistories}
         />
       )}
     </div>
