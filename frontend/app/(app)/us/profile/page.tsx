@@ -1,12 +1,10 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import {
-  fetchUSTickerData,
-  fetchUSPriceHistory,
-  fetchWatchlistCheck,
+  fetchUSTicker,
   addToWatchlist,
   removeFromWatchlist,
 } from '@/services/api';
@@ -16,7 +14,7 @@ import SignalScore, { computeSignal } from '@/components/molecules/Signalscore';
 import PlotlyChart from '@/components/molecules/PlotlyChart';
 import { plotlyLayout, COLORS, sectorColor } from '@/utils/theme';
 import { fmtUSD, fmtPct, fmtPct2, fmtVol, isPositive } from '@/utils/formatters';
-import type { TickerData, DBPriceHistory } from '@/models';
+import type { UsTickerResponse } from '@/models';
 import {
   IconChevronRight,
   IconGlobe,
@@ -68,7 +66,7 @@ function Stat({
   );
 }
 
-function n(v: string | number | null | undefined): number | null {
+function n(v: unknown): number | null {
   if (v == null) return null;
   const f = parseFloat(String(v).replace(/[^0-9.-]/g, ''));
   return isNaN(f) ? null : f;
@@ -82,7 +80,7 @@ function fmtBig(v: number | null | undefined): string {
   return fmtUSD(v);
 }
 
-function fmtPctStat(v: string | number | null | undefined): string {
+function fmtPctStat(v: unknown): string {
   const num = n(v);
   return num != null ? `${num.toFixed(2)}%` : '—';
 }
@@ -109,33 +107,44 @@ export default function USProfilePage() {
   const searchParams = useSearchParams();
   const ticker = (searchParams.get('ticker') ?? '').toUpperCase();
 
-  const [td, setTd] = useState<TickerData | null>(null);
-  const [history, setHistory] = useState<DBPriceHistory | null>(null);
+  const [resp, setResp] = useState<UsTickerResponse | null>(null);
   const [histDays, setHistDays] = useState(90);
+  const [histLoad, setHistLoad] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [watching, setWatching] = useState(false);
   const [watchBusy, setWatchBusy] = useState(false);
+  const initialLoadRef = useRef(true);
 
+  // Initial load — fetches everything including price_history
   useEffect(() => {
     if (!ticker) return;
+    let c = false;
     setLoading(true);
     setError(null);
-    Promise.allSettled([
-      fetchUSTickerData(ticker),
-      fetchWatchlistCheck(ticker),
-    ]).then(([tdRes, wRes]) => {
-      if (tdRes.status === 'fulfilled') setTd(tdRes.value);
-      else setError('Failed to load ticker data');
-      if (wRes.status === 'fulfilled') setWatching(wRes.value.watching);
-      setLoading(false);
-    });
+    fetchUSTicker(ticker, histDays)
+      .then((r) => {
+        if (c) return;
+        setResp(r);
+        setWatching(r.is_watching);
+      })
+      .catch((err) => { if (!c) setError(err?.message ?? 'Failed to load ticker data'); })
+      .finally(() => { if (!c) setLoading(false); });
+    return () => { c = true; };
   }, [ticker]);
 
+  // Re-fetch only when day range changes (skip initial mount)
   useEffect(() => {
+    if (initialLoadRef.current) { initialLoadRef.current = false; return; }
     if (!ticker) return;
-    fetchUSPriceHistory(ticker, histDays).then(setHistory).catch(() => setHistory(null));
-  }, [ticker, histDays]);
+    let c = false;
+    setHistLoad(true);
+    fetchUSTicker(ticker, histDays)
+      .then((r) => { if (!c) setResp(r); })
+      .catch(() => {})
+      .finally(() => { if (!c) setHistLoad(false); });
+    return () => { c = true; };
+  }, [histDays]);
 
   const handleWatch = async () => {
     setWatchBusy(true);
@@ -155,14 +164,17 @@ export default function USProfilePage() {
   if (!ticker) return <p className="text-[var(--ink-4)] text-sm p-8">No ticker specified.</p>;
   if (error) return <ErrorMessage message={error} />;
 
-  const ov = td?.overview ?? null;
-  const perf = td?.performance ?? null;
-  const prof = td?.profile ?? null;
-  const price = td?.price?.price ?? null;
-  const change = td?.price?.change ?? null;
-  const changePct = td?.price?.change_pct ?? null;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const ov = (resp?.overview ?? null) as any;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const perf = (resp?.performance ?? null) as any;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const prof = (resp?.profile ?? null) as any;
+  const price = resp?.price?.price ?? null;
+  const change = resp?.price?.change ?? null;
+  const changePct = resp?.price?.change_pct ?? null;
 
-  const sig = td ? computeSignal(ov, perf, price, null, null, prof?.sector ?? null) : null;
+  const sig = resp ? computeSignal(ov, perf, price, null, null, prof?.sector ?? null) : null;
 
   const w52h = n(perf?.week_52_high);
   const w52l = n(perf?.week_52_low);
@@ -171,14 +183,14 @@ export default function USProfilePage() {
       ? Math.max(0, Math.min(100, ((price - w52l) / (w52h - w52l)) * 100))
       : null;
 
-  const rec = (ov as any)?.recommendation as string | null;
+  const rec = ov?.recommendation as string | null;
   const recColor = rec ? (REC_COLORS[rec] ?? 'var(--ink-3)') : null;
   const recLabel = rec ? (REC_LABELS[rec] ?? rec) : null;
 
-  // ── Price chart ────────────────────────────────────────────────────────────
-  const histDates = history?.dates ?? [];
-  const histClose = history?.close ?? [];
-  const histChg = history?.change_pct ?? [];
+  const hist = resp?.price_history;
+  const histDates = hist?.dates ?? [];
+  const histClose = hist?.close ?? [];
+  const histChg = hist?.change_pct ?? [];
 
   const priceTrace = {
     type: 'scatter',
@@ -238,7 +250,6 @@ export default function USProfilePage() {
           </div>
         ) : (
           <>
-            {/* Name + sector */}
             <div className="flex items-start justify-between gap-4 flex-wrap">
               <div>
                 <div className="flex items-center gap-2 flex-wrap">
@@ -260,15 +271,10 @@ export default function USProfilePage() {
                     </span>
                   )}
                 </div>
-                {prof?.name && (
-                  <p className="text-[13px] text-[var(--ink-2)] mt-0.5">{prof.name}</p>
-                )}
-                {prof?.industry && (
-                  <p className="text-[10px] text-[var(--ink-4)] mt-0.5">{prof.industry}</p>
-                )}
+                {prof?.name && <p className="text-[13px] text-[var(--ink-2)] mt-0.5">{prof.name}</p>}
+                {prof?.industry && <p className="text-[10px] text-[var(--ink-4)] mt-0.5">{prof.industry}</p>}
               </div>
 
-              {/* Watch button */}
               <button
                 onClick={handleWatch}
                 disabled={watchBusy}
@@ -284,7 +290,6 @@ export default function USProfilePage() {
               </button>
             </div>
 
-            {/* Price */}
             <div className="flex items-end gap-3 flex-wrap">
               <span className="font-mono font-bold text-[32px] text-[var(--ink)] leading-none tabular-nums">
                 {price != null ? `$${price.toFixed(2)}` : '—'}
@@ -299,7 +304,6 @@ export default function USProfilePage() {
               )}
             </div>
 
-            {/* 52W range bar */}
             {rangePct != null && w52l != null && w52h != null && (
               <div>
                 <div className="flex justify-between text-[9px] font-mono text-[var(--ink-4)] mb-1">
@@ -315,13 +319,10 @@ export default function USProfilePage() {
                     }}
                   />
                 </div>
-                <p className="text-[9px] text-[var(--ink-4)] mt-1">
-                  {rangePct.toFixed(0)}% of 52-week range
-                </p>
+                <p className="text-[9px] text-[var(--ink-4)] mt-1">{rangePct.toFixed(0)}% of 52-week range</p>
               </div>
             )}
 
-            {/* Meta row */}
             <div className="flex flex-wrap gap-4 text-[10px] text-[var(--ink-3)]">
               {prof?.headquarters && <span>{prof.headquarters}</span>}
               {prof?.employees && <span>{Number(prof.employees).toLocaleString()} employees</span>}
@@ -342,7 +343,7 @@ export default function USProfilePage() {
       </div>
 
       {/* ── Signal Score ────────────────────────────────────────────────── */}
-      {!loading && td && sig && (
+      {!loading && resp && sig && (
         <div className="card px-5 py-4">
           <SectionLabel>Signal Score</SectionLabel>
           <SignalScore ov={ov} perf={perf} livePrice={price} posRow={null} dividend={null} loading={false} sector={prof?.sector ?? null} />
@@ -373,7 +374,9 @@ export default function USProfilePage() {
           </div>
         }
       >
-        {histDates.length > 0 ? (
+        {histLoad ? (
+          <div className="flex items-center justify-center h-[320px] text-[var(--ink-4)] text-[12px]">Loading…</div>
+        ) : histDates.length > 0 ? (
           <PlotlyChart data={[priceTrace, chgTrace]} layout={chartLayout} height={320} />
         ) : (
           <div className="flex items-center justify-center h-[320px] text-[var(--ink-4)] text-[12px]">
@@ -389,16 +392,16 @@ export default function USProfilePage() {
           <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-x-6 gap-y-4">
             <Stat label="Market Cap" value={fmtBig(n(ov?.market_cap))} mono />
             <Stat label="P/E (Trailing)" value={n(ov?.pe_ratio)?.toFixed(1)} mono />
-            <Stat label="P/E (Forward)" value={n((ov as any)?.forward_pe)?.toFixed(1)} mono />
+            <Stat label="P/E (Forward)" value={n(ov?.forward_pe)?.toFixed(1)} mono />
             <Stat label="EPS" value={n(ov?.eps) != null ? `$${n(ov?.eps)?.toFixed(2)}` : null} mono />
-            <Stat label="Price / Book" value={n((ov as any)?.price_to_book)?.toFixed(2)} mono />
-            <Stat label="EV / EBITDA" value={n((ov as any)?.ev_ebitda)?.toFixed(1)} mono />
-            <Stat label="EV / Revenue" value={n((ov as any)?.ev_revenue)?.toFixed(2)} mono />
+            <Stat label="Price / Book" value={n(ov?.price_to_book)?.toFixed(2)} mono />
+            <Stat label="EV / EBITDA" value={n(ov?.ev_ebitda)?.toFixed(1)} mono />
+            <Stat label="EV / Revenue" value={n(ov?.ev_revenue)?.toFixed(2)} mono />
             <Stat label="Beta" value={n(perf?.beta)?.toFixed(2)} mono />
             <Stat label="Dividend Yield" value={fmtPctStat(ov?.dividend_yield)} mono />
-            <Stat label="Div Rate / Share" value={n((ov as any)?.dividend_rate) != null ? `$${n((ov as any)?.dividend_rate)?.toFixed(2)}` : null} mono />
-            <Stat label="Payout Ratio" value={fmtPctStat((ov as any)?.payout_ratio)} mono />
-            <Stat label="Volume" value={fmtVol(n(td?.price?.volume))} mono />
+            <Stat label="Div Rate / Share" value={n(ov?.dividend_rate) != null ? `$${n(ov?.dividend_rate)?.toFixed(2)}` : null} mono />
+            <Stat label="Payout Ratio" value={fmtPctStat(ov?.payout_ratio)} mono />
+            <Stat label="Volume" value={fmtVol(n(resp?.price?.volume))} mono />
           </div>
         </div>
       )}
@@ -409,22 +412,12 @@ export default function USProfilePage() {
           <div className="card px-5 py-4">
             <SectionLabel>Profitability</SectionLabel>
             <div className="grid grid-cols-2 gap-x-6 gap-y-4">
-              <Stat label="Gross Margin" value={fmtPctStat(ov?.gross_margin)} mono accent={n(ov?.gross_margin) != null && n(ov!.gross_margin)! > 40 ? 'gain' : undefined} />
-              <Stat label="Operating Margin" value={fmtPctStat((ov as any)?.operating_margin)} mono accent={n((ov as any)?.operating_margin) != null && n((ov as any)?.operating_margin)! > 15 ? 'gain' : undefined} />
-              <Stat label="Net Margin" value={fmtPctStat(ov?.net_margin)} mono accent={n(ov?.net_margin) != null && n(ov!.net_margin)! > 10 ? 'gain' : undefined} />
-              <Stat label="EBITDA Margin" value={fmtPctStat((ov as any)?.ebitda_margin)} mono />
-              <Stat
-                label="ROE"
-                value={fmtPctStat(ov?.roe)}
-                mono
-                accent={n(ov?.roe) != null ? (n(ov!.roe)! > 15 ? 'gain' : n(ov!.roe)! < 0 ? 'loss' : undefined) : undefined}
-              />
-              <Stat
-                label="ROA"
-                value={fmtPctStat((ov as any)?.roa)}
-                mono
-                accent={n((ov as any)?.roa) != null && n((ov as any)?.roa)! > 5 ? 'gain' : undefined}
-              />
+              <Stat label="Gross Margin" value={fmtPctStat(ov?.gross_margin)} mono accent={n(ov?.gross_margin) != null && n(ov?.gross_margin)! > 40 ? 'gain' : undefined} />
+              <Stat label="Operating Margin" value={fmtPctStat(ov?.operating_margin)} mono accent={n(ov?.operating_margin) != null && n(ov?.operating_margin)! > 15 ? 'gain' : undefined} />
+              <Stat label="Net Margin" value={fmtPctStat(ov?.net_margin)} mono accent={n(ov?.net_margin) != null && n(ov?.net_margin)! > 10 ? 'gain' : undefined} />
+              <Stat label="EBITDA Margin" value={fmtPctStat(ov?.ebitda_margin)} mono />
+              <Stat label="ROE" value={fmtPctStat(ov?.roe)} mono accent={n(ov?.roe) != null ? (n(ov?.roe)! > 15 ? 'gain' : n(ov?.roe)! < 0 ? 'loss' : undefined) : undefined} />
+              <Stat label="ROA" value={fmtPctStat(ov?.roa)} mono accent={n(ov?.roa) != null && n(ov?.roa)! > 5 ? 'gain' : undefined} />
             </div>
           </div>
 
@@ -432,13 +425,13 @@ export default function USProfilePage() {
             <SectionLabel>Financial Health</SectionLabel>
             <div className="grid grid-cols-2 gap-x-6 gap-y-4">
               <Stat label="Revenue" value={fmtBig(n(ov?.revenue))} mono />
-              <Stat label="Net Income" value={fmtBig(n(ov?.net_income))} mono accent={n(ov?.net_income) != null ? (isPositive(n(ov!.net_income)) ? 'gain' : 'loss') : undefined} />
-              <Stat label="Free Cash Flow" value={fmtBig(n((ov as any)?.free_cash_flow))} mono />
-              <Stat label="Operating CF" value={fmtBig(n((ov as any)?.operating_cash_flow))} mono />
-              <Stat label="Total Cash" value={fmtBig(n((ov as any)?.total_cash))} mono />
-              <Stat label="Total Debt" value={fmtBig(n((ov as any)?.total_debt))} mono />
+              <Stat label="Net Income" value={fmtBig(n(ov?.net_income))} mono accent={n(ov?.net_income) != null ? (isPositive(n(ov?.net_income)) ? 'gain' : 'loss') : undefined} />
+              <Stat label="Free Cash Flow" value={fmtBig(n(ov?.free_cash_flow))} mono />
+              <Stat label="Operating CF" value={fmtBig(n(ov?.operating_cash_flow))} mono />
+              <Stat label="Total Cash" value={fmtBig(n(ov?.total_cash))} mono />
+              <Stat label="Total Debt" value={fmtBig(n(ov?.total_debt))} mono />
               <Stat label="Debt / Equity" value={n(ov?.debt_to_equity)?.toFixed(1)} mono />
-              <Stat label="Current Ratio" value={n(ov?.current_ratio)?.toFixed(2)} mono accent={n(ov?.current_ratio) != null && n(ov!.current_ratio)! >= 1.5 ? 'gain' : n(ov?.current_ratio) != null && n(ov!.current_ratio)! < 1 ? 'loss' : undefined} />
+              <Stat label="Current Ratio" value={n(ov?.current_ratio)?.toFixed(2)} mono accent={n(ov?.current_ratio) != null && n(ov?.current_ratio)! >= 1.5 ? 'gain' : n(ov?.current_ratio) != null && n(ov?.current_ratio)! < 1 ? 'loss' : undefined} />
             </div>
           </div>
         </div>
@@ -450,31 +443,30 @@ export default function USProfilePage() {
           <div className="card px-5 py-4">
             <SectionLabel>Growth & Momentum</SectionLabel>
             <div className="grid grid-cols-2 gap-x-6 gap-y-4">
-              <Stat label="Revenue Growth (YoY)" value={fmtPctStat((ov as any)?.revenue_growth)} mono accent={n((ov as any)?.revenue_growth) != null ? (isPositive(n((ov as any)?.revenue_growth)) ? 'gain' : 'loss') : undefined} />
-              <Stat label="Earnings Growth (YoY)" value={fmtPctStat((ov as any)?.earnings_growth)} mono accent={n((ov as any)?.earnings_growth) != null ? (isPositive(n((ov as any)?.earnings_growth)) ? 'gain' : 'loss') : undefined} />
-              <Stat label="52W Change" value={fmtPctStat(perf?.week_52_change)} mono accent={n(perf?.week_52_change) != null ? (isPositive(n(perf!.week_52_change)) ? 'gain' : 'loss') : undefined} />
+              <Stat label="Revenue Growth (YoY)" value={fmtPctStat(ov?.revenue_growth)} mono accent={n(ov?.revenue_growth) != null ? (isPositive(n(ov?.revenue_growth)) ? 'gain' : 'loss') : undefined} />
+              <Stat label="Earnings Growth (YoY)" value={fmtPctStat(ov?.earnings_growth)} mono accent={n(ov?.earnings_growth) != null ? (isPositive(n(ov?.earnings_growth)) ? 'gain' : 'loss') : undefined} />
+              <Stat label="52W Change" value={fmtPctStat(perf?.week_52_change)} mono accent={n(perf?.week_52_change) != null ? (isPositive(n(perf?.week_52_change)) ? 'gain' : 'loss') : undefined} />
               <Stat label="Beta" value={n(perf?.beta)?.toFixed(2)} mono />
-              <Stat label="MA 50d" value={n(perf?.ma_50) != null ? `$${n(perf!.ma_50)!.toFixed(2)}` : null} mono accent={price && n(perf?.ma_50) && price > n(perf!.ma_50)! ? 'gain' : price && n(perf?.ma_50) && price < n(perf!.ma_50)! ? 'loss' : undefined} />
-              <Stat label="MA 200d" value={n(perf?.ma_200) != null ? `$${n(perf!.ma_200)!.toFixed(2)}` : null} mono accent={price && n(perf?.ma_200) && price > n(perf!.ma_200)! ? 'gain' : price && n(perf?.ma_200) && price < n(perf!.ma_200)! ? 'loss' : undefined} />
+              <Stat label="MA 50d" value={n(perf?.ma_50) != null ? `$${n(perf?.ma_50)!.toFixed(2)}` : null} mono accent={price && n(perf?.ma_50) && price > n(perf?.ma_50)! ? 'gain' : price && n(perf?.ma_50) && price < n(perf?.ma_50)! ? 'loss' : undefined} />
+              <Stat label="MA 200d" value={n(perf?.ma_200) != null ? `$${n(perf?.ma_200)!.toFixed(2)}` : null} mono accent={price && n(perf?.ma_200) && price > n(perf?.ma_200)! ? 'gain' : price && n(perf?.ma_200) && price < n(perf?.ma_200)! ? 'loss' : undefined} />
             </div>
           </div>
 
-          {/* Analyst consensus */}
-          {(n((ov as any)?.target_mean) || recLabel) && (
+          {(n(ov?.target_mean) || recLabel) && (
             <div className="card px-5 py-4">
               <SectionLabel>Analyst Consensus</SectionLabel>
               <div className="grid grid-cols-2 gap-x-6 gap-y-4">
                 <Stat label="Recommendation" value={recLabel} accent={rec === 'buy' || rec === 'strong_buy' ? 'gain' : rec === 'sell' ? 'loss' : undefined} />
-                <Stat label="Analysts" value={(ov as any)?.analyst_count} mono />
-                <Stat label="Target Mean" value={n((ov as any)?.target_mean) != null ? `$${n((ov as any)?.target_mean)!.toFixed(2)}` : null} mono />
-                <Stat label="Target High" value={n((ov as any)?.target_high) != null ? `$${n((ov as any)?.target_high)!.toFixed(2)}` : null} mono accent="gain" />
-                <Stat label="Target Low" value={n((ov as any)?.target_low) != null ? `$${n((ov as any)?.target_low)!.toFixed(2)}` : null} mono accent="loss" />
-                {price && n((ov as any)?.target_mean) && (
+                <Stat label="Analysts" value={ov?.analyst_count} mono />
+                <Stat label="Target Mean" value={n(ov?.target_mean) != null ? `$${n(ov?.target_mean)!.toFixed(2)}` : null} mono />
+                <Stat label="Target High" value={n(ov?.target_high) != null ? `$${n(ov?.target_high)!.toFixed(2)}` : null} mono accent="gain" />
+                <Stat label="Target Low" value={n(ov?.target_low) != null ? `$${n(ov?.target_low)!.toFixed(2)}` : null} mono accent="loss" />
+                {price && n(ov?.target_mean) && (
                   <Stat
                     label="Upside to Target"
-                    value={fmtPct(((n((ov as any)?.target_mean)! - price) / price) * 100)}
+                    value={fmtPct(((n(ov?.target_mean)! - price) / price) * 100)}
                     mono
-                    accent={n((ov as any)?.target_mean)! > price ? 'gain' : 'loss'}
+                    accent={n(ov?.target_mean)! > price ? 'gain' : 'loss'}
                   />
                 )}
               </div>
@@ -487,9 +479,7 @@ export default function USProfilePage() {
       {!loading && prof?.description && (
         <div className="card px-5 py-4">
           <SectionLabel>About</SectionLabel>
-          <p className="text-[11px] text-[var(--ink-3)] leading-relaxed line-clamp-4">
-            {prof.description}
-          </p>
+          <p className="text-[11px] text-[var(--ink-3)] leading-relaxed line-clamp-4">{prof.description}</p>
           {prof.website && (
             <a
               href={prof.website}

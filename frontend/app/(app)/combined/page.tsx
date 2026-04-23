@@ -1,6 +1,7 @@
 'use client';
 
-import { usePortfolio } from '@/context/PortfolioContext';
+import { useState, useEffect } from 'react';
+import { fetchCombined } from '@/services/api';
 import KPICard from '@/components/molecules/KPICard';
 import ChartCard from '@/components/molecules/ChartCard';
 import { ChartSkeleton } from '@/components/atoms/Feedback';
@@ -8,9 +9,18 @@ import PlotlyChart from '@/components/molecules/PlotlyChart';
 import { plotlyLayout, COLORS, sectorColor } from '@/utils/theme';
 import { fmtUSD, fmtNGN, fmtPct, isPositive } from '@/utils/formatters';
 import { exportCombinedSnapshot } from '@/utils/csv';
+import type { CombinedResponse } from '@/models';
 
 export default function CombinedPage() {
-  const { data, loading } = usePortfolio();
+  const [data, setData] = useState<CombinedResponse | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    fetchCombined().then(setData).finally(() => setLoading(false));
+    const iv = setInterval(() => fetchCombined().then(setData), 5 * 60 * 1000);
+    return () => clearInterval(iv);
+  }, []);
+
   const isFirstLoad = loading && !data;
   if (!data && !loading) return null;
 

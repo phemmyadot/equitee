@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { getTrades, getBuys } from '@/services/tradesApi';
+import { fetchTradesAll } from '@/services/api';
 import type { SaleEvent, BuyEvent } from '@/models/trades';
 import { fmtNGN, fmtUSD } from '@/utils/formatters';
 import { exportTrades } from '@/utils/csv';
@@ -195,11 +195,9 @@ export default function TradesPage() {
   const [market, setMarket] = useState<Market>('ngx');
 
   useEffect(() => {
-    Promise.allSettled([getTrades(), getBuys()]).then(([s, b]) => {
-      if (s.status === 'fulfilled') setSells(s.value);
-      if (b.status === 'fulfilled') setBuys(b.value);
-      setLoading(false);
-    });
+    fetchTradesAll()
+      .then((r) => { setSells(r.sells); setBuys(r.buys); })
+      .finally(() => setLoading(false));
   }, []);
 
   const filtered = tab === 'sells'

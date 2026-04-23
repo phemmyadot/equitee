@@ -1,15 +1,10 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import {
-  fetchNGXTickerData,
-  fetchNGXDividend,
-  fetchNGXEarnings,
-  fetchNGXBalanceSheet,
-  fetchNGXPriceHistory,
-  fetchWatchlistCheck,
+  fetchNGXTicker,
   addToWatchlist,
   removeFromWatchlist,
 } from '@/services/api';
@@ -23,11 +18,13 @@ import PlotlyChart from '@/components/molecules/PlotlyChart';
 import { plotlyLayout, COLORS, sectorColor } from '@/utils/theme';
 import { fmtNGNFull, fmtNGN, fmtPct, fmtPct2, fmtVol, isPositive } from '@/utils/formatters';
 import type {
+  NgxTickerResponse,
+  NgxTickerEarnings,
+  NgxTickerBalanceSheet,
+  NgxTickerDividend,
+  NgxTickerPriceHistory,
   TickerData,
-  DividendInfo,
-  EarningsHistory,
-  BalanceSheet,
-  DBPriceHistory,
+  TickerPerformance,
   StockRow,
 } from '@/models';
 import {
@@ -379,107 +376,78 @@ export default function NGXProfilePage() {
   const params = useSearchParams();
   const ticker = (params.get('ticker') ?? '').toUpperCase();
 
-  const [data, setData] = useState<TickerData | null>(null);
+  const [resp, setResp] = useState<NgxTickerResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [dividend, setDividend] = useState<DividendInfo | null>(null);
-  const [divLoading, setDivLoading] = useState(true);
-  const [earnings, setEarnings] = useState<EarningsHistory | null>(null);
-  const [earnLoad, setEarnLoad] = useState(true);
-  const [balance, setBalance] = useState<BalanceSheet | null>(null);
-  const [bsLoad, setBsLoad] = useState(true);
-  const [ohlcv, setOhlcv] = useState<DBPriceHistory | null>(null);
+  const [ohlcv, setOhlcv] = useState<NgxTickerPriceHistory | null>(null);
   const [ohlcvLoad, setOhlcvLoad] = useState(true);
   const [priceDays, setPriceDays] = useState(90);
-  const [watching, setWatching] = useState<boolean | null>(null);
   const [watchBusy, setWatchBusy] = useState(false);
+  const initialLoadRef = useRef(true);
 
   const { data: portfolio } = usePortfolio();
   const posRow: StockRow | undefined = portfolio?.ngx_stocks.find((s) => s.Ticker === ticker);
 
-  // Fetch all ticker data in parallel on ticker change
+  // Single consolidated fetch on ticker change — replaces 6 separate calls
   useEffect(() => {
     if (!ticker) return;
     let c = false;
     setLoading(true);
     setError(null);
-    setDivLoading(true);
-    setEarnLoad(true);
-    setBsLoad(true);
     setOhlcvLoad(true);
-
-    Promise.allSettled([
-      fetchNGXTickerData(ticker),
-      fetchNGXDividend(ticker),
-      fetchNGXEarnings(ticker),
-      fetchNGXBalanceSheet(ticker),
-      fetchNGXPriceHistory(ticker, priceDays),
-    ]).then(([tickerRes, divRes, earnRes, bsRes, ohlcvRes]) => {
-      if (c) return;
-      if (tickerRes.status === 'fulfilled') {
-        setData(tickerRes.value);
-      } else {
-        setError(tickerRes.reason?.message ?? 'Failed to load ticker data');
-      }
-      setLoading(false);
-
-      setDividend(divRes.status === 'fulfilled' ? divRes.value : null);
-      setDivLoading(false);
-
-      setEarnings(earnRes.status === 'fulfilled' ? earnRes.value : null);
-      setEarnLoad(false);
-
-      setBalance(bsRes.status === 'fulfilled' ? bsRes.value : null);
-      setBsLoad(false);
-
-      setOhlcv(ohlcvRes.status === 'fulfilled' ? ohlcvRes.value : null);
-      setOhlcvLoad(false);
-    });
-    return () => {
-      c = true;
-    };
+    fetchNGXTicker(ticker, priceDays)
+      .then((r) => {
+        if (c) return;
+        setResp(r);
+        setOhlcv(r.price_history);
+        setOhlcvLoad(false);
+      })
+      .catch((err) => {
+        if (c) return;
+        setError(err?.message ?? 'Failed to load ticker data');
+      })
+      .finally(() => {
+        if (!c) setLoading(false);
+      });
+    return () => { c = true; };
   }, [ticker]);
 
-  // Fetch price history when day range changes (independent of ticker reload)
+  // Re-fetch only price history when day range changes (skip on initial mount — main effect handles it)
   useEffect(() => {
+    if (initialLoadRef.current) { initialLoadRef.current = false; return; }
     if (!ticker) return;
     let c = false;
     setOhlcvLoad(true);
     setOhlcv(null);
-    fetchNGXPriceHistory(ticker, priceDays)
-      .then((d) => {
+    fetchNGXTicker(ticker, priceDays)
+      .then((r) => {
         if (!c) {
-          setOhlcv(d);
+          setOhlcv(r.price_history);
           setOhlcvLoad(false);
         }
       })
-      .catch(() => {
-        if (!c) setOhlcvLoad(false);
-      });
-    return () => {
-      c = true;
-    };
+      .catch(() => { if (!c) setOhlcvLoad(false); });
+    return () => { c = true; };
   }, [priceDays]);
 
-  // Check watchlist status whenever ticker changes
-  useEffect(() => {
-    if (!ticker) return;
-    setWatching(null);
-    fetchWatchlistCheck(ticker)
-      .then((r) => setWatching(r.watching))
-      .catch(() => setWatching(false));
-  }, [ticker]);
+  const watching = resp?.is_watching ?? null;
+  const dividend: NgxTickerDividend | null = resp?.dividend ?? null;
+  const earnings: NgxTickerEarnings | null = resp?.earnings ?? null;
+  const balance: NgxTickerBalanceSheet | null = resp?.balance_sheet ?? null;
+  const divLoading = loading;
+  const earnLoad = loading;
+  const bsLoad = loading;
 
   const toggleWatch = async () => {
-    if (watchBusy || watching === null) return;
+    if (watchBusy || watching === null || !resp) return;
     setWatchBusy(true);
     try {
       if (watching) {
         await removeFromWatchlist(ticker);
-        setWatching(false);
+        setResp({ ...resp, is_watching: false });
       } else {
         await addToWatchlist(ticker);
-        setWatching(true);
+        setResp({ ...resp, is_watching: true });
       }
     } finally {
       setWatchBusy(false);
@@ -487,10 +455,11 @@ export default function NGXProfilePage() {
   };
 
   // ── Derived ───────────────────────────────────────────────────────────────
-  const price = data?.price;
-  const prof = data?.profile;
-  const ov = data?.overview;
-  const perf = data?.performance;
+  const price = resp?.price;
+  const prof = resp?.profile;
+  const ov = resp?.overview;
+  // Cast to TickerPerformance so existing field accesses work; extra fields will be undefined → rendered as "—"
+  const perf = resp?.performance as TickerPerformance | null | undefined;
   const livePrice = price?.price ?? posRow?.LivePrice;
   const dayChange = price?.change_pct ?? posRow?.LiveChangePct;
   const sectorName = posRow?.Sector ?? '';
@@ -551,7 +520,7 @@ export default function NGXProfilePage() {
   // Liquidity Risk = Daily Volume / Total Shares × 100
   // Total Shares = Market Cap / Price
   const liquidityPct = (() => {
-    const vol = _n(data?.price?.volume) ?? _n(posRow?.Volume);
+    const vol = _n(resp?.price?.volume) ?? _n(posRow?.Volume);
     const mktCap = _n(ov?.market_cap);
     if (vol == null || mktCap == null || !livePrice || livePrice <= 0) return null;
     const totalShares = mktCap / livePrice;
@@ -838,7 +807,7 @@ export default function NGXProfilePage() {
           <div className="flex items-baseline gap-1.5">
             Price History
             <span className="text-[11px] font-normal text-[var(--ink-4)]">
-              {ohlcv ? `· ${ohlcv.count} snapshots` : '· from local snapshots'}
+              {ohlcv ? `· ${ohlcv.dates.length} snapshots` : '· from local snapshots'}
             </span>
           </div>
           <div className="flex gap-1">

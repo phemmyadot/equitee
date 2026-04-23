@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import Link from 'next/link';
-import { fetchWatchlist, addToWatchlist, removeFromWatchlist, fetchAlerts, createAlert, deleteAlert } from '@/services/api';
+import { fetchWatchlist, addToWatchlist, removeFromWatchlist, createAlert, deleteAlert } from '@/services/api';
 import type { WatchlistItem, TriggeredAlert, PriceAlert } from '@/models';
 import { computeSignal } from '@/components/molecules/Signalscore';
 import { computeTargets } from '@/utils/targets';
@@ -12,6 +12,16 @@ import { sectorColor } from '@/utils/theme';
 import { IconBookmark, IconX, IconBell } from '@/components/atoms/icons';
 
 type Tab = 'NGX' | 'US';
+
+function fmtAgo(iso: string | null): string {
+  if (!iso) return '';
+  const diffMs = Date.now() - new Date(iso).getTime();
+  const mins = Math.floor(diffMs / 60_000);
+  if (mins < 1) return 'just now';
+  if (mins < 60) return `${mins}m ago`;
+  const hrs = Math.floor(mins / 60);
+  return `${hrs}h ${mins % 60}m ago`;
+}
 
 // ── AlertRow ──────────────────────────────────────────────────────────────────
 
@@ -424,6 +434,7 @@ function WatchlistTable({
 
 export default function WatchlistPage() {
   const [items, setItems] = useState<WatchlistItem[]>([]);
+  const [lastUpdated, setLastUpdated] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [tab, setTab] = useState<Tab>('NGX');
   const [removing, setRemoving] = useState<string | null>(null);
@@ -434,21 +445,18 @@ export default function WatchlistPage() {
   const [triggeredAlerts, setTriggeredAlerts] = useState<TriggeredAlert[]>([]);
   const [dismissedAlertIds, setDismissedAlertIds] = useState<Set<number>>(new Set());
 
-  const loadAlerts = useCallback(() => {
-    fetchAlerts().then((r) => setAlerts(r.alerts)).catch(() => {});
-  }, []);
-
   const load = useCallback(() => {
     setLoading(true);
     fetchWatchlist()
       .then((r) => {
         setItems(r.items);
         setTriggeredAlerts(r.triggered_alerts ?? []);
+        setAlerts(r.alerts ?? []);
+        setLastUpdated(r.last_updated ?? null);
       })
       .catch(() => setItems([]))
       .finally(() => setLoading(false));
-    loadAlerts();
-  }, [loadAlerts]);
+  }, []);
 
   useEffect(() => { load(); }, [load]);
 
@@ -549,6 +557,9 @@ export default function WatchlistPage() {
             <h1 className="text-[15px] font-bold text-[var(--ink)] leading-none">Watchlist</h1>
             <p className="text-[11px] text-[var(--ink-4)] mt-0.5">
               {loading ? 'Loading…' : `${filtered.length} ticker${filtered.length !== 1 ? 's' : ''} monitored`}
+              {!loading && lastUpdated && (
+                <span className="ml-2 text-[10px] text-[var(--ink-4)] opacity-70">· updated {fmtAgo(lastUpdated)}</span>
+              )}
             </p>
           </div>
         </div>

@@ -31,3 +31,9 @@ export interface CashBalance {
   ngn: number;
   usd: number;
 }
+
+export interface SettingsInit {
+  holdings: HoldingRecord[];
+  closed: ClosedRecord[];
+  cash: CashBalance;
+}

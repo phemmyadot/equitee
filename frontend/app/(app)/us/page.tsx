@@ -1,6 +1,7 @@
 'use client';
 
-import { usePortfolio } from '@/context/PortfolioContext';
+import { useState, useEffect } from 'react';
+import { fetchUSHome } from '@/services/api';
 import KPICard from '@/components/molecules/KPICard';
 import ChartCard from '@/components/molecules/ChartCard';
 import StockTable, { type ColDef } from '@/components/molecules/StockTable';
@@ -11,16 +12,24 @@ import PlotlyChart from '@/components/molecules/PlotlyChart';
 import { plotlyLayout, COLORS, sectorColor } from '@/utils/theme';
 import { fmtUSD, fmtPct, fmtPct2, isPositive } from '@/utils/formatters';
 import { exportUSSnapshot } from '@/utils/csv';
-import type { StockRow } from '@/models';
+import type { StockRow, UsHomeResponse } from '@/models';
 
 export default function USPortfolioPage() {
-  const { data, loading } = usePortfolio();
+  const [data, setData] = useState<UsHomeResponse | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    fetchUSHome().then(setData).finally(() => setLoading(false));
+    const iv = setInterval(() => fetchUSHome().then(setData), 5 * 60 * 1000);
+    return () => clearInterval(iv);
+  }, []);
+
   const isFirstLoad = loading && !data;
   if (!data && !loading) return null;
 
-  const k = data?.us_kpis;
-  const us_stocks = data?.us_stocks ?? [];
-  const us_sectors = data?.us_sectors ?? [];
+  const k = data?.kpis;
+  const us_stocks = data?.stocks ?? [];
+  const us_sectors = data?.sectors ?? [];
   const meta = data?.meta;
 
   const equityBar = {
@@ -231,10 +240,10 @@ export default function USPortfolioPage() {
 
       {meta && (
         <PriceBanner
-          live={meta.us_prices_live}
-          total={meta.us_prices_total}
-          source={meta.us_price_source}
-          ageSeconds={meta.us_price_age}
+          live={meta.prices_live}
+          total={meta.prices_total}
+          source={meta.price_source}
+          ageSeconds={meta.price_age}
         />
       )}
 

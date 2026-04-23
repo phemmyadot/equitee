@@ -25,11 +25,7 @@ from app.db.crud import (
 )
 from app.auth.dependencies import get_current_user
 
-from app.services.profile import get_profile as _get_profile
-from app.services import ngx as _ngx_service
-from app.services import prices as _prices_service
-from app.services import performance as _overview_service
-from app.services import overview as _performance_service
+from app.services import ngx_job as _ngx_job
 from app.services import yahoo as _yahoo_service
 
 router = APIRouter(prefix="/api/watchlist", tags=["watchlist"])
@@ -43,7 +39,7 @@ def _safe(fn, *args, **kwargs):
 
 
 def _fetch_ticker_full(ticker: str, market: str = "NGX") -> dict[str, Any]:
-    """Fetch price + profile + overview + performance in parallel."""
+    """Return price + profile + overview + performance for a ticker. NGX reads from DB."""
     if market == "US":
         with ThreadPoolExecutor(max_workers=2) as ex:
             f_price = ex.submit(_safe, _yahoo_service.get_price, ticker)
@@ -63,7 +59,6 @@ def _fetch_ticker_full(ticker: str, market: str = "NGX") -> dict[str, Any]:
             }
 
         prof = fund.get("profile") or {}
-        # Inject live name from price response if not in fundamentals
         if pd and pd.name and not prof.get("name"):
             prof = {**prof, "name": pd.name}
 
@@ -76,37 +71,36 @@ def _fetch_ticker_full(ticker: str, market: str = "NGX") -> dict[str, Any]:
             "cached_at": None,
         }
 
-    # NGX path
-    with ThreadPoolExecutor(max_workers=3) as ex:
-        f_profile = ex.submit(_safe, _get_profile, ticker)
-        f_overview = ex.submit(_safe, _overview_service.get_overview, ticker)
-        f_perf = ex.submit(_safe, _performance_service.get_performance, ticker)
-        f_price = ex.submit(_safe, _prices_service.get_price, ticker)
-        f_intraday = ex.submit(_safe, _ngx_service._get_quote_intraday, ticker)
-
-    profile_raw = f_profile.result()
-    ov_raw = f_overview.result()
-    perf_raw = f_perf.result()
-    pd = f_price.result()
-    intraday = f_intraday.result() or {}
+    # NGX path — read everything from DB cache
+    row = _ngx_job.get_ticker(ticker)
+    if not row:
+        return {"ticker": ticker, "price": None, "profile": None, "overview": None, "performance": None, "cached_at": None}
 
     price_out = None
-    if pd:
+    if row.get("price") is not None:
         price_out = {
             "symbol": ticker,
-            "price": intraday.get("price") or pd.price,
-            "change": intraday.get("change") or pd.change,
-            "change_pct": intraday.get("change_pct") or pd.change_pct,
-            "volume": intraday.get("volume") or pd.volume,
+            "price": row["price"],
+            "change": row["change"],
+            "change_pct": row["change_pct"],
+            "volume": row["volume"],
+            "high": row["high"],
+            "low": row["low"],
         }
+
+    profile_out = {k: row.get(k) for k in ("name", "sector", "industry", "description", "website", "headquarters", "founded", "employees")} if row.get("name") else None
+
+    overview_out = {k: row.get(k) for k in ("market_cap", "pe_ratio", "eps", "book_value", "dividend_yield", "roe", "roa", "debt_to_equity", "current_ratio", "gross_margin", "net_margin", "revenue", "net_income")} if row.get("market_cap") else None
+
+    performance_out = {k: row.get(k) for k in ("beta", "week_52_high", "week_52_low", "week_52_change", "return_1y", "return_ytd", "return_1m", "return_3m", "return_6m", "volatility", "sharpe_ratio", "max_drawdown", "rsi_14", "ma_50", "ma_200", "golden_cross", "piotroski_score", "altman_zscore")} if row.get("week_52_high") else None
 
     return {
         "ticker": ticker,
         "price": price_out,
-        "profile": profile_raw,
-        "overview": ov_raw,
-        "performance": perf_raw,
-        "cached_at": None,
+        "profile": profile_out,
+        "overview": overview_out,
+        "performance": performance_out,
+        "cached_at": row.get("fundamentals_updated_at"),
     }
 
 
@@ -135,10 +129,24 @@ class TriggeredAlert(BaseModel):
     note: Optional[str] = None
 
 
+class AlertOut(BaseModel):
+    id: int
+    ticker: str
+    market: str
+    threshold_price: float
+    direction: str
+    is_active: bool
+    triggered_at: Optional[str] = None
+    note: Optional[str] = None
+    created_at: str
+
+
 class WatchlistResponse(BaseModel):
     items: list[WatchlistItem]
     count: int
     triggered_alerts: list[TriggeredAlert] = []
+    alerts: list[AlertOut] = []
+    last_updated: Optional[str] = None
 
 
 class WatchCheckResponse(BaseModel):
@@ -168,7 +176,18 @@ def list_watchlist(
 ):
     rows = get_watchlist(db, current_user.id)
     if not rows:
-        return WatchlistResponse(items=[], count=0)
+        all_alerts = get_alerts(db, current_user.id)
+        alerts_out = [
+            AlertOut(
+                id=a.id, ticker=a.ticker, market=a.market,
+                threshold_price=a.threshold_price, direction=a.direction,
+                is_active=a.is_active,
+                triggered_at=a.triggered_at.isoformat() if a.triggered_at else None,
+                note=a.note, created_at=a.created_at.isoformat(),
+            )
+            for a in all_alerts
+        ]
+        return WatchlistResponse(items=[], count=0, alerts=alerts_out, last_updated=_ngx_job.last_updated())
 
     # Fetch all tickers in parallel (one thread per ticker, max 10)
     row_map = {r.ticker: r for r in rows}
@@ -233,8 +252,29 @@ def list_watchlist(
         if not a.is_active and a.triggered_at is not None
     ]
 
+    alerts_out = [
+        AlertOut(
+            id=a.id,
+            ticker=a.ticker,
+            market=a.market,
+            threshold_price=a.threshold_price,
+            direction=a.direction,
+            is_active=a.is_active,
+            triggered_at=a.triggered_at.isoformat() if a.triggered_at else None,
+            note=a.note,
+            created_at=a.created_at.isoformat(),
+        )
+        for a in all_alerts
+    ]
+
     db.commit()
-    return WatchlistResponse(items=items, count=len(items), triggered_alerts=triggered_out)
+    return WatchlistResponse(
+        items=items,
+        count=len(items),
+        triggered_alerts=triggered_out,
+        alerts=alerts_out,
+        last_updated=_ngx_job.last_updated(),
+    )
 
 
 @router.post("/{ticker}", status_code=201)
@@ -250,7 +290,7 @@ def add_watch(
     if market == "US":
         pd = _safe(_yahoo_service.get_price, t)
     else:
-        pd = _safe(_prices_service.get_price, t)
+        pd = _safe(_ngx_job.get_price, t)
     if pd is None:
         raise HTTPException(status_code=404, detail=f"{t} not found on {market}")
     added_price: float | None = pd.price

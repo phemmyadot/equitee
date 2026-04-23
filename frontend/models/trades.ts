@@ -1,3 +1,8 @@
+export interface TradesAll {
+  sells: SaleEvent[];
+  buys: BuyEvent[];
+}
+
 export interface SaleEvent {
   id: number;
   ticker: string;

@@ -433,6 +433,90 @@ class AnalysisHistory(Base):
     __table_args__ = (Index("ix_analysis_history_user_id", "user_id"),)
 
 
+# ── ngx_ticker_cache ──────────────────────────────────────────────────────────
+
+
+class NgxTickerCache(Base):
+    """DB-backed per-ticker NGX cache. One row per ticker, kept current by the hourly job."""
+
+    __tablename__ = "ngx_ticker_cache"
+
+    ticker: Mapped[str] = mapped_column(String, primary_key=True)
+    # Identity
+    name: Mapped[Optional[str]] = mapped_column(String, nullable=True)
+    sector: Mapped[Optional[str]] = mapped_column(String, nullable=True)
+    industry: Mapped[Optional[str]] = mapped_column(String, nullable=True)
+    description: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    website: Mapped[Optional[str]] = mapped_column(String, nullable=True)
+    headquarters: Mapped[Optional[str]] = mapped_column(String, nullable=True)
+    founded: Mapped[Optional[str]] = mapped_column(String, nullable=True)
+    employees: Mapped[Optional[str]] = mapped_column(String, nullable=True)
+    # Price (from list page, updated every job run)
+    price: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
+    change: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
+    change_pct: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
+    volume: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
+    high: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
+    low: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
+    # Fundamentals (from statistics page)
+    market_cap: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
+    pe_ratio: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
+    eps: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
+    book_value: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
+    dividend_yield: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
+    roe: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
+    roa: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
+    debt_to_equity: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
+    current_ratio: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
+    gross_margin: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
+    net_margin: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
+    revenue: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
+    net_income: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
+    # Performance / technicals (from statistics + quote pages)
+    beta: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
+    week_52_high: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
+    week_52_low: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
+    week_52_change: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
+    return_1y: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
+    return_ytd: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
+    return_1m: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
+    return_3m: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
+    return_6m: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
+    volatility: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
+    sharpe_ratio: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
+    max_drawdown: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
+    rsi_14: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
+    ma_50: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
+    ma_200: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
+    golden_cross: Mapped[Optional[bool]] = mapped_column(Boolean, nullable=True)
+    piotroski_score: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
+    altman_zscore: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
+    # Dividend snapshot (from dividend page)
+    dividend_amount: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
+    dividend_ex_date: Mapped[Optional[str]] = mapped_column(String, nullable=True)
+    dividend_pay_date: Mapped[Optional[str]] = mapped_column(String, nullable=True)
+    # Per-phase update timestamps for partial-run tracking
+    prices_updated_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+    fundamentals_updated_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+    profile_updated_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+
+
+class NgxJobLog(Base):
+    """One row per background job run. Lock = any row with status='running' started < 30 min ago."""
+
+    __tablename__ = "ngx_job_log"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    started_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=_now)
+    finished_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+    status: Mapped[str] = mapped_column(String, nullable=False, default="running")  # running|done|failed
+    tickers_total: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    tickers_done: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    error_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+
+    __table_args__ = (Index("ix_ngx_job_log_status", "status"),)
+
+
 # ── price_alerts ───────────────────────────────────────────────────────────────
 
 

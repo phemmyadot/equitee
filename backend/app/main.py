@@ -19,7 +19,7 @@ from slowapi.errors import RateLimitExceeded
 from app.limiter import limiter
 
 from app.config import settings
-from app.routers import data, prices, fx, history, profile, settings as settings_router
+from app.routers import data, prices, fx, history, settings as settings_router
 from app.routers import auth as auth_router
 from app.routers import watchlist as watchlist_router
 from app.routers import analysis as analysis_router
@@ -27,6 +27,9 @@ from app.routers import trades as trades_router
 from app.routers import signal_score as signal_score_router
 from app.routers import screener as screener_router
 from app.routers import alerts as alerts_router
+from app.routers import ngx_pages as ngx_pages_router
+from app.routers import us_pages as us_pages_router
+from app.routers import combined_pages as combined_pages_router
 from app.db.engine import engine, SessionLocal
 from app.db import models as db_models  # registers all ORM tables
 from app.db.seed import seed_from_json
@@ -78,9 +81,9 @@ async def lifespan(app: FastAPI):
 
     log.info("DB ready.")
 
-    # Warm screener fundamentals cache for all NGX tickers (once per day, background)
-    from app.services.screener_warmup import start_background_warmup
-    start_background_warmup()
+    # Start hourly NGX data job (prices + fundamentals + dividends → DB)
+    from app.services.ngx_job import start_scheduler as _start_ngx_scheduler
+    _start_ngx_scheduler()
 
     yield
     # ── Shutdown (nothing to do) ──────────────────────────────────────────────
@@ -120,13 +123,15 @@ app.include_router(prices.router)
 app.include_router(fx.router)
 app.include_router(history.router)
 app.include_router(settings_router.router)
-app.include_router(profile.router)
 app.include_router(watchlist_router.router)
 app.include_router(analysis_router.router)
 app.include_router(trades_router.router)
 app.include_router(signal_score_router.router)
 app.include_router(screener_router.router)
 app.include_router(alerts_router.router)
+app.include_router(ngx_pages_router.router)
+app.include_router(us_pages_router.router)
+app.include_router(combined_pages_router.router)
 
 
 # ── Health check ─────────────────────────────────────────────────────────────

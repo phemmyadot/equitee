@@ -15,7 +15,7 @@ from sqlalchemy.orm import Session
 from app.db.engine import get_db
 from app.db.models import User
 from app.auth.dependencies import get_current_user
-from app.services import ngx as ngx_service
+from app.services import ngx_job
 from app.services import yahoo as yahoo_service
 from app.services import fx as fx_service
 from app.services import dividends as dividends_service
@@ -34,21 +34,17 @@ async def get_data(
 ):
     try:
         fx = fx_service.get_rate()
-        ngx_prices = ngx_service.get_prices()
+        ngx_prices = ngx_job.get_prices_dict()
 
         holdings = load_holdings_from_db(db, current_user.id)
-        ngx_tickers = [h["ticker"] for h in holdings["ngx"]]
         us_tickers = [h["ticker"] for h in holdings["us"]]
         us_prices = yahoo_service.get_prices(us_tickers)
-
-        # Enrich NGX holdings with intraday high/low/volume from per-ticker pages
-        ngx_prices.update(ngx_service.enrich_with_volumes(ngx_tickers))
 
         return build_portfolio_response(
             ngx_prices=ngx_prices,
             us_prices=us_prices,
             fx=fx,
-            ngx_price_age=ngx_service.cache_age(),
+            ngx_price_age=ngx_job.cache_age(),
             us_price_age=yahoo_service.cache_age(),
             db=db,
             user_id=current_user.id,

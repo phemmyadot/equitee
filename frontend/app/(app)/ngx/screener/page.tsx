@@ -11,6 +11,16 @@ import { IconFilter } from '@/components/atoms/icons';
 type SortKey = keyof ScreenerItem;
 type SortDir = 'asc' | 'desc';
 
+function fmtAgo(iso: string | null): string {
+  if (!iso) return '';
+  const diffMs = Date.now() - new Date(iso).getTime();
+  const mins = Math.floor(diffMs / 60_000);
+  if (mins < 1) return 'just now';
+  if (mins < 60) return `${mins}m ago`;
+  const hrs = Math.floor(mins / 60);
+  return `${hrs}h ${mins % 60}m ago`;
+}
+
 function fmtMktCap(v: number | null): string {
   if (v == null) return '—';
   if (v >= 1e12) return `₦${(v / 1e12).toFixed(2)}T`;
@@ -46,6 +56,7 @@ function Range52W({ item }: { item: ScreenerItem }) {
 
 export default function ScreenerPage() {
   const [data, setData] = useState<ScreenerItem[]>([]);
+  const [lastUpdated, setLastUpdated] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
 
   // Filters
@@ -63,7 +74,7 @@ export default function ScreenerPage() {
 
   useEffect(() => {
     fetchNGXScreener()
-      .then((r) => setData(r.tickers))
+      .then((r) => { setData(r.tickers); setLastUpdated(r.last_updated ?? null); })
       .catch(() => setData([]))
       .finally(() => setLoading(false));
   }, []);
@@ -147,6 +158,9 @@ export default function ScreenerPage() {
             {loading
               ? 'Loading…'
               : `${filtered.length} of ${data.length} tickers · ${enriched} with fundamentals`}
+            {!loading && lastUpdated && (
+              <span className="ml-2 text-[10px] text-[var(--ink-4)] opacity-70">· updated {fmtAgo(lastUpdated)}</span>
+            )}
           </p>
         </div>
       </div>

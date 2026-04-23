@@ -52,6 +52,20 @@ export interface StockRow {
   UsdCost?: number;
   UsdReturn?: number;
   RealReturnPct?: number;
+  // Fundamentals — present on page-specific endpoints (ngx/home, ngx/advanced)
+  PeRatio?: number | null;
+  Roe?: number | null;
+  Eps?: number | null;
+  BookValue?: number | null;
+  DividendYield?: number | null;
+  Beta?: number | null;
+  Ma50?: number | null;
+  Ma200?: number | null;
+  Week52High?: number | null;
+  Week52Low?: number | null;
+  Rsi14?: number | null;
+  PiotroskiScore?: number | null;
+  AltmanZscore?: number | null;
 }
 
 export interface SectorRow {

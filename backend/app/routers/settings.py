@@ -129,6 +129,24 @@ class SellResponse(BaseModel):
 # ── Endpoints ──────────────────────────────────────────────────────────────────
 
 
+class SettingsInitResponse(BaseModel):
+    holdings: list[HoldingOut]
+    closed: list[ClosedOut]
+    cash: CashBalanceOut
+
+
+@router.get("/init", response_model=SettingsInitResponse)
+def settings_init(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    return SettingsInitResponse(
+        holdings=get_all_holdings(db, current_user.id),
+        closed=get_closed_positions(db, current_user.id),
+        cash=get_cash_balance(db, current_user.id),
+    )
+
+
 @router.get("/holdings", response_model=list[HoldingOut])
 def list_holdings(
     db: Session = Depends(get_db),

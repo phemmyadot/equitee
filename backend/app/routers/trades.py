@@ -56,6 +56,22 @@ class BuyEventOut(BaseModel):
         from_attributes = True
 
 
+class TradesAllResponse(BaseModel):
+    sells: list[SaleEventOut]
+    buys: list[BuyEventOut]
+
+
+@router.get("/all", response_model=TradesAllResponse)
+def list_all_trades(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    return TradesAllResponse(
+        sells=get_sale_events(db, current_user.id),
+        buys=get_buy_events(db, current_user.id),
+    )
+
+
 @router.get("", response_model=list[SaleEventOut])
 def list_sells(
     db: Session = Depends(get_db),

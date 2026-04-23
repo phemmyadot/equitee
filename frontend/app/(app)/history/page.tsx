@@ -2,7 +2,6 @@
 
 import { useState } from 'react';
 import { usePortfolioHistory } from '@/hooks/useHistory';
-import { usePortfolio } from '@/context/PortfolioContext';
 import KPICard from '@/components/molecules/KPICard';
 import ChartCard from '@/components/molecules/ChartCard';
 import { ChartSkeleton } from '@/components/atoms/Feedback';
@@ -34,7 +33,6 @@ function periodReturn(points: PortfolioPoint[], key: keyof PortfolioPoint) {
 
 export default function HistoryPage() {
   const [days, setDays] = useState(90);
-  const { data: live } = usePortfolio();
   const { data, loading, error } = usePortfolioHistory(days);
 
   const points = data?.points ?? [];

@@ -96,10 +96,24 @@ class StockRow(BaseModel):
     Volume: Optional[float] = None
     PriceSource: str = "no-data"
     # Real-return fields (NGX only for USD; both markets for RealReturnPct)
-    UsdEquity: Optional[float] = None       # equity in USD at current FX
-    UsdCost: Optional[float] = None         # cost in USD at current FX
-    UsdReturn: Optional[float] = None       # P&L in USD
-    RealReturnPct: Optional[float] = None   # NGN/USD return deflated by avg CPI
+    UsdEquity: Optional[float] = None
+    UsdCost: Optional[float] = None
+    UsdReturn: Optional[float] = None
+    RealReturnPct: Optional[float] = None
+    # Fundamentals — populated only on page-specific endpoints (ngx/home, ngx/advanced)
+    PeRatio: Optional[float] = None
+    Roe: Optional[float] = None
+    Eps: Optional[float] = None
+    BookValue: Optional[float] = None
+    DividendYield: Optional[float] = None
+    Beta: Optional[float] = None
+    Ma50: Optional[float] = None
+    Ma200: Optional[float] = None
+    Week52High: Optional[float] = None
+    Week52Low: Optional[float] = None
+    Rsi14: Optional[float] = None
+    PiotroskiScore: Optional[float] = None
+    AltmanZscore: Optional[float] = None
 
 
 class SectorRow(BaseModel):

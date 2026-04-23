@@ -16,6 +16,23 @@ export type {
   PortfolioData,
   PortfolioPoint,
   PortfolioHistory,
+  NgxTickerResponse,
+  NgxTickerPrice,
+  NgxTickerProfile,
+  NgxTickerOverview,
+  NgxTickerPerformance,
+  NgxTickerPriceHistory,
+  NgxTickerEarnings,
+  NgxTickerBalanceSheet,
+  NgxTickerCashFlows,
+  NgxTickerDividend,
+  UsTickerResponse,
+  UsTickerPrice,
+  UsTickerPriceHistory,
+  UsHomeResponse,
+  UsHomeMeta,
+  CombinedResponse,
+  CombinedMeta,
 } from '@/models/portfolio';
 
 export type {
@@ -45,6 +62,8 @@ export type {
 } from '@/models/analytics';
 
 export type { WatchlistItem, WatchlistResponse, PriceAlert, TriggeredAlert, ScreenerItem, ScreenerResponse } from '@/models/watchlist';
+export type { TradesAll, SaleEvent, BuyEvent } from '@/models/trades';
+export type { HoldingRecord, ClosedRecord, CashBalance, SettingsInit } from '@/models/holdings';
 
 export type {
   AnalysisContext,
@@ -124,13 +143,7 @@ import type {
   PortfolioData,
   PortfolioHistory,
   PriceHistory,
-  CompanyProfile,
-  TickerData,
-  DividendInfo,
   DividendsResponse,
-  EarningsHistory,
-  BalanceSheet,
-  DBPriceHistory,
   CorrelationData,
   AnalyticsData,
   RelativeStrengthData,
@@ -140,7 +153,15 @@ import type {
   AnalysisDetail,
   PriceAlert,
   ScreenerResponse,
+  NgxHomeResponse,
+  NgxAdvancedResponse,
+  NgxTickerResponse,
+  UsTickerResponse,
+  UsHomeResponse,
+  CombinedResponse,
 } from '@/models';
+import type { TradesAll } from '@/models/trades';
+import type { SettingsInit } from '@/models/holdings';
 
 export const fetchPortfolioData = () => get<PortfolioData>('/data');
 export const fetchFX = () => get<FXRate>('/fx');
@@ -152,23 +173,8 @@ export const fetchPortfolioHistory = (days = 90) =>
   get<PortfolioHistory>(`/history/portfolio?days=${days}`);
 export const fetchPriceHistory = (ticker: string, days = 90) =>
   get<PriceHistory>(`/history/prices/${ticker}?days=${days}`);
-export const fetchNGXProfile = (ticker: string) => get<CompanyProfile>(`/profile/ngx/${ticker}`);
-export const fetchUSTickerData = (ticker: string) =>
-  get<TickerData>(`/profile/us/${ticker}/full`);
-export const fetchUSPriceHistory = (ticker: string, days = 90) =>
-  get<DBPriceHistory>(`/profile/us/${ticker}/price-history?days=${days}`);
-export const fetchNGXTickerData = (ticker: string) =>
-  get<TickerData>(`/profile/ngx/${ticker}/full`);
-export const fetchNGXDividend = (ticker: string) =>
-  get<DividendInfo>(`/profile/ngx/${ticker}/dividend`);
 export const fetchDividends = (force = false) =>
   get<DividendsResponse>(`/dividends${force ? '?force=true' : ''}`);
-export const fetchNGXEarnings = (ticker: string) =>
-  get<EarningsHistory>(`/profile/ngx/${ticker}/earnings`);
-export const fetchNGXBalanceSheet = (ticker: string) =>
-  get<BalanceSheet>(`/profile/ngx/${ticker}/balance-sheet`);
-export const fetchNGXPriceHistory = (ticker: string, days = 90) =>
-  get<DBPriceHistory>(`/profile/ngx/${ticker}/price-history?days=${days}`);
 export const fetchCorrelation = (days = 90) =>
   get<CorrelationData>(`/history/correlation?days=${days}`);
 export const fetchAnalytics = (days = 180) => get<AnalyticsData>(`/history/analytics?days=${days}`);
@@ -181,6 +187,31 @@ export const addToWatchlist = (ticker: string, market: 'NGX' | 'US' = 'NGX') =>
   post<{ ticker: string; market: string; added_at: string }>(`/watchlist/${ticker}?market=${market}`);
 export const removeFromWatchlist = (ticker: string) =>
   del<{ ticker: string; removed: boolean }>(`/watchlist/${ticker}`);
+
+// ── NGX page-specific endpoints ───────────────────────────────────────────────
+
+export const fetchNGXHome = () => get<NgxHomeResponse>('/ngx/home');
+export const fetchNGXAdvanced = () => get<NgxAdvancedResponse>('/ngx/advanced');
+export const fetchNGXTicker = (ticker: string, days = 90) =>
+  get<NgxTickerResponse>(`/ngx/${ticker}?days=${days}`);
+
+// ── US page-specific endpoints ────────────────────────────────────────────────
+
+export const fetchUSHome = () => get<UsHomeResponse>('/us/home');
+export const fetchUSTicker = (ticker: string, days = 90) =>
+  get<UsTickerResponse>(`/us/${ticker}?days=${days}`);
+
+// ── Combined page endpoint ────────────────────────────────────────────────────
+
+export const fetchCombined = () => get<CombinedResponse>('/combined');
+
+// ── Trades ────────────────────────────────────────────────────────────────────
+
+export const fetchTradesAll = () => get<TradesAll>('/trades/all');
+
+// ── Settings init ─────────────────────────────────────────────────────────────
+
+export const fetchSettingsInit = () => get<SettingsInit>('/settings/init');
 
 // ── Screener ──────────────────────────────────────────────────────────────────
 

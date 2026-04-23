@@ -38,8 +38,15 @@ _intraday_cache: Dict[str, Dict] = {}
 _intraday_ts: Dict[str, float] = {}
 
 NGX_LIST_URL = f"{settings.NGX_SOURCE_BASE_URL}/list/nigerian-stock-exchange/"
+NGX_DATA_URL = f"{settings.NGX_SOURCE_BASE_URL}/list/nigerian-stock-exchange/__data.json"
 
-USER_AGENT = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36"
+USER_AGENT = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36"
+
+_JSON_HEADERS = {
+    "User-Agent": USER_AGENT,
+    "Accept": "application/json",
+    "Accept-Language": "en-US,en;q=0.9",
+}
 
 
 def _get_soup(url: str) -> Optional[BeautifulSoup]:
@@ -110,89 +117,76 @@ def _get_quote_intraday(ticker: str) -> Dict[str, Optional[float]]:
 
 def _fetch_all_data():
     """
-    Scrape the NGX list page and extract all price data.
-    Intelligently detects columns: ticker, name, price, change, change%, volume
+    Fetch all NGX ticker data from the stockanalysis.com SvelteKit JSON endpoint.
+    Returns (prices, dividends, profiles) or None on failure.
     """
-    soup = _get_soup(NGX_LIST_URL)
-    if not soup:
-        return
+    try:
+        resp = requests.get(NGX_DATA_URL, headers=_JSON_HEADERS, timeout=15)
+        resp.raise_for_status()
+        data = resp.json()
+    except Exception as exc:
+        log.error("[NGX] Failed to fetch __data.json: %s", exc)
+        return None
 
-    # Find the main data table
-    table = soup.find("table")
-    if not table:
-        log.error("[NGX] No table found on list page")
-        return
+    try:
+        node2 = data["nodes"][2]["data"]
+        meta = node2[0]
+        stock_list_refs = node2[meta["stockData"]]
+    except (KeyError, IndexError, TypeError) as exc:
+        log.error("[NGX] Unexpected __data.json structure: %s", exc)
+        return None
 
-    prices = {}
-    dividends = {}
-    profiles = {}
+    prices: Dict = {}
+    profiles: Dict = {}
 
-    rows = table.find_all("tr")[1:]  # Skip header row
-    for row in rows:
-        cells = row.find_all("td")
-        if len(cells) < 5:
-            continue
-
+    for ref in stock_list_refs:
         try:
-            # Actual table structure from NGX_SOURCE_BASE_URL:
-            # [0] No. [1] Symbol(link) [2] Company Name [3] Market Cap [4] Stock Price [5] % Change [6] Revenue
-
-            # Extract ticker from column 1 (contains link)
-            ticker_cell = cells[1]
-            ticker_link = ticker_cell.find("a")
-            if not ticker_link:
+            stock_raw = node2[ref]
+            if not isinstance(stock_raw, dict):
                 continue
 
-            ticker = ticker_link.text.strip().upper()
-            company_name = cells[2].text.strip() if len(cells) > 2 else ""
+            # Values are stored as index references into the flat data array
+            stock = {k: node2[v] if isinstance(v, int) else v for k, v in stock_raw.items()}
 
-            # Direct column mapping (no "smart detection" needed - we know the structure)
-            price = _safe_float(cells[4].text) if len(cells) > 4 else None
+            s = stock.get("s", "")
+            if not s or "/" not in s:
+                continue
 
-            # % Change is in column 5
-            change_pct = None
-            if len(cells) > 5:
-                text = cells[5].text.strip()
-                if text and text != "-":  # Table uses "-" for no data
-                    change_pct = _safe_float(text)
+            ticker = s.split("/")[-1].upper()
+            name = stock.get("n") or ""
+            price = stock.get("price")
+            change_pct = stock.get("change")
 
-            # Calculate change from price and change_pct if needed
-            change = None
-            if price and change_pct is not None:
-                change = (price * change_pct) / 100
+            if price is None:
+                continue
 
-            # Volume comes from individual ticker pages (lazy loaded on first request)
-            volume = None
+            change = round(price * change_pct / 100, 4) if change_pct else None
 
-            # Store price data with all available fields
-            if ticker and price is not None:
-                prices[ticker] = NGXPrice(
-                    symbol=ticker,
-                    price=price,
-                    close=None,  # Not available from list page
-                    change=change,
-                    change_pct=change_pct,
-                    high=None,
-                    low=None,
-                    volume=volume,
-                    value=None,
-                )
+            prices[ticker] = NGXPrice(
+                symbol=ticker,
+                price=price,
+                close=None,
+                change=change,
+                change_pct=change_pct,
+                high=None,
+                low=None,
+                volume=None,
+                value=None,
+            )
 
-            # Store profile data
-            if ticker and company_name:
+            if name:
                 profiles[ticker] = {
                     "symbol": ticker,
-                    "name": company_name,
+                    "name": name,
                     "sector": None,
                     "industry": None,
                 }
-
-        except Exception as e:
-            log.warning(f"[NGX] Error parsing row: {e}")
+        except Exception as exc:
+            log.debug("[NGX] Skipping entry ref=%s: %s", ref, exc)
             continue
 
-    log.info(f"[NGX] Scraped {len(prices)} tickers from list page")
-    return prices, dividends, profiles
+    log.info("[NGX] Scraped %d tickers from __data.json", len(prices))
+    return prices, {}, profiles
 
 
 def _refresh_cache():
@@ -282,50 +276,3 @@ def get_performance_ticker(ticker: str) -> Optional[Dict]:
 def cache_age() -> Optional[int]:
     """Return how many seconds old the cache is."""
     return int(time.time() - _cache["ts"]) if _cache["ts"] else None
-
-
-def enrich_with_volumes(tickers: List[str]) -> Dict[str, NGXPrice]:
-    """
-    Return prices for specific tickers with volume data fetched from individual pages.
-    Intraday requests are fired in parallel via a thread pool.
-    """
-    from concurrent.futures import ThreadPoolExecutor, as_completed
-
-    _refresh_cache()
-    tickers = [t.upper() for t in tickers]
-
-    # Only enrich tickers that are actually in the price cache
-    valid = [t for t in tickers if t in _cache["prices"]]
-    if not valid:
-        return {}
-
-    def _fetch(ticker: str):
-        return ticker, _get_quote_intraday(ticker)
-
-    intraday_map: Dict[str, Dict] = {}
-    with ThreadPoolExecutor(max_workers=min(len(valid), 10)) as ex:
-        futures = {ex.submit(_fetch, t): t for t in valid}
-        for future in as_completed(futures):
-            try:
-                t, data = future.result()
-                intraday_map[t] = data
-            except Exception:
-                intraday_map[futures[future]] = {}
-
-    prices = {}
-    for ticker in valid:
-        price_obj = _cache["prices"][ticker]
-        intraday = intraday_map.get(ticker, {})
-        prices[ticker] = NGXPrice(
-            symbol=price_obj.symbol,
-            price=price_obj.price,
-            close=price_obj.close,
-            change=price_obj.change,
-            change_pct=price_obj.change_pct,
-            high=intraday.get("high") or price_obj.high,
-            low=intraday.get("low") or price_obj.low,
-            volume=intraday.get("volume") or price_obj.volume,
-            value=price_obj.value,
-        )
-
-    return prices

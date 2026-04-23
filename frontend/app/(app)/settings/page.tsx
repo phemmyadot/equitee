@@ -2,17 +2,15 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import {
-  getHoldings,
-  getClosedPositions,
   createHolding,
   updateHolding,
   deleteHolding,
   buyShares,
   sellShares,
-  getCashBalance,
   creditCash,
   debitCash,
 } from '@/services/settingsApi';
+import { fetchSettingsInit } from '@/services/api';
 import type { HoldingRecord, ClosedRecord, SellResult, CashBalance } from '@/models';
 import { fmtNGN, fmtUSD, fmtPct } from '@/utils/formatters';
 import { useAuth } from '@/context/AuthContext';
@@ -364,10 +362,10 @@ export default function SettingsPage() {
 
   // ── Load data ──────────────────────────────────────────────────────────────
   const reload = useCallback(async () => {
-    const [h, c, bal] = await Promise.all([getHoldings(), getClosedPositions(), getCashBalance()]);
-    setHoldings(h);
-    setClosed(c);
-    setCash(bal);
+    const r = await fetchSettingsInit();
+    setHoldings(r.holdings);
+    setClosed(r.closed);
+    setCash(r.cash);
   }, []);
 
   useEffect(() => {

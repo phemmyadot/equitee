@@ -24,7 +24,7 @@ class Settings:
     NGX_PRICE_TTL: int = int(os.getenv("NGX_PRICE_TTL", "900"))  # seconds
     NGX_SOURCE_BASE_URL: str = os.getenv(
         "NGX_SOURCE_BASE_URL", "https://stockanalysis.com"
-    )
+    ).rstrip("/")
 
     # ── Yahoo Finance ────────────────────────────────────────────────────────
     YAHOO_API: str = os.getenv(

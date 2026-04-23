@@ -38,6 +38,8 @@ export interface WatchlistResponse {
   items: WatchlistItem[];
   count: number;
   triggered_alerts: TriggeredAlert[];
+  alerts: PriceAlert[];
+  last_updated: string | null;
 }
 
 export interface ScreenerItem {
@@ -61,4 +63,5 @@ export interface ScreenerItem {
 export interface ScreenerResponse {
   count: number;
   tickers: ScreenerItem[];
+  last_updated: string | null;
 }
