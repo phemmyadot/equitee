@@ -1,6 +1,7 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
+import { usePortfolio } from '@/context/PortfolioContext';
 import Link from 'next/link';
 import { fetchWatchlist, addToWatchlist, removeFromWatchlist, createAlert, deleteAlert } from '@/services/api';
 import type { WatchlistItem, TriggeredAlert, PriceAlert } from '@/models';
@@ -444,6 +445,8 @@ export default function WatchlistPage() {
   const [alerts, setAlerts] = useState<PriceAlert[]>([]);
   const [triggeredAlerts, setTriggeredAlerts] = useState<TriggeredAlert[]>([]);
   const [dismissedAlertIds, setDismissedAlertIds] = useState<Set<number>>(new Set());
+  const hasFetched = useRef(false);
+  const { refreshKey } = usePortfolio();
 
   const load = useCallback(() => {
     setLoading(true);
@@ -458,7 +461,16 @@ export default function WatchlistPage() {
       .finally(() => setLoading(false));
   }, []);
 
-  useEffect(() => { load(); }, [load]);
+  useEffect(() => {
+    if (hasFetched.current) return;
+    hasFetched.current = true;
+    load();
+  }, [load]);
+
+  useEffect(() => {
+    if (refreshKey === 0) return;
+    load();
+  }, [refreshKey, load]);
 
   // Clear input/error when switching tabs
   const switchTab = (t: Tab) => {
@@ -651,7 +663,7 @@ export default function WatchlistPage() {
           removing={removing}
           onRemove={handleRemove}
           alerts={alerts}
-          onAlertCreated={loadAlerts}
+          onAlertCreated={load}
           onAlertDeleted={handleAlertDeleted}
         />
       )}

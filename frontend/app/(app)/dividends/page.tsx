@@ -1,6 +1,7 @@
 'use client';
 
-import { useState, useMemo, useEffect, useCallback } from 'react';
+import { useState, useMemo, useEffect, useCallback, useRef } from 'react';
+import { usePortfolio } from '@/context/PortfolioContext';
 import Link from 'next/link';
 import { fmtNGN, fmtNGNFull } from '@/utils/formatters';
 import { sectorColor } from '@/utils/theme';
@@ -338,13 +339,24 @@ export default function DividendsPage() {
   const [filter, setFilter] = useState<Filter>('all');
   const [resp, setResp] = useState<DividendsResponse | null>(null);
   const [loading, setLoading] = useState(true);
+  const hasFetched = useRef(false);
+  const { refreshKey } = usePortfolio();
 
   const load = useCallback(async (force = false) => {
     setLoading(true);
     try { setResp(await fetchDividends(force)); } catch { /* silent */ } finally { setLoading(false); }
   }, []);
 
-  useEffect(() => { load(); }, [load]);
+  useEffect(() => {
+    if (hasFetched.current) return;
+    hasFetched.current = true;
+    load();
+  }, [load]);
+
+  useEffect(() => {
+    if (refreshKey === 0) return;
+    load();
+  }, [refreshKey, load]);
 
   const holdings = resp?.holdings ?? [];
 

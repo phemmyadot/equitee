@@ -144,7 +144,7 @@ class SettingsInitResponse(BaseModel):
     invites: Optional[list[InviteOut]] = None
 
 
-@router.get("/init", response_model=SettingsInitResponse)
+@router.get("/load", response_model=SettingsInitResponse)
 def settings_init(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),

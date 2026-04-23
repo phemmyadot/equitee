@@ -187,7 +187,7 @@ def list_watchlist(
             )
             for a in all_alerts
         ]
-        return WatchlistResponse(items=[], count=0, alerts=alerts_out, last_updated=_ngx_job.last_updated())
+        return WatchlistResponse(items=[], count=0, alerts=alerts_out, last_updated=(_ngx_job.last_updated().isoformat() if _ngx_job.last_updated() else None))
 
     # Fetch all tickers in parallel (one thread per ticker, max 10)
     row_map = {r.ticker: r for r in rows}
@@ -273,7 +273,7 @@ def list_watchlist(
         count=len(items),
         triggered_alerts=triggered_out,
         alerts=alerts_out,
-        last_updated=_ngx_job.last_updated(),
+        last_updated=(_ngx_job.last_updated().isoformat() if _ngx_job.last_updated() else None),
     )
 
 

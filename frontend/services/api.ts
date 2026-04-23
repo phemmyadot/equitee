@@ -211,11 +211,13 @@ export const fetchTradesAll = () => get<TradesAll>('/trades/all');
 
 // ── Settings init ─────────────────────────────────────────────────────────────
 
-export const fetchSettingsInit = () => get<SettingsInit>('/settings/init');
+export const fetchSettingsInit = () => get<SettingsInit>('/settings/load');
 
 // ── Screener ──────────────────────────────────────────────────────────────────
 
 export const fetchNGXScreener = () => get<ScreenerResponse>('/screener/ngx');
+export const fetchJobStatus = () =>
+  get<{ status: string; last_updated: string | null; next_run_at: string | null; job_interval_sec: number }>('/screener/ngx/status');
 
 // ── Alerts ────────────────────────────────────────────────────────────────────
 

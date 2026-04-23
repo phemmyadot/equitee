@@ -94,7 +94,7 @@ def combined_home(
                 return_pct=ngx_ret,
                 realized_pl=0,
                 total_cost=ngx_cost,
-                positions=sum(1 for s in ngx_stocks if s.IsActive),
+                positions=sum(1 for s in ngx_stocks if s.CurrentEquity is not None),
                 cash_balance_ngn=0,
             ),
             us_kpis=USKPIs(
@@ -102,7 +102,7 @@ def combined_home(
                 cost=us_cost,
                 gain=us_unreal,
                 return_pct=us_ret,
-                positions=sum(1 for s in us_stocks if s.IsActive),
+                positions=sum(1 for s in us_stocks if s.CurrentEquity is not None),
             ),
             combined_kpis=CombinedKPIs(
                 ngx_usd=ngx_usd,

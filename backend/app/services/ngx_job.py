@@ -295,6 +295,8 @@ def run_job() -> None:
     try:
         with SessionLocal() as db:
             job_ref = db.get(NgxJobLog, job.id)
+            if not job_ref:
+                return
             count = _scrape_prices(db, job_ref)
             if count == 0:
                 log.warning("[NGXJob] No prices scraped — aborting enrichment")
@@ -303,12 +305,16 @@ def run_job() -> None:
 
         with SessionLocal() as db:
             job_ref = db.get(NgxJobLog, job.id)
+            if not job_ref:
+                return
             _enrich_all(db, job_ref)
 
         _enrich_dividends()
 
         with SessionLocal() as db:
             job_ref = db.get(NgxJobLog, job.id)
+            if not job_ref:
+                return
             _finish_job(db, job_ref, status="done")
             log.info("[NGXJob] Job id=%d complete", job.id)
 
@@ -414,7 +420,7 @@ def get_prices_dict() -> dict[str, NGXPrice]:
         return {
             r.ticker: NGXPrice(
                 symbol=r.ticker,
-                price=r.price,
+                price=r.price or 0.0,
                 close=None,
                 change=r.change,
                 change_pct=r.change_pct,
@@ -435,7 +441,7 @@ def get_price(ticker: str) -> Optional[NGXPrice]:
             return None
         return NGXPrice(
             symbol=row.ticker,
-            price=row.price,
+            price=row.price or 0.0,
             close=None,
             change=row.change,
             change_pct=row.change_pct,
@@ -466,18 +472,39 @@ def cache_age() -> Optional[int]:
 
 
 def job_status() -> dict:
-    """Return current job state for the /api/ngx/status endpoint."""
+    """Return current job state for the /api/screener/ngx/status endpoint."""
     with SessionLocal() as db:
         latest = db.query(NgxJobLog).order_by(NgxJobLog.started_at.desc()).first()
+        last_done = db.query(NgxJobLog).filter(
+            NgxJobLog.status == "done"
+        ).order_by(NgxJobLog.finished_at.desc()).first()
         total = db.query(NgxTickerCache).count()
+
     if not latest:
-        return {"status": "never_run", "last_updated": None, "tickers": total}
+        return {
+            "status": "never_run",
+            "last_updated": None,
+            "next_run_at": None,
+            "job_interval_sec": JOB_INTERVAL,
+            "tickers_in_db": total,
+        }
+
     ts = latest.finished_at or latest.started_at
     if ts and ts.tzinfo is None:
         ts = ts.replace(tzinfo=timezone.utc)
+
+    next_run_at = None
+    if last_done and last_done.finished_at:
+        fin = last_done.finished_at
+        if fin.tzinfo is None:
+            fin = fin.replace(tzinfo=timezone.utc)
+        next_run_at = (fin + timedelta(seconds=JOB_INTERVAL)).isoformat()
+
     return {
         "status": latest.status,
         "last_updated": ts.isoformat() if ts else None,
+        "next_run_at": next_run_at,
+        "job_interval_sec": JOB_INTERVAL,
         "tickers_total": latest.tickers_total,
         "tickers_done": latest.tickers_done,
         "error_count": latest.error_count,

@@ -1,6 +1,7 @@
 'use client';
 
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useRef, useCallback } from 'react';
+import { usePortfolio } from '@/context/PortfolioContext';
 import Link from 'next/link';
 import { fetchNGXScreener } from '@/services/api';
 import type { ScreenerItem } from '@/models';
@@ -58,6 +59,8 @@ export default function ScreenerPage() {
   const [data, setData] = useState<ScreenerItem[]>([]);
   const [lastUpdated, setLastUpdated] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
+  const hasFetched = useRef(false);
+  const { refreshKey } = usePortfolio();
 
   // Filters
   const [search, setSearch] = useState('');
@@ -72,12 +75,24 @@ export default function ScreenerPage() {
   const [sortKey, setSortKey] = useState<SortKey>('ticker');
   const [sortDir, setSortDir] = useState<SortDir>('asc');
 
-  useEffect(() => {
+  const load = useCallback(() => {
+    setLoading(true);
     fetchNGXScreener()
       .then((r) => { setData(r.tickers); setLastUpdated(r.last_updated ?? null); })
       .catch(() => setData([]))
       .finally(() => setLoading(false));
   }, []);
+
+  useEffect(() => {
+    if (hasFetched.current) return;
+    hasFetched.current = true;
+    load();
+  }, [load]);
+
+  useEffect(() => {
+    if (refreshKey === 0) return;
+    load();
+  }, [refreshKey, load]);
 
   const sectors = useMemo(() => {
     const s = new Set<string>();

@@ -8,7 +8,6 @@ import {
   addToWatchlist,
   removeFromWatchlist,
 } from '@/services/api';
-import { usePortfolio } from '@/context/PortfolioContext';
 import ChartCard from '@/components/molecules/ChartCard';
 import { ErrorMessage } from '@/components/atoms/Feedback';
 import SignalScore, { computeSignal } from '@/components/molecules/Signalscore';
@@ -385,8 +384,7 @@ export default function NGXProfilePage() {
   const [watchBusy, setWatchBusy] = useState(false);
   const initialLoadRef = useRef(true);
 
-  const { data: portfolio } = usePortfolio();
-  const posRow: StockRow | undefined = portfolio?.ngx_stocks.find((s) => s.Ticker === ticker);
+  const posRow: StockRow | undefined = undefined;
 
   // Single consolidated fetch on ticker change — replaces 6 separate calls
   useEffect(() => {

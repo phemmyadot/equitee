@@ -1,7 +1,8 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { fetchCombined } from '@/services/api';
+import { usePortfolio } from '@/context/PortfolioContext';
 import KPICard from '@/components/molecules/KPICard';
 import ChartCard from '@/components/molecules/ChartCard';
 import { ChartSkeleton } from '@/components/atoms/Feedback';
@@ -14,12 +15,24 @@ import type { CombinedResponse } from '@/models';
 export default function CombinedPage() {
   const [data, setData] = useState<CombinedResponse | null>(null);
   const [loading, setLoading] = useState(true);
+  const hasFetched = useRef(false);
+  const { refreshKey } = usePortfolio();
+
+  const load = useCallback(() => {
+    setLoading(true);
+    fetchCombined().then(setData).finally(() => setLoading(false));
+  }, []);
 
   useEffect(() => {
-    fetchCombined().then(setData).finally(() => setLoading(false));
-    const iv = setInterval(() => fetchCombined().then(setData), 5 * 60 * 1000);
-    return () => clearInterval(iv);
-  }, []);
+    if (hasFetched.current) return;
+    hasFetched.current = true;
+    load();
+  }, [load]);
+
+  useEffect(() => {
+    if (refreshKey === 0) return;
+    load();
+  }, [refreshKey, load]);
 
   const isFirstLoad = loading && !data;
   if (!data && !loading) return null;

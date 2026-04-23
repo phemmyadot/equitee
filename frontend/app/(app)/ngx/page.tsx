@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import Link from 'next/link';
 import KPICard from '@/components/molecules/KPICard';
 import ChartCard from '@/components/molecules/ChartCard';
@@ -12,11 +12,10 @@ import { plotlyLayout, COLORS, sectorColor } from '@/utils/theme';
 import { fmtNGN, fmtNGNFull, fmtUSD, fmtPct, fmtPct2, isPositive } from '@/utils/formatters';
 import { fetchNGXHome } from '@/services/api';
 import type { StockRow, NgxHomeResponse } from '@/models';
+import { usePortfolio } from '@/context/PortfolioContext';
 import { computeSignal } from '@/components/molecules/Signalscore';
 import { computeTargets } from '@/utils/targets';
 import { exportNGXSnapshot } from '@/utils/csv';
-
-const REFRESH_MS = 5 * 60 * 1000; // 5 min
 
 // Build the TickerData shape that computeSignal/computeTargets expect, from StockRow fundamentals
 function toOverview(row: StockRow) {
@@ -57,19 +56,28 @@ const _n = (v: string | number | null | undefined): number | null => {
 export default function NGXOverviewPage() {
   const [resp, setResp] = useState<NgxHomeResponse | null>(null);
   const [loading, setLoading] = useState(true);
+  const { refreshKey, setLastUpdated } = usePortfolio();
+  const hasFetched = useRef(false);
 
   const load = useCallback(() => {
     fetchNGXHome()
-      .then(setResp)
+      .then((r) => { setResp(r); setLastUpdated(new Date()); })
       .catch(() => {})
       .finally(() => setLoading(false));
-  }, []);
+  }, [setLastUpdated]);
 
+  // Initial load — StrictMode guard prevents double-fetch in dev
   useEffect(() => {
+    if (hasFetched.current) return;
+    hasFetched.current = true;
     load();
-    const id = setInterval(load, REFRESH_MS);
-    return () => clearInterval(id);
   }, [load]);
+
+  // Reload when header refresh button or auto-interval fires
+  useEffect(() => {
+    if (refreshKey === 0) return;
+    load();
+  }, [refreshKey, load]);
 
   const isFirstLoad = loading && !resp;
 

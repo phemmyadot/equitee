@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useMemo, useCallback } from 'react';
+import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import KPICard from '@/components/molecules/KPICard';
 import ChartCard from '@/components/molecules/ChartCard';
 import PlotlyChart from '@/components/molecules/PlotlyChart';
@@ -8,8 +8,7 @@ import { plotlyLayout, COLORS, sectorColor } from '@/utils/theme';
 import { fmtNGN, fmtPct } from '@/utils/formatters';
 import { fetchNGXAdvanced } from '@/services/api';
 import type { StockRow, NgxAdvancedResponse } from '@/models';
-
-const REFRESH_MS = 5 * 60 * 1000;
+import { usePortfolio } from '@/context/PortfolioContext';
 
 const PE_BENCHMARKS = [
   { label: 'NGX', value: 11, color: '#6366F1' },
@@ -28,16 +27,26 @@ const _n = (v: string | number | null | undefined): number | null => {
 export default function NGXAdvancedPage() {
   const [resp, setResp] = useState<NgxAdvancedResponse | null>(null);
   const [loading, setLoading] = useState(true);
+  const { refreshKey, setLastUpdated } = usePortfolio();
+  const hasFetched = useRef(false);
 
   const load = useCallback(() => {
-    fetchNGXAdvanced().then(setResp).catch(() => {}).finally(() => setLoading(false));
-  }, []);
+    fetchNGXAdvanced()
+      .then((r) => { setResp(r); setLastUpdated(new Date()); })
+      .catch(() => {})
+      .finally(() => setLoading(false));
+  }, [setLastUpdated]);
 
   useEffect(() => {
+    if (hasFetched.current) return;
+    hasFetched.current = true;
     load();
-    const id = setInterval(load, REFRESH_MS);
-    return () => clearInterval(id);
   }, [load]);
+
+  useEffect(() => {
+    if (refreshKey === 0) return;
+    load();
+  }, [refreshKey, load]);
 
   if (!resp && !loading) return null;
   const isFirstLoad = loading && !resp;

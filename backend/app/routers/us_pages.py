@@ -91,7 +91,7 @@ def us_home(
         cost=cost,
         gain=unrealized,
         return_pct=ret_pct,
-        positions=sum(1 for s in stocks if s.IsActive),
+        positions=sum(1 for s in stocks if s.CurrentEquity is not None),
     )
 
     return UsHomeResponse(

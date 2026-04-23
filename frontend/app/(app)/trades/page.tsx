@@ -1,6 +1,7 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
+import { usePortfolio } from '@/context/PortfolioContext';
 import { fetchTradesAll } from '@/services/api';
 import type { SaleEvent, BuyEvent } from '@/models/trades';
 import { fmtNGN, fmtUSD } from '@/utils/formatters';
@@ -193,12 +194,26 @@ export default function TradesPage() {
   const [loading, setLoading] = useState(true);
   const [tab, setTab] = useState<Tab>('sells');
   const [market, setMarket] = useState<Market>('ngx');
+  const hasFetched = useRef(false);
+  const { refreshKey } = usePortfolio();
 
-  useEffect(() => {
+  const load = useCallback(() => {
+    setLoading(true);
     fetchTradesAll()
       .then((r) => { setSells(r.sells); setBuys(r.buys); })
       .finally(() => setLoading(false));
   }, []);
+
+  useEffect(() => {
+    if (hasFetched.current) return;
+    hasFetched.current = true;
+    load();
+  }, [load]);
+
+  useEffect(() => {
+    if (refreshKey === 0) return;
+    load();
+  }, [refreshKey, load]);
 
   const filtered = tab === 'sells'
     ? sells.filter((t) => t.market === market)

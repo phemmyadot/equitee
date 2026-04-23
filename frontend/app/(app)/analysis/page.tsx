@@ -2,7 +2,6 @@
 
 import { useEffect, useRef, useState, useCallback, useMemo } from 'react';
 import MarkdownViewer from '@/components/MarkdownViewer';
-import { usePortfolio } from '@/context/PortfolioContext';
 import {
   streamAnalysis,
   streamTradeJournal,
@@ -227,7 +226,6 @@ function RebalancingCalc({
 
 // ── Main Page ─────────────────────────────────────────────────────────────────
 export default function AnalysisPage() {
-  const { data: portfolioData } = usePortfolio();
   const [mode, setMode] = useState<Mode>('analysis');
   const [scope, setScope] = useState<AnalysisScope>('portfolio');
   const [depth, setDepth] = useState<AnalysisDepth>('default');
@@ -406,7 +404,7 @@ export default function AnalysisPage() {
 
   const displayText = activeDetail?.full_response ?? streamText;
   const displayEmpty = !displayText && !streaming && !error && !followUps.length;
-  const ngxHoldings = (portfolioData?.ngx_stocks ?? [])
+  const ngxHoldings = ([] as { ticker: string; equity: number }[])
     .filter(s => s.CurrentEquity != null)
     .map(s => ({ ticker: s.Ticker, equity: s.CurrentEquity! }));
 

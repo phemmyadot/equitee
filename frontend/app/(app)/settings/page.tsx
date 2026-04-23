@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import {
   createHolding,
   updateHolding,
@@ -14,7 +14,6 @@ import { fetchSettingsInit } from '@/services/api';
 import type { HoldingRecord, ClosedRecord, SellResult, CashBalance, InviteCode } from '@/models';
 import { fmtNGN, fmtUSD, fmtPct } from '@/utils/formatters';
 import { useAuth } from '@/context/AuthContext';
-import { usePortfolio } from '@/context/PortfolioContext';
 import {
   IconX,
   IconCheck,
@@ -325,7 +324,6 @@ function AdminInvitePanel({
 
 export default function SettingsPage() {
   const { user } = useAuth();
-  const { refresh: refreshPortfolio } = usePortfolio();
   const [tab, setTab] = useState<Tab>('active');
   const [holdings, setHoldings] = useState<HoldingRecord[]>([]);
   const [closed, setClosed] = useState<ClosedRecord[]>([]);
@@ -337,6 +335,8 @@ export default function SettingsPage() {
   const [filter, setFilter] = useState<'all' | 'ngx' | 'us'>('all');
 
   // ── Load data ──────────────────────────────────────────────────────────────
+  const hasFetched = useRef(false);
+
   const reload = useCallback(async () => {
     const r = await fetchSettingsInit();
     setHoldings(r.holdings);
@@ -346,6 +346,8 @@ export default function SettingsPage() {
   }, []);
 
   useEffect(() => {
+    if (hasFetched.current) return;
+    hasFetched.current = true;
     reload();
   }, [reload]);
 
@@ -604,7 +606,6 @@ export default function SettingsPage() {
           onClose={() => setModal(null)}
           onDone={() => {
             reload();
-            refreshPortfolio();
             setModal(null);
             showToast('Position added');
           }}
@@ -618,7 +619,6 @@ export default function SettingsPage() {
           onClose={() => setModal(null)}
           onDone={() => {
             reload();
-            refreshPortfolio();
             setModal(null);
             showToast('Position updated');
           }}
@@ -633,7 +633,6 @@ export default function SettingsPage() {
           onClose={() => setModal(null)}
           onDone={() => {
             reload();
-            refreshPortfolio();
             setModal(null);
             showToast(`Shares added to ${modal.holding.ticker}`);
           }}
@@ -672,7 +671,6 @@ export default function SettingsPage() {
           onClose={() => setModal(null)}
           onDone={(res) => {
             reload();
-            refreshPortfolio();
             setModal(null);
             const pl =
               res.holding.market === 'ngx' ? fmtNGN(res.realized_pl) : fmtUSD(res.realized_pl);
@@ -709,8 +707,7 @@ export default function SettingsPage() {
                 try {
                   await deleteHolding(modal.holding.id);
                   reload();
-                  refreshPortfolio();
-                  setModal(null);
+                        setModal(null);
                   showToast(`${modal.holding.ticker} deleted`);
                 } catch (e: any) {
                   showToast(e.message, 'error');
