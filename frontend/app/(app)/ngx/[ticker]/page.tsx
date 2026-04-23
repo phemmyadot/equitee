@@ -380,11 +380,12 @@ export default function NGXProfilePage() {
   const [watchBusy, setWatchBusy] = useState(false);
   const initialLoadRef = useRef(true);
 
-  const posRow: StockRow | undefined = undefined;
+  const posRow = undefined as StockRow | undefined;
 
   // Single consolidated fetch on ticker change — replaces 6 separate calls
   useEffect(() => {
     if (!ticker) return;
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     let c = false;
     setLoading(true);
     setError(null);
@@ -415,6 +416,7 @@ export default function NGXProfilePage() {
       return;
     }
     if (!ticker) return;
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     let c = false;
     setOhlcvLoad(true);
     setOhlcv(null);

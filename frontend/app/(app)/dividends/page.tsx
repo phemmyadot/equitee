@@ -13,10 +13,6 @@ import { IconTrendingUp, IconCheck, IconChartLine } from '@/components/atoms/ico
 // Helpers
 // ─────────────────────────────────────────────────────────────────────────────
 
-function Skeleton({ w = 'w-24', h = 'h-3' }: { w?: string; h?: string }) {
-  return <div className={`skeleton rounded ${w} ${h}`} />;
-}
-
 /** Days until a date string; negative = past */
 function daysUntil(dateStr: string | null): number | null {
   if (!dateStr) return null;
@@ -361,6 +357,7 @@ export default function DividendsPage() {
 
   useEffect(() => {
     if (refreshKey === 0) return;
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     load();
   }, [refreshKey, load]);
 

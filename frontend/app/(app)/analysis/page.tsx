@@ -141,12 +141,16 @@ function CollapsibleSections({ markdown }: { markdown: string }) {
     return result;
   }, [markdown]);
 
-  const [open, setOpen] = useState<Record<number, boolean>>({});
+  const [open, setOpen] = useState<Record<number, boolean>>(() =>
+    sections.reduce((acc, _, i) => ({ ...acc, [i]: i === 0 }), {} as Record<number, boolean>),
+  );
+
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setOpen(
       sections.reduce((acc, _, i) => ({ ...acc, [i]: i === 0 }), {} as Record<number, boolean>),
     );
-  }, [sections.length]);
+  }, [sections]);
 
   if (!sections.length) return <MarkdownViewer>{markdown}</MarkdownViewer>;
 
@@ -278,7 +282,6 @@ export default function AnalysisPage() {
   const [initialMessage, setInitialMessage] = useState('');
 
   const [streaming, setStreaming] = useState(false);
-  const [thinking, setThinking] = useState(false);
   const [streamText, setStreamText] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [tokenInfo, setTokenInfo] = useState<{ tokens: number; cached: boolean } | null>(null);
@@ -349,6 +352,7 @@ export default function AnalysisPage() {
   }, []);
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     loadHistory();
   }, [loadHistory]);
 
@@ -363,7 +367,6 @@ export default function AnalysisPage() {
 
   const handleRun = useCallback(() => {
     setStreaming(true);
-    setThinking(false);
     setStreamText('');
     setError(null);
     setTokenInfo(null);
@@ -393,12 +396,10 @@ export default function AnalysisPage() {
         scope,
         depth,
         (chunk) => {
-          setThinking(false);
           setStreamText((prev) => prev + chunk);
         },
         (id, tokens, cached) => {
           setStreaming(false);
-          setThinking(false);
           setTokenInfo({ tokens, cached });
           if (id) {
             setActiveId(id);
@@ -407,14 +408,13 @@ export default function AnalysisPage() {
         },
         (msg) => {
           setStreaming(false);
-          setThinking(false);
           setError(msg);
         },
         undefined,
         undefined,
         msg,
-        (status) => {
-          if (status === 'thinking') setThinking(true);
+        () => {
+          // Placeholder for status updates
         },
       );
     }
@@ -635,6 +635,7 @@ export default function AnalysisPage() {
                 </button>
               </div>
             </div>
+            {/* eslint-disable-next-line react-hooks/static-components */}
             <ThreadList onSelect={() => setSidebarOpen(false)} />
           </div>
         </div>
@@ -655,6 +656,7 @@ export default function AnalysisPage() {
             </button>
           )}
         </div>
+        {/* eslint-disable-next-line react-hooks/static-components */}
         <ThreadList />
       </div>
 

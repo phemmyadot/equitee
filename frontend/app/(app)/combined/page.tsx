@@ -33,6 +33,7 @@ export default function CombinedPage() {
 
   useEffect(() => {
     if (refreshKey === 0) return;
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     load();
   }, [refreshKey, load]);
 

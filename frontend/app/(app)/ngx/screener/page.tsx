@@ -55,6 +55,37 @@ function Range52W({ item }: { item: ScreenerItem }) {
   );
 }
 
+function SortIndicator({ sortKey, sortDir, k }: { sortKey: SortKey; sortDir: SortDir; k: SortKey }) {
+  if (sortKey !== k) return <span className="ml-0.5 opacity-20">↕</span>;
+  return <span className="ml-0.5">{sortDir === 'asc' ? '↑' : '↓'}</span>;
+}
+
+function TH({
+  label,
+  k,
+  sortKey,
+  sortDir,
+  onToggleSort,
+  right,
+}: {
+  label: string;
+  k: SortKey;
+  sortKey: SortKey;
+  sortDir: SortDir;
+  onToggleSort: (key: SortKey) => void;
+  right?: boolean;
+}) {
+  return (
+    <th
+      className={`px-3 py-2.5 text-[9.5px] font-bold uppercase tracking-[0.07em] text-[var(--ink-4)] whitespace-nowrap cursor-pointer select-none hover:text-[var(--ink-2)] ${right ? 'text-right' : ''}`}
+      onClick={() => onToggleSort(k)}
+    >
+      {label}
+      <SortIndicator sortKey={sortKey} sortDir={sortDir} k={k} />
+    </th>
+  );
+}
+
 export default function ScreenerPage() {
   const [data, setData] = useState<ScreenerItem[]>([]);
   const [lastUpdated, setLastUpdated] = useState<string | null>(null);
@@ -94,6 +125,7 @@ export default function ScreenerPage() {
 
   useEffect(() => {
     if (refreshKey === 0) return;
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     load();
   }, [refreshKey, load]);
 
@@ -151,28 +183,13 @@ export default function ScreenerPage() {
 
   const enriched = data.filter((d) => d.pe_ratio != null || d.roe != null).length;
 
-  function toggleSort(key: SortKey) {
+  const toggleSort = (key: SortKey) => {
     if (sortKey === key) setSortDir((d) => (d === 'asc' ? 'desc' : 'asc'));
     else {
       setSortKey(key);
       setSortDir('desc');
     }
-  }
-
-  function SortIndicator({ k }: { k: SortKey }) {
-    if (sortKey !== k) return <span className="ml-0.5 opacity-20">↕</span>;
-    return <span className="ml-0.5">{sortDir === 'asc' ? '↑' : '↓'}</span>;
-  }
-
-  const TH = ({ label, k, right }: { label: string; k: SortKey; right?: boolean }) => (
-    <th
-      className={`px-3 py-2.5 text-[9.5px] font-bold uppercase tracking-[0.07em] text-[var(--ink-4)] whitespace-nowrap cursor-pointer select-none hover:text-[var(--ink-2)] ${right ? 'text-right' : ''}`}
-      onClick={() => toggleSort(k)}
-    >
-      {label}
-      <SortIndicator k={k} />
-    </th>
-  );
+  };
 
   return (
     <div className="space-y-5">
@@ -343,17 +360,17 @@ export default function ScreenerPage() {
             <table className="w-full text-left border-collapse">
               <thead>
                 <tr className="border-b border-[var(--border)] bg-[var(--canvas)]">
-                  <TH label="Ticker" k="ticker" />
-                  <TH label="Company" k="name" />
-                  <TH label="Sector" k="sector" />
-                  <TH label="Price" k="price" right />
-                  <TH label="Day %" k="change_pct" right />
-                  <TH label="Mkt Cap" k="market_cap" right />
-                  <TH label="P/E" k="pe_ratio" right />
-                  <TH label="ROE %" k="roe" right />
-                  <TH label="Div Yield" k="dividend_yield" right />
-                  <TH label="52W Range" k="week_52_high" />
-                  <TH label="52W Chg %" k="week_52_change" right />
+                  <TH label="Ticker" k="ticker" sortKey={sortKey} sortDir={sortDir} onToggleSort={toggleSort} />
+                  <TH label="Company" k="name" sortKey={sortKey} sortDir={sortDir} onToggleSort={toggleSort} />
+                  <TH label="Sector" k="sector" sortKey={sortKey} sortDir={sortDir} onToggleSort={toggleSort} />
+                  <TH label="Price" k="price" sortKey={sortKey} sortDir={sortDir} onToggleSort={toggleSort} right />
+                  <TH label="Day %" k="change_pct" sortKey={sortKey} sortDir={sortDir} onToggleSort={toggleSort} right />
+                  <TH label="Mkt Cap" k="market_cap" sortKey={sortKey} sortDir={sortDir} onToggleSort={toggleSort} right />
+                  <TH label="P/E" k="pe_ratio" sortKey={sortKey} sortDir={sortDir} onToggleSort={toggleSort} right />
+                  <TH label="ROE %" k="roe" sortKey={sortKey} sortDir={sortDir} onToggleSort={toggleSort} right />
+                  <TH label="Div Yield" k="dividend_yield" sortKey={sortKey} sortDir={sortDir} onToggleSort={toggleSort} right />
+                  <TH label="52W Range" k="week_52_high" sortKey={sortKey} sortDir={sortDir} onToggleSort={toggleSort} />
+                  <TH label="52W Chg %" k="week_52_change" sortKey={sortKey} sortDir={sortDir} onToggleSort={toggleSort} right />
                 </tr>
               </thead>
               <tbody>
