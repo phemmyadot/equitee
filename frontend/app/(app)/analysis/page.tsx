@@ -67,18 +67,18 @@ function ThinkingAnimation({ depth, compact = false }: { depth: string; compact?
   const steps =
     depth === 'deep'
       ? [
-          'Reading portfolio…',
-          'Evaluating signals…',
-          'Reasoning through positions…',
-          'Formulating analysis…',
-        ]
+        'Reading portfolio…',
+        'Evaluating signals…',
+        'Reasoning through positions…',
+        'Formulating analysis…',
+      ]
       : depth === 'default'
         ? [
-            'Reading market data…',
-            'Checking global cues…',
-            'Reviewing watchlist…',
-            'Writing briefing…',
-          ]
+          'Reading market data…',
+          'Checking global cues…',
+          'Reviewing watchlist…',
+          'Writing briefing…',
+        ]
         : ['Reading portfolio…', 'Evaluating signals…', 'Writing analysis…'];
 
   const step = steps[Math.min(Math.floor(elapsed / 4), steps.length - 1)];
@@ -325,9 +325,9 @@ export default function AnalysisPage() {
       // line prefix (blockquote, list)
       replacement = selected
         ? selected
-            .split('\n')
-            .map((l) => wrap + l)
-            .join('\n')
+          .split('\n')
+          .map((l) => wrap + l)
+          .join('\n')
         : wrap;
       cursor = s + replacement.length;
     } else {
@@ -545,11 +545,10 @@ export default function AnalysisPage() {
               handleSelectHistory(item);
               onSelect?.();
             }}
-            className={`group relative rounded-xl border px-3 py-2.5 cursor-pointer transition-all duration-150 ${
-              isActive
+            className={`group relative rounded-xl border px-3 py-2.5 cursor-pointer transition-all duration-150 ${isActive
                 ? 'border-[var(--accent)] bg-[var(--accent-light)]'
                 : 'border-[var(--border)] hover:border-[var(--accent-light)] bg-white'
-            }`}
+              }`}
           >
             <div className="flex items-center justify-between gap-1 mb-0.5">
               <span
@@ -567,13 +566,12 @@ export default function AnalysisPage() {
             </div>
             <div className="flex items-center gap-1.5">
               <span
-                className={`text-[9px] font-semibold px-1 py-0.5 rounded ${
-                  item.depth === 'deep'
+                className={`text-[9px] font-semibold px-1 py-0.5 rounded ${item.depth === 'deep'
                     ? 'bg-purple-100 text-purple-600'
                     : item.depth === 'default'
                       ? 'bg-emerald-100 text-emerald-700'
                       : 'bg-[var(--accent-light)] text-[var(--accent)]'
-                }`}
+                  }`}
               >
                 {item.depth === 'quick'
                   ? 'Compact'
@@ -766,15 +764,14 @@ export default function AnalysisPage() {
                     key={d.key}
                     onClick={() => setDepth(d.key)}
                     disabled={streaming}
-                    className={`px-3 py-1.5 text-[11px] font-semibold transition-colors disabled:opacity-50 ${
-                      depth === d.key
+                    className={`px-3 py-1.5 text-[11px] font-semibold transition-colors disabled:opacity-50 ${depth === d.key
                         ? d.key === 'deep'
                           ? 'bg-purple-100 text-purple-600'
                           : d.key === 'default'
                             ? 'bg-emerald-100 text-emerald-700'
                             : 'bg-[var(--accent-light)] text-[var(--accent)]'
                         : 'text-[var(--ink-4)] hover:text-[var(--ink)]'
-                    }`}
+                      }`}
                   >
                     {d.label}
                   </button>
@@ -832,13 +829,12 @@ export default function AnalysisPage() {
                         {SCOPE_LABELS[s] ?? s}
                       </span>
                       <span
-                        className={`text-[10px] font-semibold px-1.5 py-0.5 rounded ${
-                          d === 'deep'
+                        className={`text-[10px] font-semibold px-1.5 py-0.5 rounded ${d === 'deep'
                             ? 'bg-purple-100 text-purple-700'
                             : d === 'default'
                               ? 'bg-emerald-100 text-emerald-700'
                               : 'bg-[var(--accent-light)] text-[var(--accent)]'
-                        }`}
+                          }`}
                       >
                         {d === 'quick' ? 'Compact' : d === 'deep' ? 'Detailed' : 'Default'}
                       </span>

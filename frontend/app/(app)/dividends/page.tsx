@@ -62,11 +62,10 @@ function StreakBadge({ streak, growing }: { streak: number | null; growing: bool
   const isGrowing = growing === true;
   return (
     <span
-      className={`inline-flex items-center gap-1 text-[9px] font-bold px-2 py-0.5 rounded-full ${
-        isGrowing
+      className={`inline-flex items-center gap-1 text-[9px] font-bold px-2 py-0.5 rounded-full ${isGrowing
           ? 'bg-[var(--gain-light)] text-[var(--gain)]'
           : 'bg-[var(--accent-light)] text-[var(--accent)]'
-      }`}
+        }`}
       title={`${streak}-year dividend streak${isGrowing ? ' · growing' : ''}`}
     >
       <IconChartLine width={9} height={9} />
@@ -280,13 +279,12 @@ function Timeline({ holdings }: { holdings: DividendHolding[] }) {
               <div key={h.ticker} className="flex items-center gap-4 py-2.5">
                 {/* Dot */}
                 <div
-                  className={`w-[23px] h-[23px] rounded-full border-2 flex items-center justify-center shrink-0 z-10 ${
-                    isNext
+                  className={`w-[23px] h-[23px] rounded-full border-2 flex items-center justify-center shrink-0 z-10 ${isNext
                       ? 'bg-[var(--gain)] border-[var(--gain)]'
                       : days <= 14
                         ? 'bg-white border-[var(--warn)]'
                         : 'bg-white border-[var(--border-strong)]'
-                  }`}
+                    }`}
                 >
                   {isNext && <IconCheck width={10} height={10} style={{ stroke: 'white' }} />}
                 </div>

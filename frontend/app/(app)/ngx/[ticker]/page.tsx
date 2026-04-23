@@ -326,17 +326,17 @@ function AltmanBadge({ score }: { score: string | number | null }) {
       ? { label: 'Safe', col: 'var(--gain)', bg: 'var(--gain-light)', desc: 'Low bankruptcy risk' }
       : n >= 1.81
         ? {
-            label: 'Grey Zone',
-            col: 'var(--warn)',
-            bg: 'var(--warn-light)',
-            desc: 'Monitor closely',
-          }
+          label: 'Grey Zone',
+          col: 'var(--warn)',
+          bg: 'var(--warn-light)',
+          desc: 'Monitor closely',
+        }
         : {
-            label: 'Distress',
-            col: 'var(--loss)',
-            bg: 'var(--loss-light)',
-            desc: 'High bankruptcy risk',
-          };
+          label: 'Distress',
+          col: 'var(--loss)',
+          bg: 'var(--loss-light)',
+          desc: 'High bankruptcy risk',
+        };
 
   return (
     <div className="flex flex-col gap-1.5">

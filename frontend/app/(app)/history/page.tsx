@@ -46,7 +46,7 @@ export default function HistoryPage() {
         setResp(r);
         setLastUpdated(new Date());
       })
-      .catch(() => {})
+      .catch(() => { })
       .finally(() => setLoading(false));
   }, [setLastUpdated]);
 
