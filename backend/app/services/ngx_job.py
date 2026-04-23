@@ -330,16 +330,24 @@ def run_job() -> None:
 
 # ── Scheduler ─────────────────────────────────────────────────────────────────
 
-def _run_and_reschedule() -> None:
-    run_job()
-    t = threading.Timer(JOB_INTERVAL, _run_and_reschedule)
-    t.daemon = True
-    t.start()
+def _next_top_of_hour(after: Optional[datetime] = None) -> datetime:
+    """Return the next wall-clock top-of-hour (UTC) after `after` (defaults to now)."""
+    base = after or datetime.now(timezone.utc)
+    return (base + timedelta(hours=1)).replace(minute=0, second=0, microsecond=0)
+
+
+def _scheduler_loop() -> None:
+    while True:
+        next_run = _next_top_of_hour()
+        delay = (next_run - datetime.now(timezone.utc)).total_seconds()
+        log.info("[NGXJob] Scheduler: next run at %s UTC (in %.0fs)", next_run.strftime("%H:%M"), delay)
+        time.sleep(max(delay, 0))
+        run_job()
 
 
 def start_scheduler() -> None:
-    """Called once from main.py lifespan. Runs first job immediately, then every hour."""
-    t = threading.Thread(target=_run_and_reschedule, daemon=True, name="ngx-job")
+    """Start the background scheduler. Fires at the top of each clock hour (1:00, 2:00 …)."""
+    t = threading.Thread(target=_scheduler_loop, daemon=True, name="ngx-job")
     t.start()
 
 
@@ -486,7 +494,7 @@ def job_status() -> dict:
         return {
             "status": "never_run",
             "last_updated": None,
-            "next_run_at": None,
+            "next_run_at": _next_top_of_hour().isoformat(),
             "job_interval_sec": JOB_INTERVAL,
             "tickers_in_db": total,
         }
@@ -495,12 +503,8 @@ def job_status() -> dict:
     if ts and ts.tzinfo is None:
         ts = ts.replace(tzinfo=timezone.utc)
 
-    next_run_at = None
-    if last_done and last_done.finished_at:
-        fin = last_done.finished_at
-        if fin.tzinfo is None:
-            fin = fin.replace(tzinfo=timezone.utc)
-        next_run_at = (fin + timedelta(seconds=JOB_INTERVAL)).isoformat()
+    # Always the next wall-clock top-of-hour; accurate regardless of when the job last ran
+    next_run_at = _next_top_of_hour().isoformat()
 
     return {
         "status": latest.status,

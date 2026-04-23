@@ -82,7 +82,7 @@ async def lifespan(app: FastAPI):
 
     log.info("DB ready.")
 
-    # Start hourly NGX data job (prices + fundamentals + dividends → DB)
+    # Start the NGX scheduler — fires at the top of each clock hour, not on app load
     from app.services.ngx_job import start_scheduler as _start_ngx_scheduler
     _start_ngx_scheduler()
 
