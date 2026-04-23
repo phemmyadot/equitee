@@ -117,6 +117,7 @@ function CountdownPill({ payDate }: { payDate: string | null }) {
 function DividendCard({ h, sector }: { h: DividendHolding; sector?: string }) {
   const div = h.dividend;
   const hasDividend = div != null;
+  const missed = h.qualified === false;
   const sCol = sectorColor(sector ?? '');
 
   return (
@@ -142,7 +143,12 @@ function DividendCard({ h, sector }: { h: DividendHolding; sector?: string }) {
                 {h.ticker}
               </Link>
               <StreakBadge streak={h.dividend_streak} growing={h.dividend_growing} />
-              {hasDividend && <CountdownPill payDate={div!.pay_date} />}
+              {missed && (
+                <span className="text-[9px] font-semibold px-2 py-0.5 rounded-full bg-[var(--loss-light)] text-[var(--loss)]">
+                  Missed ex-date
+                </span>
+              )}
+              {hasDividend && !missed && <CountdownPill payDate={div!.pay_date} />}
               {!hasDividend && (
                 <span className="text-[9px] font-semibold px-2 py-0.5 rounded-full bg-[var(--sidebar)] text-[var(--ink-4)]">
                   No data
@@ -154,7 +160,14 @@ function DividendCard({ h, sector }: { h: DividendHolding; sector?: string }) {
         </div>
 
         {/* Projected payout — right side */}
-        {h.projected_payout != null ? (
+        {missed ? (
+          <div className="text-right shrink-0">
+            <div className="font-mono text-[13px] text-[var(--loss)] line-through leading-none">
+              {div?.cash_amount != null ? fmtNGN(h.shares * div.cash_amount) : '—'}
+            </div>
+            <div className="text-[9px] text-[var(--loss)] mt-0.5">not eligible</div>
+          </div>
+        ) : h.projected_payout != null ? (
           <div className="text-right shrink-0">
             <div className="font-mono font-bold text-[16px] text-[var(--gain)] leading-none">
               {fmtNGN(h.projected_payout)}
@@ -177,6 +190,11 @@ function DividendCard({ h, sector }: { h: DividendHolding; sector?: string }) {
             <DateCell label="Record Date" value={div!.record_date} />
             <DateCell label="Pay Date" value={div!.pay_date} />
           </div>
+          {missed && (
+            <div className="mb-3 px-3 py-2 rounded-lg bg-[var(--loss-light)] border border-[#F5C6C6] text-[10px] text-[var(--loss)]">
+              Bought on or after ex-dividend date — not eligible for this payout.
+            </div>
+          )}
 
           {/* ── Metrics row ── */}
           <div className="flex flex-wrap gap-x-6 gap-y-2 pt-3 border-t border-[var(--border)]">
@@ -250,7 +268,7 @@ function DividendCard({ h, sector }: { h: DividendHolding; sector?: string }) {
 
 function Timeline({ holdings }: { holdings: DividendHolding[] }) {
   const upcoming = holdings
-    .filter((h) => h.dividend?.pay_date && (daysUntil(h.dividend.pay_date) ?? -1) >= 0)
+    .filter((h) => h.dividend?.pay_date && (daysUntil(h.dividend.pay_date) ?? -1) >= 0 && h.qualified !== false)
     .sort((a, b) => {
       const da = daysUntil(a.dividend!.pay_date);
       const db = daysUntil(b.dividend!.pay_date);
@@ -327,7 +345,7 @@ function Timeline({ holdings }: { holdings: DividendHolding[] }) {
 // Main page
 // ─────────────────────────────────────────────────────────────────────────────
 
-type Filter = 'all' | 'upcoming' | 'no-data';
+type Filter = 'all' | 'upcoming' | 'missed' | 'no-data';
 
 export default function DividendsPage() {
   const [filter, setFilter] = useState<Filter>('all');
@@ -364,15 +382,17 @@ export default function DividendsPage() {
   const filtered = useMemo(() => {
     if (filter === 'upcoming')
       return holdings.filter(
-        (h) => h.dividend?.pay_date && (daysUntil(h.dividend.pay_date) ?? -1) >= 0,
+        (h) => h.dividend?.pay_date && (daysUntil(h.dividend.pay_date) ?? -1) >= 0 && h.qualified !== false,
       );
+    if (filter === 'missed') return holdings.filter((h) => h.qualified === false);
     if (filter === 'no-data') return holdings.filter((h) => !h.dividend);
     return holdings;
   }, [holdings, filter]);
 
   const upcomingCount = holdings.filter(
-    (h) => h.dividend?.pay_date && (daysUntil(h.dividend.pay_date) ?? -1) >= 0,
+    (h) => h.dividend?.pay_date && (daysUntil(h.dividend.pay_date) ?? -1) >= 0 && h.qualified !== false,
   ).length;
+  const missedCount = holdings.filter((h) => h.qualified === false).length;
   const noDataCount = holdings.filter((h) => !h.dividend).length;
 
   return (
@@ -576,6 +596,7 @@ export default function DividendsPage() {
           [
             ['all', `All (${holdings.length})`],
             ['upcoming', `Upcoming (${upcomingCount})`],
+            ['missed', `Missed (${missedCount})`],
             ['no-data', `No data (${noDataCount})`],
           ] as [Filter, string][]
         ).map(([f, label]) => (

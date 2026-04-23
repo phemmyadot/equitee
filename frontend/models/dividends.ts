@@ -74,6 +74,8 @@ export interface DividendHolding {
   dividend_streak: number | null;
   years_with_dividend: number | null;
   dividend_growing: boolean | null;
+  /** true = bought before ex-date, false = bought on/after (missed), null = unknown */
+  qualified: boolean | null;
 }
 
 export interface DividendsResponse {

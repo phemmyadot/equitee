@@ -5,7 +5,7 @@ GET /api/dividends  — all dividend data for the dividends page (one call, all 
 """
 
 import logging
-from datetime import datetime, timezone
+from datetime import datetime, timezone, date
 from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException
@@ -23,6 +23,53 @@ from app.models import DividendInfo
 log = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/dividends", tags=["dividends"])
+
+_DATE_FMTS = [
+    "%Y-%m-%d",
+    "%b %d, %Y",   # Apr 15, 2024
+    "%B %d, %Y",   # April 15, 2024
+    "%d/%m/%Y",
+    "%m/%d/%Y",
+    "%b %d %Y",    # Apr 15 2024 (no comma)
+    "%d %b %Y",    # 15 Apr 2024
+]
+
+def _parse_date(s: Optional[str]) -> Optional[date]:
+    if not s:
+        return None
+    s = " ".join(s.strip().split())  # normalise whitespace
+    # fromisoformat handles "2024-01-15", "2024-01-15T10:30:00", "2024-01-15T10:30:00+00:00"
+    try:
+        return datetime.fromisoformat(s.replace("Z", "+00:00")).date()
+    except ValueError:
+        pass
+    for fmt in _DATE_FMTS:
+        try:
+            return datetime.strptime(s, fmt).date()
+        except ValueError:
+            continue
+    return None
+
+
+def _is_qualified(
+    purchase_date_str: Optional[str],
+    ex_div_str: Optional[str],
+    pay_date_str: Optional[str],
+) -> Optional[bool]:
+    """
+    True  = bought before ex-date (eligible for upcoming dividend).
+    False = bought on/after ex-date AND pay_date is still in the future (missed).
+    None  = pay_date already passed (historical, not relevant) or dates unknown.
+    """
+    pay = _parse_date(pay_date_str)
+    if pay is not None and pay < date.today():
+        return None  # dividend already paid — past, not missed
+
+    buy = _parse_date(purchase_date_str)
+    ex = _parse_date(ex_div_str)
+    if buy is None or ex is None:
+        return None
+    return buy < ex
 
 
 class DripProjection(BaseModel):
@@ -45,6 +92,8 @@ class DividendHolding(BaseModel):
     dividend_streak: Optional[int] = None
     years_with_dividend: Optional[int] = None
     dividend_growing: Optional[bool] = None
+    # True = bought before ex-date (qualifies), False = bought on/after (missed), None = unknown
+    qualified: Optional[bool] = None
 
 
 class PortfolioDrip(BaseModel):
@@ -97,12 +146,21 @@ async def get_dividends(
             cost_basis = shares * avg_cost
             div = _div_from_cache(ticker)
 
+            # Determine ex-date eligibility
+            purchase_date_str = h.get("purchase_date") or h.get("created_at")
+            qualified = _is_qualified(
+                purchase_date_str,
+                div.ex_dividend_date if div else None,
+                div.pay_date if div else None,
+            )
+
             projected = None
             yoc = None
             annual_yield = None
             drip = None
 
-            if div and div.cash_amount:
+            # Only calculate payout if qualified (or qualification unknown)
+            if div and div.cash_amount and qualified is not False:
                 projected = round(shares * div.cash_amount, 2)
                 yoc = round((div.cash_amount / avg_cost) * 100, 4) if avg_cost else None
                 total_payout += projected
@@ -133,6 +191,7 @@ async def get_dividends(
                     dividend_streak=hist.get("streak") or None,
                     years_with_dividend=hist.get("years_paid") or None,
                     dividend_growing=hist.get("growing"),
+                    qualified=qualified,
                 )
             )
 
