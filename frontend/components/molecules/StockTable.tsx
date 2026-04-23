@@ -61,7 +61,7 @@ export default function StockTable<T extends Record<string, any>>({
                 className={clsx(
                   col.right && 'right',
                   col.sortValue &&
-                    'cursor-pointer select-none hover:text-[var(--ink-2)] transition-colors',
+                  'cursor-pointer select-none hover:text-[var(--ink-2)] transition-colors',
                 )}
               >
                 <span className="inline-flex items-center gap-1">

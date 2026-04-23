@@ -35,18 +35,18 @@ export function PortfolioProvider({ children }: { children: ReactNode }) {
   const { user, loading: authLoading } = useAuth();
 
   const [nextRefreshIn, setNextRefreshIn] = useState<number | null>(null);
-  const [isBuffering, setIsBuffering]     = useState(false);
-  const [refreshKey, setRefreshKey]       = useState(0);
-  const [lastUpdated, setLastUpdated]     = useState<Date | null>(null);
+  const [isBuffering, setIsBuffering] = useState(false);
+  const [refreshKey, setRefreshKey] = useState(0);
+  const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
 
-  const countdownRef = useRef<ReturnType<typeof setInterval>  | null>(null);
-  const jobTimerRef  = useRef<ReturnType<typeof setTimeout>   | null>(null);
-  const bufTimerRef  = useRef<ReturnType<typeof setTimeout>   | null>(null);
+  const countdownRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const jobTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const bufTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const clearAll = useCallback(() => {
     if (countdownRef.current) clearInterval(countdownRef.current);
-    if (jobTimerRef.current)  clearTimeout(jobTimerRef.current);
-    if (bufTimerRef.current)  clearTimeout(bufTimerRef.current);
+    if (jobTimerRef.current) clearTimeout(jobTimerRef.current);
+    if (bufTimerRef.current) clearTimeout(bufTimerRef.current);
   }, []);
 
   // Ref so the async callback inside setTimeout can always call the latest version
@@ -86,25 +86,29 @@ export function PortfolioProvider({ children }: { children: ReactNode }) {
     }, msToJob);
 
     // After buffer: trigger refresh, re-fetch job status, restart cycle
-    bufTimerRef.current = setTimeout(async () => {
-      setIsBuffering(false);
-      setRefreshKey((k) => k + 1);
-      try {
-        const status = await fetchJobStatus();
-        const nextAt = status.next_run_at
-          ? new Date(status.next_run_at)
-          : new Date(Date.now() + (status.job_interval_sec ?? 3600) * 1000);
-        // If next_run_at is already in the past, project one interval ahead
-        const now = Date.now();
-        const adjusted = nextAt.getTime() > now
-          ? nextAt
-          : new Date(now + (status.job_interval_sec ?? 3600) * 1000);
-        startCycleRef.current(adjusted);
-      } catch {
-        // Fallback: restart in 1 hour
-        startCycleRef.current(new Date(Date.now() + 3600 * 1000));
-      }
-    }, msToJob + BUFFER_SEC * 1000);
+    bufTimerRef.current = setTimeout(
+      async () => {
+        setIsBuffering(false);
+        setRefreshKey((k) => k + 1);
+        try {
+          const status = await fetchJobStatus();
+          const nextAt = status.next_run_at
+            ? new Date(status.next_run_at)
+            : new Date(Date.now() + (status.job_interval_sec ?? 3600) * 1000);
+          // If next_run_at is already in the past, project one interval ahead
+          const now = Date.now();
+          const adjusted =
+            nextAt.getTime() > now
+              ? nextAt
+              : new Date(now + (status.job_interval_sec ?? 3600) * 1000);
+          startCycleRef.current(adjusted);
+        } catch {
+          // Fallback: restart in 1 hour
+          startCycleRef.current(new Date(Date.now() + 3600 * 1000));
+        }
+      },
+      msToJob + BUFFER_SEC * 1000,
+    );
   };
 
   const triggerRefresh = useCallback(() => {
@@ -137,7 +141,14 @@ export function PortfolioProvider({ children }: { children: ReactNode }) {
 
   return (
     <PortfolioContext.Provider
-      value={{ nextRefreshIn, isBuffering, refreshKey, triggerRefresh, lastUpdated, setLastUpdated }}
+      value={{
+        nextRefreshIn,
+        isBuffering,
+        refreshKey,
+        triggerRefresh,
+        lastUpdated,
+        setLastUpdated,
+      }}
     >
       {children}
     </PortfolioContext.Provider>

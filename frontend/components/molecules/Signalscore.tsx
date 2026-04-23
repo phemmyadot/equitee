@@ -393,7 +393,15 @@ function scoreRisk(
 
 export interface SignalResult {
   total: number;
-  label: 'Strong Buy' | 'Buy' | 'Accumulate' | 'Hold' | 'Reduce' | 'Sell' | 'Strong Sell' | 'Signal Unreliable';
+  label:
+    | 'Strong Buy'
+    | 'Buy'
+    | 'Accumulate'
+    | 'Hold'
+    | 'Reduce'
+    | 'Sell'
+    | 'Strong Sell'
+    | 'Signal Unreliable';
   color: string;
   bg: string;
   flags: string[];
@@ -531,7 +539,8 @@ export function computeSignal(
         signals: risk.signals,
       },
     ],
-    dataPoints: [...mom.signals, ...val.signals, ...qual.signals, ...div.signals, ...risk.signals].length,
+    dataPoints: [...mom.signals, ...val.signals, ...qual.signals, ...div.signals, ...risk.signals]
+      .length,
   };
 }
 

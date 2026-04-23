@@ -23,16 +23,16 @@ import {
 } from '@/components/atoms/icons';
 
 const NAV_ITEMS = [
-  { href: '/ngx',          label: 'NGX',       exact: true, icon: <IconChartLine  width={14} height={14} /> },
-  { href: '/ngx/advanced', label: 'Advanced',              icon: <IconSearch      width={14} height={14} /> },
-  { href: '/ngx/screener', label: 'Screener',              icon: <IconFilter      width={14} height={14} /> },
-  { href: '/us',           label: 'US',                    icon: <IconGlobe       width={14} height={14} /> },
-  { href: '/combined',     label: 'Combined',              icon: <IconChartPie    width={14} height={14} /> },
-  { href: '/dividends',    label: 'Dividends',             icon: <IconClock       width={14} height={14} /> },
-  { href: '/history',      label: 'History',               icon: <IconChartHistory width={14} height={14} /> },
-  { href: '/trades',       label: 'Trades',                icon: <IconTrendingUp  width={14} height={14} /> },
-  { href: '/watchlist',    label: 'Watchlist',             icon: <IconBookmark    width={14} height={14} /> },
-  { href: '/analysis',     label: 'AI Analyst',            icon: <IconSparkles    width={14} height={14} /> },
+  { href: '/ngx', label: 'NGX', exact: true, icon: <IconChartLine width={14} height={14} /> },
+  { href: '/ngx/advanced', label: 'Advanced', icon: <IconSearch width={14} height={14} /> },
+  { href: '/ngx/screener', label: 'Screener', icon: <IconFilter width={14} height={14} /> },
+  { href: '/us', label: 'US', icon: <IconGlobe width={14} height={14} /> },
+  { href: '/combined', label: 'Combined', icon: <IconChartPie width={14} height={14} /> },
+  { href: '/dividends', label: 'Dividends', icon: <IconClock width={14} height={14} /> },
+  { href: '/history', label: 'History', icon: <IconChartHistory width={14} height={14} /> },
+  { href: '/trades', label: 'Trades', icon: <IconTrendingUp width={14} height={14} /> },
+  { href: '/watchlist', label: 'Watchlist', icon: <IconBookmark width={14} height={14} /> },
+  { href: '/analysis', label: 'AI Analyst', icon: <IconSparkles width={14} height={14} /> },
 ] as const;
 
 const JOB_INTERVAL_SEC = 3600;
@@ -108,13 +108,24 @@ export default function Header() {
         {nextRefreshIn !== null && (
           <div
             className="hidden sm:flex items-center gap-1.5 h-8 px-2.5 rounded-lg border border-[var(--border)] bg-[var(--canvas)] shrink-0"
-            title={isBuffering ? 'Fetching fresh data…' : `Next data update in ${fmtCountdown(nextRefreshIn)}`}
+            title={
+              isBuffering
+                ? 'Fetching fresh data…'
+                : `Next data update in ${fmtCountdown(nextRefreshIn)}`
+            }
           >
-            <IconClock width={11} height={11} className="shrink-0" style={{ stroke: isBuffering ? 'var(--gain)' : 'var(--ink-4)' }} />
+            <IconClock
+              width={11}
+              height={11}
+              className="shrink-0"
+              style={{ stroke: isBuffering ? 'var(--gain)' : 'var(--ink-4)' }}
+            />
             <svg width="18" height="18" viewBox="0 0 18 18" style={{ transform: 'rotate(-90deg)' }}>
               <circle cx="9" cy="9" r={r} fill="none" stroke="#E4E7EC" strokeWidth="2.5" />
               <circle
-                cx="9" cy="9" r={r}
+                cx="9"
+                cy="9"
+                r={r}
                 fill="none"
                 stroke={isBuffering ? 'var(--gain)' : 'var(--accent)'}
                 strokeWidth="2.5"
@@ -192,7 +203,12 @@ export default function Header() {
                     : 'text-[var(--ink-3)] hover:text-[var(--ink)] hover:bg-[var(--canvas)]',
                 )}
               >
-                <span className={clsx('transition-colors duration-150', active ? 'text-[var(--accent)]' : 'text-[var(--ink-4)]')}>
+                <span
+                  className={clsx(
+                    'transition-colors duration-150',
+                    active ? 'text-[var(--accent)]' : 'text-[var(--ink-4)]',
+                  )}
+                >
                   {item.icon}
                 </span>
                 {item.label}
@@ -210,7 +226,12 @@ export default function Header() {
               : 'text-[var(--ink-3)] hover:text-[var(--ink)] hover:bg-[var(--canvas)]',
           )}
         >
-          <span className={clsx('transition-colors', settingsActive ? 'text-[var(--accent)]' : 'text-[var(--ink-4)]')}>
+          <span
+            className={clsx(
+              'transition-colors',
+              settingsActive ? 'text-[var(--accent)]' : 'text-[var(--ink-4)]',
+            )}
+          >
             <IconSettings width={15} height={15} />
           </span>
           <span className="hidden lg:inline">Settings</span>

@@ -3,7 +3,13 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { usePortfolio } from '@/context/PortfolioContext';
 import Link from 'next/link';
-import { fetchWatchlist, addToWatchlist, removeFromWatchlist, createAlert, deleteAlert } from '@/services/api';
+import {
+  fetchWatchlist,
+  addToWatchlist,
+  removeFromWatchlist,
+  createAlert,
+  deleteAlert,
+} from '@/services/api';
 import type { WatchlistItem, TriggeredAlert, PriceAlert } from '@/models';
 import { computeSignal } from '@/components/molecules/Signalscore';
 import { computeTargets } from '@/utils/targets';
@@ -26,21 +32,20 @@ function fmtAgo(iso: string | null): string {
 
 // ── AlertRow ──────────────────────────────────────────────────────────────────
 
-function AlertRow({
-  alert,
-  onDelete,
-}: {
-  alert: PriceAlert;
-  onDelete: (id: number) => void;
-}) {
+function AlertRow({ alert, onDelete }: { alert: PriceAlert; onDelete: (id: number) => void }) {
   return (
     <div className="flex items-center gap-2 text-[10px]">
       <span
         className={`px-1.5 py-0.5 rounded font-bold font-mono text-[9px] ${alert.direction === 'above' ? 'bg-[var(--gain-light)] text-[var(--gain)]' : 'bg-[var(--loss-light)] text-[var(--loss)]'}`}
       >
-        {alert.direction === 'above' ? '↑' : '↓'} {alert.market === 'US' ? `$${alert.threshold_price.toFixed(2)}` : fmtNGNFull(alert.threshold_price)}
+        {alert.direction === 'above' ? '↑' : '↓'}{' '}
+        {alert.market === 'US'
+          ? `$${alert.threshold_price.toFixed(2)}`
+          : fmtNGNFull(alert.threshold_price)}
       </span>
-      {alert.note && <span className="text-[var(--ink-4)] truncate max-w-[100px]">{alert.note}</span>}
+      {alert.note && (
+        <span className="text-[var(--ink-4)] truncate max-w-[100px]">{alert.note}</span>
+      )}
       <button
         onClick={() => onDelete(alert.id)}
         className="flex items-center justify-center w-4 h-4 rounded text-[var(--ink-4)] hover:text-[var(--loss)] transition-colors"
@@ -129,7 +134,14 @@ function _n(v: string | number | null | undefined): number | null {
 }
 
 function SignalPill({ item }: { item: WatchlistItem }) {
-  const sig = computeSignal(item.overview, item.performance, item.price?.price ?? null, null, null, item.profile?.sector ?? null);
+  const sig = computeSignal(
+    item.overview,
+    item.performance,
+    item.price?.price ?? null,
+    null,
+    null,
+    item.profile?.sector ?? null,
+  );
   if (!sig) return <span className="text-[var(--ink-4)] text-[10px]">—</span>;
 
   const price = item.price?.price ?? null;
@@ -173,7 +185,14 @@ function SignalPill({ item }: { item: WatchlistItem }) {
 function InBuyZone({ item }: { item: WatchlistItem }): boolean {
   const price = item.price?.price;
   if (!price) return false;
-  const sig = computeSignal(item.overview, item.performance, price, null, null, item.profile?.sector ?? null);
+  const sig = computeSignal(
+    item.overview,
+    item.performance,
+    price,
+    null,
+    null,
+    item.profile?.sector ?? null,
+  );
   if (!sig || sig.total <= 1) return false;
   const eps = _n(item.overview?.eps);
   const bv = _n(item.overview?.book_value);
@@ -214,8 +233,35 @@ function WatchlistTable({
 }) {
   const [alertFormTicker, setAlertFormTicker] = useState<string | null>(null);
 
-  const ngxCols = ['Ticker', 'Company', 'Sector', 'Price', 'Day %', 'Since Added', 'P/E', 'ROE', '52W Range', 'Signal', '90d', 'Alerts', ''];
-  const usCols  = ['Ticker', 'Company', 'Sector', 'Price', 'Day %', 'Since Added', 'P/E', 'ROE', '52W Range', 'Signal', 'Alerts', ''];
+  const ngxCols = [
+    'Ticker',
+    'Company',
+    'Sector',
+    'Price',
+    'Day %',
+    'Since Added',
+    'P/E',
+    'ROE',
+    '52W Range',
+    'Signal',
+    '90d',
+    'Alerts',
+    '',
+  ];
+  const usCols = [
+    'Ticker',
+    'Company',
+    'Sector',
+    'Price',
+    'Day %',
+    'Since Added',
+    'P/E',
+    'ROE',
+    '52W Range',
+    'Signal',
+    'Alerts',
+    '',
+  ];
 
   return (
     <div className="card overflow-hidden">
@@ -250,10 +296,17 @@ function WatchlistTable({
                   <td className="px-3 py-3">
                     <div className="flex items-center gap-1.5">
                       {inBuyZone && (
-                        <span className="w-1.5 h-1.5 rounded-full bg-[var(--gain)] shrink-0" title="In buy zone" />
+                        <span
+                          className="w-1.5 h-1.5 rounded-full bg-[var(--gain)] shrink-0"
+                          title="In buy zone"
+                        />
                       )}
                       <Link
-                        href={isUS ? `/us/profile?ticker=${item.ticker}` : `/ngx/profile?ticker=${item.ticker}`}
+                        href={
+                          isUS
+                            ? `/us/profile?ticker=${item.ticker}`
+                            : `/ngx/profile?ticker=${item.ticker}`
+                        }
                         className="font-mono font-bold text-[11px] text-[var(--accent)] hover:underline"
                       >
                         {item.ticker}
@@ -272,7 +325,10 @@ function WatchlistTable({
                   <td className="px-3 py-3">
                     {sector ? (
                       <span className="flex items-center gap-1 text-[10px] text-[var(--ink-3)] whitespace-nowrap">
-                        <span className="w-1.5 h-1.5 rounded-full shrink-0" style={{ background: sCol }} />
+                        <span
+                          className="w-1.5 h-1.5 rounded-full shrink-0"
+                          style={{ background: sCol }}
+                        />
                         {sector}
                       </span>
                     ) : (
@@ -294,7 +350,9 @@ function WatchlistTable({
                   {/* Day % */}
                   <td className="px-3 py-3 text-right">
                     {changePct != null ? (
-                      <span className={`font-mono text-[11px] font-medium ${isPositive(changePct) ? 'text-[var(--gain)]' : 'text-[var(--loss)]'}`}>
+                      <span
+                        className={`font-mono text-[11px] font-medium ${isPositive(changePct) ? 'text-[var(--gain)]' : 'text-[var(--loss)]'}`}
+                      >
                         {fmtPct2(changePct)}
                       </span>
                     ) : (
@@ -305,7 +363,9 @@ function WatchlistTable({
                   {/* Since Added */}
                   <td className="px-3 py-3 text-right">
                     {item.since_added_pct != null ? (
-                      <span className={`font-mono text-[11px] font-medium ${isPositive(item.since_added_pct) ? 'text-[var(--gain)]' : 'text-[var(--loss)]'}`}>
+                      <span
+                        className={`font-mono text-[11px] font-medium ${isPositive(item.since_added_pct) ? 'text-[var(--gain)]' : 'text-[var(--loss)]'}`}
+                      >
                         {fmtPct2(item.since_added_pct)}
                       </span>
                     ) : (
@@ -336,11 +396,22 @@ function WatchlistTable({
                     {(() => {
                       const w52l = item.performance?.week_52_low;
                       const w52h = item.performance?.week_52_high;
-                      const lo = w52l == null ? null : typeof w52l === 'number' ? w52l : parseFloat(String(w52l).replace(/[^0-9.]/g, ''));
-                      const hi = w52h == null ? null : typeof w52h === 'number' ? w52h : parseFloat(String(w52h).replace(/[^0-9.]/g, ''));
-                      const rangePct = lo && hi && hi > lo && price
-                        ? Math.max(0, Math.min(100, ((price - lo) / (hi - lo)) * 100))
-                        : null;
+                      const lo =
+                        w52l == null
+                          ? null
+                          : typeof w52l === 'number'
+                            ? w52l
+                            : parseFloat(String(w52l).replace(/[^0-9.]/g, ''));
+                      const hi =
+                        w52h == null
+                          ? null
+                          : typeof w52h === 'number'
+                            ? w52h
+                            : parseFloat(String(w52h).replace(/[^0-9.]/g, ''));
+                      const rangePct =
+                        lo && hi && hi > lo && price
+                          ? Math.max(0, Math.min(100, ((price - lo) / (hi - lo)) * 100))
+                          : null;
                       return rangePct != null ? (
                         <div className="flex flex-col gap-0.5">
                           <div className="relative h-1.5 rounded-full overflow-hidden bg-[var(--border)] w-[80px]">
@@ -348,13 +419,19 @@ function WatchlistTable({
                               className="absolute left-0 top-0 h-full rounded-full"
                               style={{
                                 width: `${rangePct}%`,
-                                background: rangePct > 70 ? 'var(--gain)' : rangePct > 35 ? 'var(--accent)' : 'var(--loss)',
+                                background:
+                                  rangePct > 70
+                                    ? 'var(--gain)'
+                                    : rangePct > 35
+                                      ? 'var(--accent)'
+                                      : 'var(--loss)',
                                 opacity: 0.7,
                               }}
                             />
                           </div>
                           <span className="text-[8px] font-mono text-[var(--ink-4)]">
-                            {isUS ? `$${lo!.toFixed(0)}` : fmtNGN(lo)} – {isUS ? `$${hi!.toFixed(0)}` : fmtNGN(hi)}
+                            {isUS ? `$${lo!.toFixed(0)}` : fmtNGN(lo)} –{' '}
+                            {isUS ? `$${hi!.toFixed(0)}` : fmtNGN(hi)}
                           </span>
                         </div>
                       ) : (
@@ -447,7 +524,9 @@ export default function WatchlistPage() {
   const [alerts, setAlerts] = useState<PriceAlert[]>([]);
   const [triggeredAlerts, setTriggeredAlerts] = useState<TriggeredAlert[]>([]);
   const [dismissedAlertIds, setDismissedAlertIds] = useState<Set<number>>(new Set());
-  const [priceHistories, setPriceHistories] = useState<Record<string, { ts: string; price: number | null; change_pct: number | null }[]>>({});
+  const [priceHistories, setPriceHistories] = useState<
+    Record<string, { ts: string; price: number | null; change_pct: number | null }[]>
+  >({});
   const hasFetched = useRef(false);
   const { refreshKey } = usePortfolio();
 
@@ -532,7 +611,8 @@ export default function WatchlistPage() {
           <div className="flex items-center justify-between">
             <span className="text-[11px] font-bold text-[var(--accent)] flex items-center gap-1.5">
               <IconBell width={12} height={12} />
-              {visibleTriggered.length} price alert{visibleTriggered.length > 1 ? 's' : ''} triggered
+              {visibleTriggered.length} price alert{visibleTriggered.length > 1 ? 's' : ''}{' '}
+              triggered
             </span>
             <button
               onClick={() => setDismissedAlertIds(new Set(visibleTriggered.map((a) => a.id)))}
@@ -544,13 +624,13 @@ export default function WatchlistPage() {
           {visibleTriggered.map((a) => (
             <div key={a.id} className="flex items-center justify-between gap-3">
               <span className="text-[11px] text-[var(--ink)]">
-                <span className="font-mono font-bold">{a.ticker}</span>
-                {' '}crossed{' '}
+                <span className="font-mono font-bold">{a.ticker}</span> crossed{' '}
                 <span className="font-mono font-semibold">
-                  {a.market === 'US' ? `$${a.threshold_price.toFixed(2)}` : fmtNGNFull(a.threshold_price)}
-                </span>
-                {' '}({a.direction})
-                {a.note && <span className="text-[var(--ink-4)]"> · {a.note}</span>}
+                  {a.market === 'US'
+                    ? `$${a.threshold_price.toFixed(2)}`
+                    : fmtNGNFull(a.threshold_price)}
+                </span>{' '}
+                ({a.direction}){a.note && <span className="text-[var(--ink-4)]"> · {a.note}</span>}
               </span>
               <button
                 onClick={() => setDismissedAlertIds((prev) => new Set([...prev, a.id]))}
@@ -572,9 +652,13 @@ export default function WatchlistPage() {
           <div>
             <h1 className="text-[15px] font-bold text-[var(--ink)] leading-none">Watchlist</h1>
             <p className="text-[11px] text-[var(--ink-4)] mt-0.5">
-              {loading ? 'Loading…' : `${filtered.length} ticker${filtered.length !== 1 ? 's' : ''} monitored`}
+              {loading
+                ? 'Loading…'
+                : `${filtered.length} ticker${filtered.length !== 1 ? 's' : ''} monitored`}
               {!loading && lastUpdated && (
-                <span className="ml-2 text-[10px] text-[var(--ink-4)] opacity-70">· updated {fmtAgo(lastUpdated)}</span>
+                <span className="ml-2 text-[10px] text-[var(--ink-4)] opacity-70">
+                  · updated {fmtAgo(lastUpdated)}
+                </span>
               )}
             </p>
           </div>
@@ -604,7 +688,10 @@ export default function WatchlistPage() {
             <div className="flex items-center gap-2">
               <input
                 value={addInput}
-                onChange={(e) => { setAddInput(e.target.value.toUpperCase()); setAddError(null); }}
+                onChange={(e) => {
+                  setAddInput(e.target.value.toUpperCase());
+                  setAddError(null);
+                }}
                 placeholder={isUS ? 'e.g. AAPL' : 'e.g. GTCO'}
                 maxLength={12}
                 className="h-8 px-3 rounded-lg border border-[var(--border)] bg-[var(--canvas)] text-[11px] font-mono font-semibold text-[var(--ink)] placeholder:text-[var(--ink-4)] focus:outline-none focus:border-[var(--accent)] w-32 transition-colors"
@@ -626,7 +713,10 @@ export default function WatchlistPage() {
       {loading && (
         <div className="card overflow-hidden">
           {[...Array(4)].map((_, i) => (
-            <div key={i} className="flex items-center gap-4 px-4 py-3.5 border-b border-[var(--border)] last:border-0">
+            <div
+              key={i}
+              className="flex items-center gap-4 px-4 py-3.5 border-b border-[var(--border)] last:border-0"
+            >
               <div className="skeleton rounded w-16 h-4" />
               <div className="skeleton rounded flex-1 h-3" />
               <div className="skeleton rounded w-20 h-4" />
@@ -639,7 +729,12 @@ export default function WatchlistPage() {
       {/* Empty state */}
       {!loading && filtered.length === 0 && (
         <div className="card px-6 py-16 text-center">
-          <IconBookmark width={32} height={32} style={{ stroke: 'var(--ink-4)', strokeWidth: 1.5 }} className="mx-auto mb-3" />
+          <IconBookmark
+            width={32}
+            height={32}
+            style={{ stroke: 'var(--ink-4)', strokeWidth: 1.5 }}
+            className="mx-auto mb-3"
+          />
           <p className="text-[13px] font-semibold text-[var(--ink-3)] mb-1">
             No {isUS ? 'US' : 'NGX'} tickers on your watchlist
           </p>

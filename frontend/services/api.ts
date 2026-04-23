@@ -61,9 +61,22 @@ export type {
   RelativeStrengthData,
 } from '@/models/analytics';
 
-export type { WatchlistItem, WatchlistResponse, PriceAlert, TriggeredAlert, ScreenerItem, ScreenerResponse } from '@/models/watchlist';
+export type {
+  WatchlistItem,
+  WatchlistResponse,
+  PriceAlert,
+  TriggeredAlert,
+  ScreenerItem,
+  ScreenerResponse,
+} from '@/models/watchlist';
 export type { TradesAll, SaleEvent, BuyEvent } from '@/models/trades';
-export type { HoldingRecord, ClosedRecord, CashBalance, SettingsInit, InviteCode } from '@/models/holdings';
+export type {
+  HoldingRecord,
+  ClosedRecord,
+  CashBalance,
+  SettingsInit,
+  InviteCode,
+} from '@/models/holdings';
 
 export type {
   AnalysisContext,
@@ -170,7 +183,9 @@ export const fetchPortfolioHistory = (days = 90) =>
 export const fetchDividends = () => get<DividendsResponse>('/dividends');
 export const fetchWatchlist = () => get<WatchlistResponse>('/watchlist');
 export const addToWatchlist = (ticker: string, market: 'NGX' | 'US' = 'NGX') =>
-  post<{ ticker: string; market: string; added_at: string }>(`/watchlist/${ticker}?market=${market}`);
+  post<{ ticker: string; market: string; added_at: string }>(
+    `/watchlist/${ticker}?market=${market}`,
+  );
 export const removeFromWatchlist = (ticker: string) =>
   del<{ ticker: string; removed: boolean }>(`/watchlist/${ticker}`);
 
@@ -203,7 +218,12 @@ export const fetchSettingsInit = () => get<SettingsInit>('/settings/load');
 
 export const fetchNGXScreener = () => get<ScreenerResponse>('/screener/ngx');
 export const fetchJobStatus = () =>
-  get<{ status: string; last_updated: string | null; next_run_at: string | null; job_interval_sec: number }>('/screener/ngx/status');
+  get<{
+    status: string;
+    last_updated: string | null;
+    next_run_at: string | null;
+    job_interval_sec: number;
+  }>('/screener/ngx/status');
 
 // ── Alerts ────────────────────────────────────────────────────────────────────
 
@@ -223,20 +243,15 @@ export const deleteAlert = (alert_id: number) =>
 
 // ── Analysis ──────────────────────────────────────────────────────────────────
 
-export const fetchAnalysisContext = () =>
-  get<AnalysisContextResponse>('/analysis/context');
+export const fetchAnalysisContext = () => get<AnalysisContextResponse>('/analysis/context');
 
-export const fetchAnalysisHistory = () =>
-  get<AnalysisSummary[]>('/analysis/history');
+export const fetchAnalysisHistory = () => get<AnalysisSummary[]>('/analysis/history');
 
-export const fetchAnalysisById = (id: number) =>
-  get<AnalysisDetail>(`/analysis/${id}`);
+export const fetchAnalysisById = (id: number) => get<AnalysisDetail>(`/analysis/${id}`);
 
-export const clearAnalysisHistory = () =>
-  del<{ deleted: number }>('/analysis/history');
+export const clearAnalysisHistory = () => del<{ deleted: number }>('/analysis/history');
 
-export const deleteAnalysisById = (id: number) =>
-  del<{ deleted: number }>(`/analysis/${id}`);
+export const deleteAnalysisById = (id: number) => del<{ deleted: number }>(`/analysis/${id}`);
 
 /**
  * Opens an SSE stream to POST /analysis/trade-journal.
@@ -260,7 +275,10 @@ export function streamTradeJournal(
       });
       if (res.status === 401) {
         const refreshed = await tryRefresh();
-        if (!refreshed) { window.location.href = '/login'; return; }
+        if (!refreshed) {
+          window.location.href = '/login';
+          return;
+        }
         res = await fetch(`${BASE}/analysis/trade-journal`, {
           method: 'POST',
           cache: 'no-store',
@@ -277,7 +295,10 @@ export function streamTradeJournal(
       return;
     }
 
-    if (!res.body) { onError('No response body'); return; }
+    if (!res.body) {
+      onError('No response body');
+      return;
+    }
 
     const reader = res.body.getReader();
     const decoder = new TextDecoder();
@@ -293,11 +314,22 @@ export function streamTradeJournal(
           const line = part.trim();
           if (!line.startsWith('data: ')) continue;
           try {
-            const data = JSON.parse(line.slice(6)) as { text?: string; done?: boolean; id?: number; tokens?: number; error?: string };
-            if (data.error) { onError(data.error); return; }
+            const data = JSON.parse(line.slice(6)) as {
+              text?: string;
+              done?: boolean;
+              id?: number;
+              tokens?: number;
+              error?: string;
+            };
+            if (data.error) {
+              onError(data.error);
+              return;
+            }
             if (data.text) onChunk(data.text);
             if (data.done) onDone(data.id ?? 0, data.tokens ?? 0);
-          } catch { /* malformed chunk */ }
+          } catch {
+            /* malformed chunk */
+          }
         }
       }
     } catch (e: unknown) {

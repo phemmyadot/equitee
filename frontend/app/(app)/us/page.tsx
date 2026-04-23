@@ -23,7 +23,9 @@ export default function USPortfolioPage() {
 
   const load = useCallback(() => {
     setLoading(true);
-    fetchUSHome().then(setData).finally(() => setLoading(false));
+    fetchUSHome()
+      .then(setData)
+      .finally(() => setLoading(false));
   }, []);
 
   useEffect(() => {
@@ -221,7 +223,9 @@ export default function USPortfolioPage() {
     {
       key: 'sparkline',
       label: '90d',
-      render: (_: unknown, row: StockRow) => <Sparkline ticker={row.Ticker} points={data?.price_histories?.[row.Ticker]} />,
+      render: (_: unknown, row: StockRow) => (
+        <Sparkline ticker={row.Ticker} points={data?.price_histories?.[row.Ticker]} />
+      ),
     },
   ];
 

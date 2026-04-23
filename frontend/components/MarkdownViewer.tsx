@@ -25,18 +25,12 @@ const components: Components = {
   ),
 
   // ── Body ────────────────────────────────────────────────────────────────────
-  p: ({ children }) => (
-    <p className="mb-3 leading-relaxed text-[var(--ink-2)]">{children}</p>
-  ),
+  p: ({ children }) => <p className="mb-3 leading-relaxed text-[var(--ink-2)]">{children}</p>,
   strong: ({ children }) => (
     <strong className="font-semibold text-[var(--ink-1)]">{children}</strong>
   ),
-  em: ({ children }) => (
-    <em className="italic text-[var(--ink-3)]">{children}</em>
-  ),
-  del: ({ children }) => (
-    <del className="line-through text-[var(--ink-4)]">{children}</del>
-  ),
+  em: ({ children }) => <em className="italic text-[var(--ink-3)]">{children}</em>,
+  del: ({ children }) => <del className="line-through text-[var(--ink-4)]">{children}</del>,
   a: ({ href, children }) => (
     <a
       href={href}
@@ -49,9 +43,7 @@ const components: Components = {
   ),
 
   // ── Lists ───────────────────────────────────────────────────────────────────
-  ul: ({ children }) => (
-    <ul className="list-none pl-0 mb-3 space-y-1">{children}</ul>
-  ),
+  ul: ({ children }) => <ul className="list-none pl-0 mb-3 space-y-1">{children}</ul>,
   ol: ({ children }) => (
     <ol className="list-decimal pl-5 mb-3 space-y-1 text-[var(--ink-2)]">{children}</ol>
   ),
@@ -113,9 +105,7 @@ const components: Components = {
       {children}
     </th>
   ),
-  td: ({ children }) => (
-    <td className="px-3 py-2 text-[var(--ink-2)] align-top">{children}</td>
-  ),
+  td: ({ children }) => <td className="px-3 py-2 text-[var(--ink-2)] align-top">{children}</td>,
 };
 
 interface MarkdownViewerProps {
@@ -124,7 +114,11 @@ interface MarkdownViewerProps {
   breaks?: boolean;
 }
 
-export default function MarkdownViewer({ children, className = '', breaks = false }: MarkdownViewerProps) {
+export default function MarkdownViewer({
+  children,
+  className = '',
+  breaks = false,
+}: MarkdownViewerProps) {
   const plugins = breaks ? [remarkGfm, remarkBreaks] : [remarkGfm];
   return (
     <div className={`text-sm ${className}`}>

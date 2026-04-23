@@ -20,7 +20,9 @@ export default function CombinedPage() {
 
   const load = useCallback(() => {
     setLoading(true);
-    fetchCombined().then(setData).finally(() => setLoading(false));
+    fetchCombined()
+      .then(setData)
+      .finally(() => setLoading(false));
   }, []);
 
   useEffect(() => {

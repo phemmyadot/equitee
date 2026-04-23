@@ -16,7 +16,9 @@ function fmtAmt(market: string, v: number) {
 
 function fmtDate(iso: string) {
   return new Date(iso).toLocaleDateString(undefined, {
-    year: 'numeric', month: 'short', day: 'numeric',
+    year: 'numeric',
+    month: 'short',
+    day: 'numeric',
   });
 }
 
@@ -42,13 +44,20 @@ function SellsTab({ sells, market }: { sells: SaleEvent[]; market: Market }) {
           <p className="text-[10px] font-semibold uppercase tracking-[0.07em] text-[var(--ink-4)]">
             Realized P/L ({market.toUpperCase()})
           </p>
-          <p className={`font-mono text-[18px] font-semibold mt-1 ${totalPL >= 0 ? 'text-[var(--gain)]' : 'text-[var(--loss)]'}`}>
-            {totalPL >= 0 ? '+' : ''}{fmtAmt(market, totalPL)}
+          <p
+            className={`font-mono text-[18px] font-semibold mt-1 ${totalPL >= 0 ? 'text-[var(--gain)]' : 'text-[var(--loss)]'}`}
+          >
+            {totalPL >= 0 ? '+' : ''}
+            {fmtAmt(market, totalPL)}
           </p>
         </div>
         <div className="card px-4 py-3">
-          <p className="text-[10px] font-semibold uppercase tracking-[0.07em] text-[var(--ink-4)]">Transactions</p>
-          <p className="font-mono text-[18px] font-semibold text-[var(--accent)] mt-1">{filtered.length}</p>
+          <p className="text-[10px] font-semibold uppercase tracking-[0.07em] text-[var(--ink-4)]">
+            Transactions
+          </p>
+          <p className="font-mono text-[18px] font-semibold text-[var(--accent)] mt-1">
+            {filtered.length}
+          </p>
           <p className="text-[10px] text-[var(--ink-4)] mt-0.5 font-mono">
             {filtered.filter((t) => t.fully_closed).length} full ·{' '}
             {filtered.filter((t) => !t.fully_closed).length} partial
@@ -84,20 +93,39 @@ function SellsTab({ sells, market }: { sells: SaleEvent[]; market: Market }) {
                 const isBackfilled = t.shares_sold === 0 && t.sale_price === 0;
                 return (
                   <tr key={t.id}>
-                    <td className="text-[var(--ink-4)] font-mono text-[11px] whitespace-nowrap">{fmtDate(t.sold_at)}</td>
-                    <td><span className="font-mono font-semibold text-[var(--ink)] text-[11px]">{t.ticker}</span></td>
-                    <td className="text-[var(--ink-2)] max-w-[140px] truncate">{t.name}</td>
-                    <td><span className={`badge ${t.fully_closed ? 'badge-nodata' : 'badge-live'}`}>{t.fully_closed ? 'Full' : 'Partial'}</span></td>
-                    <td className="right font-mono text-[var(--ink)]">
-                      {isBackfilled ? '—' : t.shares_sold.toLocaleString(undefined, { maximumFractionDigits: 4 })}
+                    <td className="text-[var(--ink-4)] font-mono text-[11px] whitespace-nowrap">
+                      {fmtDate(t.sold_at)}
                     </td>
-                    <td className="right font-mono text-[var(--ink-3)]">{isBackfilled ? '—' : fmtAmt(t.market, t.sale_price)}</td>
+                    <td>
+                      <span className="font-mono font-semibold text-[var(--ink)] text-[11px]">
+                        {t.ticker}
+                      </span>
+                    </td>
+                    <td className="text-[var(--ink-2)] max-w-[140px] truncate">{t.name}</td>
+                    <td>
+                      <span className={`badge ${t.fully_closed ? 'badge-nodata' : 'badge-live'}`}>
+                        {t.fully_closed ? 'Full' : 'Partial'}
+                      </span>
+                    </td>
+                    <td className="right font-mono text-[var(--ink)]">
+                      {isBackfilled
+                        ? '—'
+                        : t.shares_sold.toLocaleString(undefined, { maximumFractionDigits: 4 })}
+                    </td>
+                    <td className="right font-mono text-[var(--ink-3)]">
+                      {isBackfilled ? '—' : fmtAmt(t.market, t.sale_price)}
+                    </td>
                     <td className="right font-mono text-[var(--ink-3)]">
                       {t.commission > 0 ? fmtAmt(t.market, t.commission) : '—'}
                     </td>
-                    <td className="right font-mono text-[var(--ink)]">{isBackfilled ? '—' : fmtAmt(t.market, t.proceeds)}</td>
-                    <td className={`right font-mono font-semibold ${t.realized_pl >= 0 ? 'text-[var(--gain)]' : 'text-[var(--loss)]'}`}>
-                      {t.realized_pl >= 0 ? '+' : ''}{fmtAmt(t.market, t.realized_pl)}
+                    <td className="right font-mono text-[var(--ink)]">
+                      {isBackfilled ? '—' : fmtAmt(t.market, t.proceeds)}
+                    </td>
+                    <td
+                      className={`right font-mono font-semibold ${t.realized_pl >= 0 ? 'text-[var(--gain)]' : 'text-[var(--loss)]'}`}
+                    >
+                      {t.realized_pl >= 0 ? '+' : ''}
+                      {fmtAmt(t.market, t.realized_pl)}
                     </td>
                   </tr>
                 );
@@ -129,15 +157,23 @@ function BuysTab({ buys, market }: { buys: BuyEvent[]; market: Market }) {
           </p>
         </div>
         <div className="card px-4 py-3">
-          <p className="text-[10px] font-semibold uppercase tracking-[0.07em] text-[var(--ink-4)]">Shares Bought</p>
+          <p className="text-[10px] font-semibold uppercase tracking-[0.07em] text-[var(--ink-4)]">
+            Shares Bought
+          </p>
           <p className="font-mono text-[18px] font-semibold text-[var(--accent)] mt-1">
             {totalShares.toLocaleString(undefined, { maximumFractionDigits: 2 })}
           </p>
-          <p className="text-[10px] text-[var(--ink-4)] mt-0.5 font-mono">across {filtered.length} transaction{filtered.length !== 1 ? 's' : ''}</p>
+          <p className="text-[10px] text-[var(--ink-4)] mt-0.5 font-mono">
+            across {filtered.length} transaction{filtered.length !== 1 ? 's' : ''}
+          </p>
         </div>
         <div className="card px-4 py-3">
-          <p className="text-[10px] font-semibold uppercase tracking-[0.07em] text-[var(--ink-4)]">Transactions</p>
-          <p className="font-mono text-[18px] font-semibold text-[var(--ink)] mt-1">{filtered.length}</p>
+          <p className="text-[10px] font-semibold uppercase tracking-[0.07em] text-[var(--ink-4)]">
+            Transactions
+          </p>
+          <p className="font-mono text-[18px] font-semibold text-[var(--ink)] mt-1">
+            {filtered.length}
+          </p>
         </div>
       </div>
 
@@ -165,17 +201,27 @@ function BuysTab({ buys, market }: { buys: BuyEvent[]; market: Market }) {
               )}
               {filtered.map((t) => (
                 <tr key={t.id}>
-                  <td className="text-[var(--ink-4)] font-mono text-[11px] whitespace-nowrap">{fmtDate(t.bought_at)}</td>
-                  <td><span className="font-mono font-semibold text-[var(--ink)] text-[11px]">{t.ticker}</span></td>
+                  <td className="text-[var(--ink-4)] font-mono text-[11px] whitespace-nowrap">
+                    {fmtDate(t.bought_at)}
+                  </td>
+                  <td>
+                    <span className="font-mono font-semibold text-[var(--ink)] text-[11px]">
+                      {t.ticker}
+                    </span>
+                  </td>
                   <td className="text-[var(--ink-2)] max-w-[140px] truncate">{t.name}</td>
                   <td className="right font-mono text-[var(--ink)]">
                     {t.shares_bought.toLocaleString(undefined, { maximumFractionDigits: 4 })}
                   </td>
-                  <td className="right font-mono text-[var(--ink-3)]">{fmtAmt(t.market, t.buy_price)}</td>
+                  <td className="right font-mono text-[var(--ink-3)]">
+                    {fmtAmt(t.market, t.buy_price)}
+                  </td>
                   <td className="right font-mono text-[var(--ink-3)]">
                     {t.commission > 0 ? fmtAmt(t.market, t.commission) : '—'}
                   </td>
-                  <td className="right font-mono font-semibold text-[var(--ink)]">{fmtAmt(t.market, t.total_cost)}</td>
+                  <td className="right font-mono font-semibold text-[var(--ink)]">
+                    {fmtAmt(t.market, t.total_cost)}
+                  </td>
                 </tr>
               ))}
             </tbody>
@@ -200,7 +246,10 @@ export default function TradesPage() {
   const load = useCallback(() => {
     setLoading(true);
     fetchTradesAll()
-      .then((r) => { setSells(r.sells); setBuys(r.buys); })
+      .then((r) => {
+        setSells(r.sells);
+        setBuys(r.buys);
+      })
       .finally(() => setLoading(false));
   }, []);
 
@@ -215,9 +264,10 @@ export default function TradesPage() {
     load();
   }, [refreshKey, load]);
 
-  const filtered = tab === 'sells'
-    ? sells.filter((t) => t.market === market)
-    : buys.filter((t) => t.market === market);
+  const filtered =
+    tab === 'sells'
+      ? sells.filter((t) => t.market === market)
+      : buys.filter((t) => t.market === market);
 
   return (
     <div className="space-y-5">
@@ -226,7 +276,9 @@ export default function TradesPage() {
         <div>
           <h1 className="text-[15px] font-semibold text-[var(--ink)]">Trade History</h1>
           <p className="text-[11px] text-[var(--ink-4)] mt-0.5">
-            {loading ? 'Loading…' : `${filtered.length} ${tab === 'sells' ? 'sale' : 'buy'}${filtered.length !== 1 ? 's' : ''} recorded`}
+            {loading
+              ? 'Loading…'
+              : `${filtered.length} ${tab === 'sells' ? 'sale' : 'buy'}${filtered.length !== 1 ? 's' : ''} recorded`}
           </p>
         </div>
 

@@ -10,7 +10,13 @@ import {
   clearAnalysisHistory,
   deleteAnalysisById,
 } from '@/services/api';
-import type { AnalysisSummary, AnalysisDetail, AnalysisFollowUp, AnalysisScope, AnalysisDepth } from '@/models/analysis';
+import type {
+  AnalysisSummary,
+  AnalysisDetail,
+  AnalysisFollowUp,
+  AnalysisScope,
+  AnalysisDepth,
+} from '@/models/analysis';
 
 type Mode = 'analysis' | 'journal';
 import {
@@ -54,15 +60,26 @@ function Cursor() {
 function ThinkingAnimation({ depth, compact = false }: { depth: string; compact?: boolean }) {
   const [elapsed, setElapsed] = useState(0);
   useEffect(() => {
-    const t = setInterval(() => setElapsed(s => s + 1), 1000);
+    const t = setInterval(() => setElapsed((s) => s + 1), 1000);
     return () => clearInterval(t);
   }, []);
 
-  const steps = depth === 'deep'
-    ? ['Reading portfolio…', 'Evaluating signals…', 'Reasoning through positions…', 'Formulating analysis…']
-    : depth === 'default'
-    ? ['Reading market data…', 'Checking global cues…', 'Reviewing watchlist…', 'Writing briefing…']
-    : ['Reading portfolio…', 'Evaluating signals…', 'Writing analysis…'];
+  const steps =
+    depth === 'deep'
+      ? [
+          'Reading portfolio…',
+          'Evaluating signals…',
+          'Reasoning through positions…',
+          'Formulating analysis…',
+        ]
+      : depth === 'default'
+        ? [
+            'Reading market data…',
+            'Checking global cues…',
+            'Reviewing watchlist…',
+            'Writing briefing…',
+          ]
+        : ['Reading portfolio…', 'Evaluating signals…', 'Writing analysis…'];
 
   const step = steps[Math.min(Math.floor(elapsed / 4), steps.length - 1)];
 
@@ -70,7 +87,7 @@ function ThinkingAnimation({ depth, compact = false }: { depth: string; compact?
     return (
       <div className="flex items-center gap-2 py-2">
         <div className="flex items-center gap-1">
-          {[0, 1, 2].map(i => (
+          {[0, 1, 2].map((i) => (
             <span
               key={i}
               className="w-1.5 h-1.5 rounded-full bg-[var(--accent)] opacity-80"
@@ -87,7 +104,7 @@ function ThinkingAnimation({ depth, compact = false }: { depth: string; compact?
     <div className="flex flex-col items-center justify-center gap-4 py-10">
       {/* Animated orbs */}
       <div className="flex items-center gap-1.5">
-        {[0, 1, 2, 3].map(i => (
+        {[0, 1, 2, 3].map((i) => (
           <span
             key={i}
             className="w-2 h-2 rounded-full bg-[var(--accent)] opacity-80"
@@ -97,7 +114,9 @@ function ThinkingAnimation({ depth, compact = false }: { depth: string; compact?
       </div>
       <div className="text-center space-y-1">
         <p className="text-[12px] font-semibold text-[var(--ink-2)]">{step}</p>
-        <p className="text-[10px] text-[var(--ink-4)] tabular-nums">{elapsed}s elapsed{depth === 'deep' ? ' · deep mode' : ''}</p>
+        <p className="text-[10px] text-[var(--ink-4)] tabular-nums">
+          {elapsed}s elapsed{depth === 'deep' ? ' · deep mode' : ''}
+        </p>
       </div>
     </div>
   );
@@ -111,7 +130,8 @@ function CollapsibleSections({ markdown }: { markdown: string }) {
     let current: { heading: string; lines: string[] } | null = null;
     for (const line of lines) {
       if (/^## /.test(line)) {
-        if (current) result.push({ heading: current.heading, body: current.lines.join('\n').trim() });
+        if (current)
+          result.push({ heading: current.heading, body: current.lines.join('\n').trim() });
         current = { heading: line.replace(/^## /, ''), lines: [] };
       } else if (current) {
         current.lines.push(line);
@@ -123,7 +143,9 @@ function CollapsibleSections({ markdown }: { markdown: string }) {
 
   const [open, setOpen] = useState<Record<number, boolean>>({});
   useEffect(() => {
-    setOpen(sections.reduce((acc, _, i) => ({ ...acc, [i]: i === 0 }), {} as Record<number, boolean>));
+    setOpen(
+      sections.reduce((acc, _, i) => ({ ...acc, [i]: i === 0 }), {} as Record<number, boolean>),
+    );
   }, [sections.length]);
 
   if (!sections.length) return <MarkdownViewer>{markdown}</MarkdownViewer>;
@@ -135,13 +157,17 @@ function CollapsibleSections({ markdown }: { markdown: string }) {
         return (
           <div key={i} className="border border-[var(--border)] rounded-xl overflow-hidden">
             <button
-              onClick={() => setOpen(prev => ({ ...prev, [i]: !prev[i] }))}
+              onClick={() => setOpen((prev) => ({ ...prev, [i]: !prev[i] }))}
               className="w-full flex items-center justify-between px-4 py-2.5 bg-[var(--sidebar)] hover:bg-[var(--accent-light)] transition-colors text-left"
             >
               <span className="text-[13px] font-semibold text-[var(--ink)]">{s.heading}</span>
               <svg
-                width="14" height="14" viewBox="0 0 24 24" fill="none"
-                stroke="currentColor" strokeWidth="2.5"
+                width="14"
+                height="14"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2.5"
                 className={`text-[var(--ink-4)] transition-transform duration-200 shrink-0 ${isOpen ? 'rotate-180' : ''}`}
               >
                 <path d="m6 9 6 6 6-6" />
@@ -173,15 +199,16 @@ function RebalancingCalc({
     for (const line of markdown.split('\n')) {
       const m = line.match(/\*{0,2}([A-Z]{2,10})\*{0,2}[^%\n]*?(\d+(?:\.\d+)?)\s*%/);
       if (m) {
-        const ticker = m[1], pct = parseFloat(m[2]);
-        if (pct > 0 && pct <= 100 && holdings.some(h => h.ticker === ticker)) found[ticker] = pct;
+        const ticker = m[1],
+          pct = parseFloat(m[2]);
+        if (pct > 0 && pct <= 100 && holdings.some((h) => h.ticker === ticker)) found[ticker] = pct;
       }
     }
     if (!Object.keys(found).length) return null;
     const total = holdings.reduce((s, h) => s + h.equity, 0) || 1;
     return holdings
-      .filter(h => found[h.ticker] != null)
-      .map(h => ({
+      .filter((h) => found[h.ticker] != null)
+      .map((h) => ({
         ticker: h.ticker,
         current: +((h.equity / total) * 100).toFixed(1),
         suggested: found[h.ticker],
@@ -194,26 +221,45 @@ function RebalancingCalc({
   return (
     <div className="card mt-4">
       <div className="px-4 pt-3.5 pb-2 border-b border-[var(--border)]">
-        <p className="text-[10px] font-bold uppercase tracking-[0.08em] text-[var(--ink-4)]">Rebalancing Guide</p>
+        <p className="text-[10px] font-bold uppercase tracking-[0.08em] text-[var(--ink-4)]">
+          Rebalancing Guide
+        </p>
         <p className="text-[10px] text-[var(--ink-4)] mt-0.5">Weights mentioned in analysis</p>
       </div>
       <div className="overflow-x-auto">
         <table className="w-full text-[11px]">
           <thead>
             <tr className="border-b border-[var(--border)]">
-              {['Ticker', 'Current', 'Suggested', 'Delta'].map(h => (
-                <th key={h} className={`py-2 px-4 text-[9px] font-semibold uppercase tracking-wide text-[var(--ink-4)] ${h === 'Ticker' ? 'text-left' : 'text-right'}`}>{h}</th>
+              {['Ticker', 'Current', 'Suggested', 'Delta'].map((h) => (
+                <th
+                  key={h}
+                  className={`py-2 px-4 text-[9px] font-semibold uppercase tracking-wide text-[var(--ink-4)] ${h === 'Ticker' ? 'text-left' : 'text-right'}`}
+                >
+                  {h}
+                </th>
               ))}
             </tr>
           </thead>
           <tbody>
-            {rows.map(r => (
-              <tr key={r.ticker} className="border-b border-[var(--border)] last:border-0 hover:bg-[var(--sidebar)]">
-                <td className="py-2.5 px-4 font-mono font-semibold text-[var(--ink)]">{r.ticker}</td>
-                <td className="py-2.5 px-4 font-mono text-right text-[var(--ink-2)]">{r.current}%</td>
-                <td className="py-2.5 px-4 font-mono text-right text-[var(--ink-2)]">{r.suggested}%</td>
-                <td className={`py-2.5 px-4 font-mono font-semibold text-right ${r.delta > 0 ? 'text-[var(--gain)]' : r.delta < 0 ? 'text-[var(--loss)]' : 'text-[var(--ink-4)]'}`}>
-                  {r.delta > 0 ? '+' : ''}{r.delta}%
+            {rows.map((r) => (
+              <tr
+                key={r.ticker}
+                className="border-b border-[var(--border)] last:border-0 hover:bg-[var(--sidebar)]"
+              >
+                <td className="py-2.5 px-4 font-mono font-semibold text-[var(--ink)]">
+                  {r.ticker}
+                </td>
+                <td className="py-2.5 px-4 font-mono text-right text-[var(--ink-2)]">
+                  {r.current}%
+                </td>
+                <td className="py-2.5 px-4 font-mono text-right text-[var(--ink-2)]">
+                  {r.suggested}%
+                </td>
+                <td
+                  className={`py-2.5 px-4 font-mono font-semibold text-right ${r.delta > 0 ? 'text-[var(--gain)]' : r.delta < 0 ? 'text-[var(--loss)]' : 'text-[var(--ink-4)]'}`}
+                >
+                  {r.delta > 0 ? '+' : ''}
+                  {r.delta}%
                 </td>
               </tr>
             ))}
@@ -246,7 +292,7 @@ export default function AnalysisPage() {
   const [followUps, setFollowUps] = useState<FollowUpEntry[]>([]);
   const [followUpText, setFollowUpText] = useState('');
   const [followUpPreview, setFollowUpPreview] = useState(false);
-  const followUpStreaming = followUps.some(f => !f.done);
+  const followUpStreaming = followUps.some((f) => !f.done);
 
   const [atBottom, setAtBottom] = useState(true);
 
@@ -275,7 +321,10 @@ export default function AnalysisPage() {
     if (typeof wrap === 'string') {
       // line prefix (blockquote, list)
       replacement = selected
-        ? selected.split('\n').map(l => wrap + l).join('\n')
+        ? selected
+            .split('\n')
+            .map((l) => wrap + l)
+            .join('\n')
         : wrap;
       cursor = s + replacement.length;
     } else {
@@ -292,12 +341,20 @@ export default function AnalysisPage() {
   }, []);
 
   const loadHistory = useCallback(async () => {
-    try { setHistory(await fetchAnalysisHistory()); } catch { /* silent */ }
+    try {
+      setHistory(await fetchAnalysisHistory());
+    } catch {
+      /* silent */
+    }
   }, []);
 
-  useEffect(() => { loadHistory(); }, [loadHistory]);
+  useEffect(() => {
+    loadHistory();
+  }, [loadHistory]);
 
-  useEffect(() => { scrollToBottom('smooth'); }, [streamText, followUps, scrollToBottom]);
+  useEffect(() => {
+    scrollToBottom('smooth');
+  }, [streamText, followUps, scrollToBottom]);
 
   // Scroll to bottom instantly when a historical thread finishes loading
   useEffect(() => {
@@ -316,19 +373,49 @@ export default function AnalysisPage() {
 
     if (mode === 'journal') {
       abortRef.current = streamTradeJournal(
-        (chunk) => setStreamText(prev => prev + chunk),
-        (id, tokens) => { setStreaming(false); setTokenInfo({ tokens, cached: false }); if (id) { setActiveId(id); loadHistory(); } },
-        (msg) => { setStreaming(false); setError(msg); },
+        (chunk) => setStreamText((prev) => prev + chunk),
+        (id, tokens) => {
+          setStreaming(false);
+          setTokenInfo({ tokens, cached: false });
+          if (id) {
+            setActiveId(id);
+            loadHistory();
+          }
+        },
+        (msg) => {
+          setStreaming(false);
+          setError(msg);
+        },
       );
     } else {
       const msg = initialMessage.trim() || undefined;
       abortRef.current = streamAnalysis(
-        scope, depth,
-        (chunk) => { setThinking(false); setStreamText(prev => prev + chunk); },
-        (id, tokens, cached) => { setStreaming(false); setThinking(false); setTokenInfo({ tokens, cached }); if (id) { setActiveId(id); loadHistory(); } },
-        (msg) => { setStreaming(false); setThinking(false); setError(msg); },
-        undefined, undefined, msg,
-        (status) => { if (status === 'thinking') setThinking(true); },
+        scope,
+        depth,
+        (chunk) => {
+          setThinking(false);
+          setStreamText((prev) => prev + chunk);
+        },
+        (id, tokens, cached) => {
+          setStreaming(false);
+          setThinking(false);
+          setTokenInfo({ tokens, cached });
+          if (id) {
+            setActiveId(id);
+            loadHistory();
+          }
+        },
+        (msg) => {
+          setStreaming(false);
+          setThinking(false);
+          setError(msg);
+        },
+        undefined,
+        undefined,
+        msg,
+        (status) => {
+          if (status === 'thinking') setThinking(true);
+        },
       );
     }
   }, [mode, scope, depth, initialMessage, loadHistory]);
@@ -340,29 +427,46 @@ export default function AnalysisPage() {
     const idx = followUps.length;
     setFollowUpText('');
     setFollowUpPreview(false);
-    setFollowUps(prev => [...prev, { question: text, answer: '', done: false }]);
+    setFollowUps((prev) => [...prev, { question: text, answer: '', done: false }]);
     abortRef.current = streamAnalysis(
-      scope, depth,
-      (chunk) => setFollowUps(prev => prev.map((f, i) => i === idx ? { ...f, answer: f.answer + chunk } : f)),
+      scope,
+      depth,
+      (chunk) =>
+        setFollowUps((prev) =>
+          prev.map((f, i) => (i === idx ? { ...f, answer: f.answer + chunk } : f)),
+        ),
       async () => {
-        setFollowUps(prev => prev.map((f, i) => i === idx ? { ...f, done: true } : f));
+        setFollowUps((prev) => prev.map((f, i) => (i === idx ? { ...f, done: true } : f)));
         if (id) {
-          try { const d = await fetchAnalysisById(id); setActiveDetail(d); } catch { /* non-critical */ }
+          try {
+            const d = await fetchAnalysisById(id);
+            setActiveDetail(d);
+          } catch {
+            /* non-critical */
+          }
         }
       },
-      (msg) => { setFollowUps(prev => prev.map((f, i) => i === idx ? { ...f, answer: `Error: ${msg}`, done: true } : f)); },
-      text, id,
+      (msg) => {
+        setFollowUps((prev) =>
+          prev.map((f, i) => (i === idx ? { ...f, answer: `Error: ${msg}`, done: true } : f)),
+        );
+      },
+      text,
+      id,
     );
   }, [followUpText, streaming, followUpStreaming, followUps, activeId, scope, depth]);
 
   const handleAbort = useCallback(() => {
     abortRef.current?.abort();
     setStreaming(false);
-    setFollowUps(prev => prev.map(f => f.done ? f : { ...f, done: true }));
+    setFollowUps((prev) => prev.map((f) => (f.done ? f : { ...f, done: true })));
   }, []);
 
   const handleSelectHistory = useCallback(async (item: AnalysisSummary) => {
-    setStreamText(''); setError(null); setTokenInfo(null); setFollowUps([]);
+    setStreamText('');
+    setError(null);
+    setTokenInfo(null);
+    setFollowUps([]);
     setActiveId(item.id);
     if (item.scope === 'journal') {
       setMode('journal');
@@ -375,29 +479,44 @@ export default function AnalysisPage() {
       const detail = await fetchAnalysisById(item.id);
       setActiveDetail(detail);
       if (detail.follow_ups?.length)
-        setFollowUps(detail.follow_ups.map(f => ({ ...f, done: true })));
-    } catch { setError('Failed to load analysis'); }
+        setFollowUps(detail.follow_ups.map((f) => ({ ...f, done: true })));
+    } catch {
+      setError('Failed to load analysis');
+    }
   }, []);
 
-  const handleDeleteThread = useCallback(async (id: number, e: React.MouseEvent) => {
-    e.stopPropagation();
-    await deleteAnalysisById(id);
-    setHistory(prev => prev.filter(h => h.id !== id));
-    if (activeId === id) {
-      setActiveId(null); setActiveDetail(null); setStreamText(''); setFollowUps([]);
-    }
-  }, [activeId]);
+  const handleDeleteThread = useCallback(
+    async (id: number, e: React.MouseEvent) => {
+      e.stopPropagation();
+      await deleteAnalysisById(id);
+      setHistory((prev) => prev.filter((h) => h.id !== id));
+      if (activeId === id) {
+        setActiveId(null);
+        setActiveDetail(null);
+        setStreamText('');
+        setFollowUps([]);
+      }
+    },
+    [activeId],
+  );
 
   const handleClearHistory = useCallback(async () => {
     if (!confirm('Clear all threads?')) return;
     await clearAnalysisHistory();
-    setHistory([]); setActiveId(null); setActiveDetail(null); setStreamText(''); setFollowUps([]);
+    setHistory([]);
+    setActiveId(null);
+    setActiveDetail(null);
+    setStreamText('');
+    setFollowUps([]);
   }, []);
 
   const handleCopy = useCallback(() => {
     const text = activeDetail?.full_response ?? streamText;
     if (!text) return;
-    navigator.clipboard.writeText(text).then(() => { setCopied(true); setTimeout(() => setCopied(false), 1500); });
+    navigator.clipboard.writeText(text).then(() => {
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1500);
+    });
   }, [activeDetail, streamText]);
 
   const [sidebarOpen, setSidebarOpen] = useState(false);
@@ -405,8 +524,8 @@ export default function AnalysisPage() {
   const displayText = activeDetail?.full_response ?? streamText;
   const displayEmpty = !displayText && !streaming && !error && !followUps.length;
   const ngxHoldings = ([] as { ticker: string; equity: number }[])
-    .filter(s => s.CurrentEquity != null)
-    .map(s => ({ ticker: s.Ticker, equity: s.CurrentEquity! }));
+    .filter((s) => s.equity != null)
+    .map((s) => ({ ticker: s.ticker, equity: s.equity! }));
 
   // ── Shared thread list renderer ───────────────────────────────────────────
   const ThreadList = ({ onSelect }: { onSelect?: () => void }) => (
@@ -414,7 +533,7 @@ export default function AnalysisPage() {
       {history.length === 0 && (
         <p className="text-[11px] text-[var(--ink-5)] px-0.5">No threads yet</p>
       )}
-      {history.map(item => {
+      {history.map((item) => {
         const d = new Date(item.created_at);
         const label = d.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
         const time = d.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' });
@@ -422,7 +541,10 @@ export default function AnalysisPage() {
         return (
           <div
             key={item.id}
-            onClick={() => { handleSelectHistory(item); onSelect?.(); }}
+            onClick={() => {
+              handleSelectHistory(item);
+              onSelect?.();
+            }}
             className={`group relative rounded-xl border px-3 py-2.5 cursor-pointer transition-all duration-150 ${
               isActive
                 ? 'border-[var(--accent)] bg-[var(--accent-light)]'
@@ -430,7 +552,9 @@ export default function AnalysisPage() {
             }`}
           >
             <div className="flex items-center justify-between gap-1 mb-0.5">
-              <span className={`text-[11px] font-semibold truncate ${isActive ? 'text-[var(--accent)]' : 'text-[var(--ink)]'}`}>
+              <span
+                className={`text-[11px] font-semibold truncate ${isActive ? 'text-[var(--accent)]' : 'text-[var(--ink)]'}`}
+              >
                 {SCOPE_LABELS[item.scope] ?? item.scope}
               </span>
               <button
@@ -442,17 +566,30 @@ export default function AnalysisPage() {
               </button>
             </div>
             <div className="flex items-center gap-1.5">
-              <span className={`text-[9px] font-semibold px-1 py-0.5 rounded ${
-                item.depth === 'deep' ? 'bg-purple-100 text-purple-600'
-                : item.depth === 'default' ? 'bg-emerald-100 text-emerald-700'
-                : 'bg-[var(--accent-light)] text-[var(--accent)]'
-              }`}>
-                {item.depth === 'quick' ? 'Compact' : item.depth === 'deep' ? 'Detailed' : 'Default'}
+              <span
+                className={`text-[9px] font-semibold px-1 py-0.5 rounded ${
+                  item.depth === 'deep'
+                    ? 'bg-purple-100 text-purple-600'
+                    : item.depth === 'default'
+                      ? 'bg-emerald-100 text-emerald-700'
+                      : 'bg-[var(--accent-light)] text-[var(--accent)]'
+                }`}
+              >
+                {item.depth === 'quick'
+                  ? 'Compact'
+                  : item.depth === 'deep'
+                    ? 'Detailed'
+                    : 'Default'}
               </span>
-              <span className="text-[9px] text-[var(--ink-5)]">{label} {time}</span>
+              <span className="text-[9px] text-[var(--ink-5)]">
+                {label} {time}
+              </span>
               {item.total_tokens != null && item.total_tokens > 0 && (
                 <span className="ml-auto text-[9px] text-[var(--ink-5)] tabular-nums">
-                  ~{item.total_tokens >= 1000 ? `${(item.total_tokens / 1000).toFixed(1)}k` : item.total_tokens}
+                  ~
+                  {item.total_tokens >= 1000
+                    ? `${(item.total_tokens / 1000).toFixed(1)}k`
+                    : item.total_tokens}
                 </span>
               )}
             </div>
@@ -472,19 +609,28 @@ export default function AnalysisPage() {
       className="flex flex-col gap-4 sm:flex-row"
       style={{ height: 'calc(100dvh - var(--header-h) - var(--nav-h) - 56px)' }}
     >
-
       {/* ── Mobile bottom-sheet overlay ── */}
       {sidebarOpen && (
         <div className="sm:hidden fixed inset-0 z-50 flex flex-col justify-end">
           <div className="absolute inset-0 bg-black/40" onClick={() => setSidebarOpen(false)} />
           <div className="relative bg-white rounded-t-2xl px-4 pt-4 pb-6 max-h-[70vh] overflow-y-auto">
             <div className="flex items-center justify-between mb-3">
-              <span className="text-[10px] font-bold uppercase tracking-[0.08em] text-[var(--ink-4)]">Threads</span>
+              <span className="text-[10px] font-bold uppercase tracking-[0.08em] text-[var(--ink-4)]">
+                Threads
+              </span>
               <div className="flex items-center gap-3">
                 {history.length > 0 && (
-                  <button onClick={handleClearHistory} className="text-[10px] text-[var(--loss)] hover:underline">Clear all</button>
+                  <button
+                    onClick={handleClearHistory}
+                    className="text-[10px] text-[var(--loss)] hover:underline"
+                  >
+                    Clear all
+                  </button>
                 )}
-                <button onClick={() => setSidebarOpen(false)} className="text-[var(--ink-4)] hover:text-[var(--ink)]">
+                <button
+                  onClick={() => setSidebarOpen(false)}
+                  className="text-[var(--ink-4)] hover:text-[var(--ink)]"
+                >
                   <IconX width={14} height={14} />
                 </button>
               </div>
@@ -497,9 +643,16 @@ export default function AnalysisPage() {
       {/* ── Desktop threads sidebar ── */}
       <div className="hidden sm:flex flex-col w-48 shrink-0 overflow-y-auto space-y-1.5">
         <div className="flex items-center justify-between px-0.5 mb-2">
-          <span className="text-[10px] font-bold uppercase tracking-[0.08em] text-[var(--ink-4)]">Threads</span>
+          <span className="text-[10px] font-bold uppercase tracking-[0.08em] text-[var(--ink-4)]">
+            Threads
+          </span>
           {history.length > 0 && (
-            <button onClick={handleClearHistory} className="text-[10px] text-[var(--loss)] hover:underline">Clear all</button>
+            <button
+              onClick={handleClearHistory}
+              className="text-[10px] text-[var(--loss)] hover:underline"
+            >
+              Clear all
+            </button>
           )}
         </div>
         <ThreadList />
@@ -507,29 +660,40 @@ export default function AnalysisPage() {
 
       {/* ── Main content ── */}
       <div className="flex-1 min-w-0 min-h-0 flex flex-col gap-4">
-
         {/* Header */}
         <div className="flex items-center justify-between flex-wrap gap-3">
           <div>
             <h1 className="text-[15px] font-semibold text-[var(--ink)]">AI Analyst</h1>
-            <p className="text-[11px] text-[var(--ink-4)] mt-0.5">Claude analyses your portfolio and watchlist</p>
+            <p className="text-[11px] text-[var(--ink-4)] mt-0.5">
+              Claude analyses your portfolio and watchlist
+            </p>
           </div>
           <div className="flex items-center gap-2">
             {/* Mobile threads toggle */}
             <button
-              onClick={() => setSidebarOpen(o => !o)}
+              onClick={() => setSidebarOpen((o) => !o)}
               className="sm:hidden flex items-center gap-1.5 h-8 px-3 text-[11px] font-semibold border border-[var(--border)] text-[var(--ink-3)] rounded-lg hover:border-[var(--accent-light)] transition-colors"
             >
               Threads{history.length > 0 ? ` (${history.length})` : ''}
             </button>
             {displayText && !streaming && (
               <>
-                <button onClick={() => handleRun()} className="flex items-center gap-1.5 h-8 px-3 text-[11px] font-semibold border border-[var(--border)] text-[var(--ink-3)] rounded-lg hover:border-[var(--accent-light)] transition-colors">
+                <button
+                  onClick={() => handleRun()}
+                  className="flex items-center gap-1.5 h-8 px-3 text-[11px] font-semibold border border-[var(--border)] text-[var(--ink-3)] rounded-lg hover:border-[var(--accent-light)] transition-colors"
+                >
                   <IconRefresh width={12} height={12} />
                   Re-run
                 </button>
-                <button onClick={handleCopy} className="flex items-center gap-1.5 h-8 px-3 text-[11px] font-semibold border border-[var(--border)] text-[var(--ink-3)] rounded-lg hover:border-[var(--accent-light)] transition-colors">
-                  {copied ? <IconCheck width={12} height={12} className="text-[var(--gain)]" /> : <IconCopy width={12} height={12} />}
+                <button
+                  onClick={handleCopy}
+                  className="flex items-center gap-1.5 h-8 px-3 text-[11px] font-semibold border border-[var(--border)] text-[var(--ink-3)] rounded-lg hover:border-[var(--accent-light)] transition-colors"
+                >
+                  {copied ? (
+                    <IconCheck width={12} height={12} className="text-[var(--gain)]" />
+                  ) : (
+                    <IconCopy width={12} height={12} />
+                  )}
                   {copied ? 'Copied' : 'Copy'}
                 </button>
               </>
@@ -541,17 +705,29 @@ export default function AnalysisPage() {
         <div className="flex flex-wrap items-center gap-2">
           {/* Mode */}
           <div className="flex rounded-lg border border-[var(--border)] overflow-hidden shrink-0">
-            {([
-              { key: 'analysis', label: 'Analysis' },
-              { key: 'journal',  label: 'Journal' },
-            ] as { key: Mode; label: string }[]).map(m => (
+            {(
+              [
+                { key: 'analysis', label: 'Analysis' },
+                { key: 'journal', label: 'Journal' },
+              ] as { key: Mode; label: string }[]
+            ).map((m) => (
               <button
                 key={m.key}
-                onClick={() => { setMode(m.key); setStreamText(''); setError(null); setTokenInfo(null); setFollowUps([]); setActiveId(null); setActiveDetail(null); }}
+                onClick={() => {
+                  setMode(m.key);
+                  setStreamText('');
+                  setError(null);
+                  setTokenInfo(null);
+                  setFollowUps([]);
+                  setActiveId(null);
+                  setActiveDetail(null);
+                }}
                 disabled={streaming}
                 className={[
                   'px-3 py-1.5 text-[11px] font-semibold transition-colors disabled:opacity-50',
-                  mode === m.key ? 'bg-[var(--accent-light)] text-[var(--accent)]' : 'text-[var(--ink-4)] hover:text-[var(--ink)]',
+                  mode === m.key
+                    ? 'bg-[var(--accent-light)] text-[var(--accent)]'
+                    : 'text-[var(--ink-4)] hover:text-[var(--ink)]',
                 ].join(' ')}
               >
                 {m.label}
@@ -563,9 +739,13 @@ export default function AnalysisPage() {
             <>
               {/* Scope */}
               <div className="flex rounded-lg border border-[var(--border)] overflow-hidden shrink-0">
-                {(['portfolio', 'watchlist', 'combined'] as AnalysisScope[]).map(s => (
-                  <button key={s} onClick={() => setScope(s)} disabled={streaming}
-                    className={`px-3 py-1.5 text-[11px] font-semibold transition-colors disabled:opacity-50 capitalize ${scope === s ? 'bg-[var(--accent-light)] text-[var(--accent)]' : 'text-[var(--ink-4)] hover:text-[var(--ink)]'}`}>
+                {(['portfolio', 'watchlist', 'combined'] as AnalysisScope[]).map((s) => (
+                  <button
+                    key={s}
+                    onClick={() => setScope(s)}
+                    disabled={streaming}
+                    className={`px-3 py-1.5 text-[11px] font-semibold transition-colors disabled:opacity-50 capitalize ${scope === s ? 'bg-[var(--accent-light)] text-[var(--accent)]' : 'text-[var(--ink-4)] hover:text-[var(--ink)]'}`}
+                  >
                     {SCOPE_LABELS[s]}
                   </button>
                 ))}
@@ -573,21 +753,27 @@ export default function AnalysisPage() {
 
               {/* Depth */}
               <div className="flex rounded-lg border border-[var(--border)] overflow-hidden shrink-0">
-                {([
-                  { key: 'default', label: 'Default' },
-                  { key: 'quick',   label: 'Compact' },
-                  { key: 'deep',    label: 'Detailed' },
-                ] as { key: AnalysisDepth; label: string }[]).map(d => (
-                  <button key={d.key} onClick={() => setDepth(d.key)} disabled={streaming}
+                {(
+                  [
+                    { key: 'default', label: 'Default' },
+                    { key: 'quick', label: 'Compact' },
+                    { key: 'deep', label: 'Detailed' },
+                  ] as { key: AnalysisDepth; label: string }[]
+                ).map((d) => (
+                  <button
+                    key={d.key}
+                    onClick={() => setDepth(d.key)}
+                    disabled={streaming}
                     className={`px-3 py-1.5 text-[11px] font-semibold transition-colors disabled:opacity-50 ${
                       depth === d.key
                         ? d.key === 'deep'
                           ? 'bg-purple-100 text-purple-600'
                           : d.key === 'default'
-                          ? 'bg-emerald-100 text-emerald-700'
-                          : 'bg-[var(--accent-light)] text-[var(--accent)]'
+                            ? 'bg-emerald-100 text-emerald-700'
+                            : 'bg-[var(--accent-light)] text-[var(--accent)]'
                         : 'text-[var(--ink-4)] hover:text-[var(--ink)]'
-                    }`}>
+                    }`}
+                  >
                     {d.label}
                   </button>
                 ))}
@@ -596,7 +782,7 @@ export default function AnalysisPage() {
               {/* Focus input */}
               <input
                 value={initialMessage}
-                onChange={e => setInitialMessage(e.target.value)}
+                onChange={(e) => setInitialMessage(e.target.value)}
                 placeholder="Optional focus…"
                 disabled={streaming}
                 className="h-8 flex-1 min-w-[140px] px-3 rounded-lg border border-[var(--border)] text-[11px] text-[var(--ink)] placeholder:text-[var(--ink-5)] focus:outline-none focus:border-[var(--accent)] bg-white disabled:opacity-50"
@@ -605,12 +791,18 @@ export default function AnalysisPage() {
           )}
 
           {/* Run / Stop */}
-          {(streaming || followUpStreaming) ? (
-            <button onClick={handleAbort} className="flex items-center gap-1.5 h-8 px-3 rounded-lg text-[11px] font-semibold bg-red-50 text-red-600 border border-red-200 hover:bg-red-100 transition-colors shrink-0">
+          {streaming || followUpStreaming ? (
+            <button
+              onClick={handleAbort}
+              className="flex items-center gap-1.5 h-8 px-3 rounded-lg text-[11px] font-semibold bg-red-50 text-red-600 border border-red-200 hover:bg-red-100 transition-colors shrink-0"
+            >
               <IconX width={12} height={12} /> Stop
             </button>
           ) : (
-            <button onClick={() => handleRun()} className="flex items-center gap-1.5 h-8 px-3 rounded-lg text-[11px] font-semibold bg-[var(--accent)] text-white hover:opacity-90 transition-opacity shrink-0">
+            <button
+              onClick={() => handleRun()}
+              className="flex items-center gap-1.5 h-8 px-3 rounded-lg text-[11px] font-semibold bg-[var(--accent)] text-white hover:opacity-90 transition-opacity shrink-0"
+            >
               <IconSparkles width={12} height={12} />
               {mode === 'journal' ? 'Run' : 'Run'}
             </button>
@@ -625,20 +817,34 @@ export default function AnalysisPage() {
                 {(() => {
                   const s = activeDetail?.scope ?? scope;
                   const d = activeDetail?.depth ?? depth;
-                  const ts = activeDetail ? new Date(activeDetail.created_at).toLocaleString() : null;
+                  const ts = activeDetail
+                    ? new Date(activeDetail.created_at).toLocaleString()
+                    : null;
                   // thread_tokens = parent + all follow-ups; fall back to single-run tokenInfo
                   const tok = activeDetail?.thread_tokens ?? tokenInfo?.tokens;
                   const cached = tokenInfo?.cached;
                   const hasFollowUps = (activeDetail?.follow_ups?.length ?? 0) > 0;
                   return (
                     <>
-                      <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded bg-[var(--ink-6)] text-[var(--ink-3)]">{SCOPE_LABELS[s] ?? s}</span>
-                      <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded ${
-                        d === 'deep' ? 'bg-purple-100 text-purple-700'
-                        : d === 'default' ? 'bg-emerald-100 text-emerald-700'
-                        : 'bg-[var(--accent-light)] text-[var(--accent)]'
-                      }`}>{d === 'quick' ? 'Compact' : d === 'deep' ? 'Detailed' : 'Default'}</span>
-                      {cached && <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded bg-[var(--ink-6)] text-[var(--ink-4)]">cached</span>}
+                      <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded bg-[var(--ink-6)] text-[var(--ink-3)]">
+                        {SCOPE_LABELS[s] ?? s}
+                      </span>
+                      <span
+                        className={`text-[10px] font-semibold px-1.5 py-0.5 rounded ${
+                          d === 'deep'
+                            ? 'bg-purple-100 text-purple-700'
+                            : d === 'default'
+                              ? 'bg-emerald-100 text-emerald-700'
+                              : 'bg-[var(--accent-light)] text-[var(--accent)]'
+                        }`}
+                      >
+                        {d === 'quick' ? 'Compact' : d === 'deep' ? 'Detailed' : 'Default'}
+                      </span>
+                      {cached && (
+                        <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded bg-[var(--ink-6)] text-[var(--ink-4)]">
+                          cached
+                        </span>
+                      )}
                       <span className="sm:ml-auto text-[10px] text-[var(--ink-4)] whitespace-nowrap tabular-nums">
                         {ts ?? ''}
                         {tok != null && tok > 0
@@ -658,107 +864,174 @@ export default function AnalysisPage() {
                   className="absolute bottom-3 right-3 z-10 w-7 h-7 flex items-center justify-center rounded-full bg-[var(--accent)] text-white shadow-md hover:bg-[#17A06B] transition-colors"
                   title="Scroll to bottom"
                 >
-                  <svg width="12" height="12" viewBox="0 0 12 12" fill="none"><path d="M6 2v8M2.5 7.5 6 11l3.5-3.5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/></svg>
+                  <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
+                    <path
+                      d="M6 2v8M2.5 7.5 6 11l3.5-3.5"
+                      stroke="currentColor"
+                      strokeWidth="1.5"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                    />
+                  </svg>
                 </button>
               )}
-            <div ref={viewerRef} onScroll={handleViewerScroll} className="h-full overflow-y-auto px-4 py-4">
-              {error && (
-                <div className="rounded-xl bg-red-50 border border-red-200 px-4 py-3">
-                  <p className="text-[13px] font-semibold text-red-700 mb-0.5">Analysis failed</p>
-                  <p className="text-[11px] text-red-600">{error}</p>
-                </div>
-              )}
-
-              {streaming && !streamText && <ThinkingAnimation depth={depth} />}
-              {streaming && streamText && <MarkdownViewer>{streamText}</MarkdownViewer>}
-              {streaming && streamText && <Cursor />}
-
-              {!streaming && displayText && (
-                <>
-                  <CollapsibleSections markdown={displayText} />
-                  <RebalancingCalc markdown={displayText} holdings={ngxHoldings} />
-                </>
-              )}
-
-              {/* Follow-up thread */}
-              {followUps.map((f, i) => (
-                <div key={i} className="mt-5 pt-4 border-t border-[var(--border)]">
-                  <div className="flex items-start gap-2 mb-3">
-                    <span className="shrink-0 mt-0.5 text-[10px] font-bold uppercase tracking-[0.08em] text-[var(--ink-4)] bg-[var(--canvas)] border border-[var(--border)] rounded px-1.5 py-0.5">You</span>
-                    <div className="text-[13px] text-[var(--ink)] leading-snug"><MarkdownViewer breaks>{f.question}</MarkdownViewer></div>
+              <div
+                ref={viewerRef}
+                onScroll={handleViewerScroll}
+                className="h-full overflow-y-auto px-4 py-4"
+              >
+                {error && (
+                  <div className="rounded-xl bg-red-50 border border-red-200 px-4 py-3">
+                    <p className="text-[13px] font-semibold text-red-700 mb-0.5">Analysis failed</p>
+                    <p className="text-[11px] text-red-600">{error}</p>
                   </div>
-                  {!f.done && !f.answer && <ThinkingAnimation depth={depth} compact />}
-                  {f.answer && <MarkdownViewer>{f.answer}</MarkdownViewer>}
-                  {!f.done && f.answer && <Cursor />}
-                </div>
-              ))}
-              <div ref={bottomRef} />
-            </div>
-          </div>
-
-          {/* Follow-up input — fixed at bottom of card, does not scroll */}
-          {!streaming && displayText && mode === 'analysis' && (
-            <div className="px-4 pb-4 pt-2 border-t border-[var(--border)]">
-              <div className="rounded-xl border border-[var(--border)] overflow-hidden focus-within:border-[var(--accent)] transition-colors">
-                {/* Tab bar */}
-                <div className="flex items-center border-b border-[var(--border)] bg-[var(--canvas)]">
-                  <button type="button" onClick={() => setFollowUpPreview(false)}
-                    className={`px-3 py-1.5 text-[11px] font-medium transition-colors ${!followUpPreview ? 'text-[var(--ink-1)] border-b-2 border-[var(--accent)] -mb-px bg-white' : 'text-[var(--ink-4)] hover:text-[var(--ink-2)]'}`}>
-                    Write
-                  </button>
-                  <button type="button" onClick={() => setFollowUpPreview(true)} disabled={!followUpText.trim()}
-                    className={`px-3 py-1.5 text-[11px] font-medium transition-colors disabled:opacity-30 ${followUpPreview ? 'text-[var(--ink-1)] border-b-2 border-[var(--accent)] -mb-px bg-white' : 'text-[var(--ink-4)] hover:text-[var(--ink-2)]'}`}>
-                    Preview
-                  </button>
-                  {!followUpPreview && (
-                    <div className="ml-auto flex items-center gap-0.5 pr-2">
-                      {([
-                        { label: 'B', title: 'Bold', wrap: ['**', '**'] as [string,string], cls: 'font-bold' },
-                        { label: 'I', title: 'Italic', wrap: ['*', '*'] as [string,string], cls: 'italic' },
-                        { label: '<>', title: 'Inline code', wrap: ['`', '`'] as [string,string], cls: 'font-mono text-[10px]' },
-                        { label: '❝', title: 'Blockquote', wrap: '> ', cls: '' },
-                        { label: '•', title: 'Bullet list', wrap: '- ', cls: 'text-base leading-none' },
-                        { label: '1.', title: 'Ordered list', wrap: '1. ', cls: 'font-mono text-[10px]' },
-                      ] as const).map(({ label, title, wrap, cls }) => (
-                        <button key={title} type="button" title={title}
-                          onMouseDown={e => { e.preventDefault(); insertMarkdown(wrap); }}
-                          disabled={followUpStreaming}
-                          className={`w-6 h-6 flex items-center justify-center rounded text-[11px] text-[var(--ink-3)] hover:bg-[var(--border)] hover:text-[var(--ink-1)] transition-colors disabled:opacity-30 ${cls}`}>
-                          {label}
-                        </button>
-                      ))}
-                    </div>
-                  )}
-                </div>
-                {/* Write / Preview body */}
-                {followUpPreview ? (
-                  <div className="min-h-[64px] px-3 py-2 text-[12px] bg-white">
-                    <MarkdownViewer breaks>{followUpText}</MarkdownViewer>
-                  </div>
-                ) : (
-                  <textarea
-                    ref={followUpRef}
-                    value={followUpText}
-                    onChange={e => setFollowUpText(e.target.value)}
-                    onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleFollowUp(); } }}
-                    placeholder="Ask a follow-up question… (markdown supported)"
-                    rows={2}
-                    disabled={followUpStreaming}
-                    className="w-full resize-none px-3 py-2 text-[12px] text-[var(--ink)] placeholder:text-[var(--ink-5)] focus:outline-none bg-white disabled:opacity-50"
-                  />
                 )}
-                {/* Footer row */}
-                <div className="flex items-center justify-between px-3 py-1.5 bg-[var(--canvas)] border-t border-[var(--border)]">
-                  <span className="text-[10px] text-[var(--ink-5)]">Markdown supported · Enter to send · Shift+Enter for newline</span>
-                  <button onClick={handleFollowUp} disabled={!followUpText.trim() || followUpStreaming}
-                    className="h-7 px-3 rounded-lg text-[11px] font-semibold bg-[var(--accent)] text-white hover:bg-[#17A06B] transition-colors disabled:opacity-40">
-                    Ask
-                  </button>
-                </div>
+
+                {streaming && !streamText && <ThinkingAnimation depth={depth} />}
+                {streaming && streamText && <MarkdownViewer>{streamText}</MarkdownViewer>}
+                {streaming && streamText && <Cursor />}
+
+                {!streaming && displayText && (
+                  <>
+                    <CollapsibleSections markdown={displayText} />
+                    <RebalancingCalc markdown={displayText} holdings={ngxHoldings} />
+                  </>
+                )}
+
+                {/* Follow-up thread */}
+                {followUps.map((f, i) => (
+                  <div key={i} className="mt-5 pt-4 border-t border-[var(--border)]">
+                    <div className="flex items-start gap-2 mb-3">
+                      <span className="shrink-0 mt-0.5 text-[10px] font-bold uppercase tracking-[0.08em] text-[var(--ink-4)] bg-[var(--canvas)] border border-[var(--border)] rounded px-1.5 py-0.5">
+                        You
+                      </span>
+                      <div className="text-[13px] text-[var(--ink)] leading-snug">
+                        <MarkdownViewer breaks>{f.question}</MarkdownViewer>
+                      </div>
+                    </div>
+                    {!f.done && !f.answer && <ThinkingAnimation depth={depth} compact />}
+                    {f.answer && <MarkdownViewer>{f.answer}</MarkdownViewer>}
+                    {!f.done && f.answer && <Cursor />}
+                  </div>
+                ))}
+                <div ref={bottomRef} />
               </div>
             </div>
-          )}
-        </div>
+
+            {/* Follow-up input — fixed at bottom of card, does not scroll */}
+            {!streaming && displayText && mode === 'analysis' && (
+              <div className="px-4 pb-4 pt-2 border-t border-[var(--border)]">
+                <div className="rounded-xl border border-[var(--border)] overflow-hidden focus-within:border-[var(--accent)] transition-colors">
+                  {/* Tab bar */}
+                  <div className="flex items-center border-b border-[var(--border)] bg-[var(--canvas)]">
+                    <button
+                      type="button"
+                      onClick={() => setFollowUpPreview(false)}
+                      className={`px-3 py-1.5 text-[11px] font-medium transition-colors ${!followUpPreview ? 'text-[var(--ink-1)] border-b-2 border-[var(--accent)] -mb-px bg-white' : 'text-[var(--ink-4)] hover:text-[var(--ink-2)]'}`}
+                    >
+                      Write
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setFollowUpPreview(true)}
+                      disabled={!followUpText.trim()}
+                      className={`px-3 py-1.5 text-[11px] font-medium transition-colors disabled:opacity-30 ${followUpPreview ? 'text-[var(--ink-1)] border-b-2 border-[var(--accent)] -mb-px bg-white' : 'text-[var(--ink-4)] hover:text-[var(--ink-2)]'}`}
+                    >
+                      Preview
+                    </button>
+                    {!followUpPreview && (
+                      <div className="ml-auto flex items-center gap-0.5 pr-2">
+                        {(
+                          [
+                            {
+                              label: 'B',
+                              title: 'Bold',
+                              wrap: ['**', '**'] as [string, string],
+                              cls: 'font-bold',
+                            },
+                            {
+                              label: 'I',
+                              title: 'Italic',
+                              wrap: ['*', '*'] as [string, string],
+                              cls: 'italic',
+                            },
+                            {
+                              label: '<>',
+                              title: 'Inline code',
+                              wrap: ['`', '`'] as [string, string],
+                              cls: 'font-mono text-[10px]',
+                            },
+                            { label: '❝', title: 'Blockquote', wrap: '> ', cls: '' },
+                            {
+                              label: '•',
+                              title: 'Bullet list',
+                              wrap: '- ',
+                              cls: 'text-base leading-none',
+                            },
+                            {
+                              label: '1.',
+                              title: 'Ordered list',
+                              wrap: '1. ',
+                              cls: 'font-mono text-[10px]',
+                            },
+                          ] as const
+                        ).map(({ label, title, wrap, cls }) => (
+                          <button
+                            key={title}
+                            type="button"
+                            title={title}
+                            onMouseDown={(e) => {
+                              e.preventDefault();
+                              insertMarkdown(wrap);
+                            }}
+                            disabled={followUpStreaming}
+                            className={`w-6 h-6 flex items-center justify-center rounded text-[11px] text-[var(--ink-3)] hover:bg-[var(--border)] hover:text-[var(--ink-1)] transition-colors disabled:opacity-30 ${cls}`}
+                          >
+                            {label}
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                  {/* Write / Preview body */}
+                  {followUpPreview ? (
+                    <div className="min-h-[64px] px-3 py-2 text-[12px] bg-white">
+                      <MarkdownViewer breaks>{followUpText}</MarkdownViewer>
+                    </div>
+                  ) : (
+                    <textarea
+                      ref={followUpRef}
+                      value={followUpText}
+                      onChange={(e) => setFollowUpText(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter' && !e.shiftKey) {
+                          e.preventDefault();
+                          handleFollowUp();
+                        }
+                      }}
+                      placeholder="Ask a follow-up question… (markdown supported)"
+                      rows={2}
+                      disabled={followUpStreaming}
+                      className="w-full resize-none px-3 py-2 text-[12px] text-[var(--ink)] placeholder:text-[var(--ink-5)] focus:outline-none bg-white disabled:opacity-50"
+                    />
+                  )}
+                  {/* Footer row */}
+                  <div className="flex items-center justify-between px-3 py-1.5 bg-[var(--canvas)] border-t border-[var(--border)]">
+                    <span className="text-[10px] text-[var(--ink-5)]">
+                      Markdown supported · Enter to send · Shift+Enter for newline
+                    </span>
+                    <button
+                      onClick={handleFollowUp}
+                      disabled={!followUpText.trim() || followUpStreaming}
+                      className="h-7 px-3 rounded-lg text-[11px] font-semibold bg-[var(--accent)] text-white hover:bg-[#17A06B] transition-colors disabled:opacity-40"
+                    >
+                      Ask
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
         )}
 
         {/* Empty state */}
@@ -766,10 +1039,11 @@ export default function AnalysisPage() {
           <div className="card px-6 py-14 flex flex-col items-center text-center">
             <IconSparkles width={28} height={28} className="text-[var(--ink-5)] mb-3" />
             <p className="text-[13px] font-semibold text-[var(--ink-3)]">No analysis yet</p>
-            <p className="text-[11px] text-[var(--ink-5)] mt-1">Choose a scope and depth, then tap Analyse Now</p>
+            <p className="text-[11px] text-[var(--ink-5)] mt-1">
+              Choose a scope and depth, then tap Analyse Now
+            </p>
           </div>
         )}
-
       </div>
     </div>
   );

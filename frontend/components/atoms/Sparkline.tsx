@@ -25,8 +25,13 @@ function buildPath(points: PricePoint[], w: number, h: number): string {
   return xs.map((x, i) => `${i === 0 ? 'M' : 'L'}${x.toFixed(1)},${ys[i].toFixed(1)}`).join(' ');
 }
 
-export default function Sparkline({ ticker, days = 90, width = 80, height = 28, points = [] }: SparklineProps) {
-
+export default function Sparkline({
+  ticker,
+  days = 90,
+  width = 80,
+  height = 28,
+  points = [],
+}: SparklineProps) {
   if (points.length < 2) {
     return <span className="text-[var(--ink-4)] text-[10px] font-mono">—</span>;
   }

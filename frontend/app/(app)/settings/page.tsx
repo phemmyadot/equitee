@@ -209,7 +209,6 @@ type ModalState =
 
 type Tab = 'active' | 'closed';
 
-
 function fmtDate(iso: string | null | undefined): string {
   if (!iso) return '—';
   // Normalise: replace space separator with T, truncate microseconds to ms
@@ -387,13 +386,21 @@ export default function SettingsPage() {
       <div className="card px-4 py-3 flex items-center justify-between gap-4">
         <div className="flex items-center gap-6">
           <div>
-            <p className="text-[10px] font-semibold uppercase tracking-[0.07em] text-[var(--ink-4)]">Cash Balance · NGN</p>
-            <p className="text-[14px] font-mono font-semibold text-[var(--ink)] mt-0.5">{fmtNGN(cash.ngn)}</p>
+            <p className="text-[10px] font-semibold uppercase tracking-[0.07em] text-[var(--ink-4)]">
+              Cash Balance · NGN
+            </p>
+            <p className="text-[14px] font-mono font-semibold text-[var(--ink)] mt-0.5">
+              {fmtNGN(cash.ngn)}
+            </p>
           </div>
           {cash.usd > 0 && (
             <div>
-              <p className="text-[10px] font-semibold uppercase tracking-[0.07em] text-[var(--ink-4)]">Cash Balance · USD</p>
-              <p className="text-[14px] font-mono font-semibold text-[var(--ink)] mt-0.5">{fmtUSD(cash.usd)}</p>
+              <p className="text-[10px] font-semibold uppercase tracking-[0.07em] text-[var(--ink-4)]">
+                Cash Balance · USD
+              </p>
+              <p className="text-[14px] font-mono font-semibold text-[var(--ink)] mt-0.5">
+                {fmtUSD(cash.usd)}
+              </p>
             </div>
           )}
         </div>
@@ -707,7 +714,7 @@ export default function SettingsPage() {
                 try {
                   await deleteHolding(modal.holding.id);
                   reload();
-                        setModal(null);
+                  setModal(null);
                   showToast(`${modal.holding.ticker} deleted`);
                 } catch (e: any) {
                   showToast(e.message, 'error');
@@ -757,7 +764,7 @@ function AddModal({
 
   // Detect if ticker already has an existing position (local — no extra fetch)
   const existing = ticker.trim()
-    ? holdings.find(h => h.ticker === ticker.trim().toUpperCase() && h.market === market)
+    ? holdings.find((h) => h.ticker === ticker.trim().toUpperCase() && h.market === market)
     : undefined;
 
   const sharesNum = Number(shares) || 0;
@@ -807,12 +814,12 @@ function AddModal({
         <Field label="Ticker" error={errors.ticker}>
           <Input
             value={ticker}
-            onChange={e => setTicker(e.target.value.toUpperCase())}
+            onChange={(e) => setTicker(e.target.value.toUpperCase())}
             placeholder="e.g. GTCO"
           />
         </Field>
         <Field label="Market">
-          <Select value={market} onChange={e => setMarket(e.target.value)}>
+          <Select value={market} onChange={(e) => setMarket(e.target.value)}>
             <option value="ngx">NGX</option>
             <option value="us">US</option>
           </Select>
@@ -822,23 +829,46 @@ function AddModal({
       {/* Existing position notice */}
       {existing && (
         <div className="rounded-lg bg-[var(--accent-light)] border border-[var(--accent)] px-3 py-2 text-[11px] text-[var(--accent)]">
-          Already holding <strong>{existing.shares.toLocaleString()} shares</strong> @ {cur}{existing.avg_cost.toLocaleString(undefined, { maximumFractionDigits: 4 })} avg — will add to existing position
+          Already holding <strong>{existing.shares.toLocaleString()} shares</strong> @ {cur}
+          {existing.avg_cost.toLocaleString(undefined, { maximumFractionDigits: 4 })} avg — will add
+          to existing position
         </div>
       )}
 
       {/* Shares + Price */}
       <div className="grid grid-cols-2 gap-3">
         <Field label="Shares" error={errors.shares}>
-          <Input type="number" min="0" step="any" value={shares} onChange={e => setShares(e.target.value)} placeholder="0" />
+          <Input
+            type="number"
+            min="0"
+            step="any"
+            value={shares}
+            onChange={(e) => setShares(e.target.value)}
+            placeholder="0"
+          />
         </Field>
         <Field label={`Unit price (${cur})`} error={errors.price}>
-          <Input type="number" min="0" step="any" value={price} onChange={e => setPrice(e.target.value)} placeholder="0.00" />
+          <Input
+            type="number"
+            min="0"
+            step="any"
+            value={price}
+            onChange={(e) => setPrice(e.target.value)}
+            placeholder="0.00"
+          />
         </Field>
       </div>
 
       {/* Commission */}
       <Field label={`Commission (${cur}) — optional`}>
-        <Input type="number" min="0" step="any" value={commission} onChange={e => setCommission(e.target.value)} placeholder="0.00" />
+        <Input
+          type="number"
+          min="0"
+          step="any"
+          value={commission}
+          onChange={(e) => setCommission(e.target.value)}
+          placeholder="0.00"
+        />
       </Field>
 
       {/* Fund source toggle */}
@@ -851,29 +881,49 @@ function AddModal({
           disabled={availCash <= 0}
         />
         <span className="text-[11px] text-[var(--ink-3)]">
-          Fund from cash balance{availCash > 0 ? ` (${fmtCash(availCash)} available)` : ' (no cash)'}
+          Fund from cash balance
+          {availCash > 0 ? ` (${fmtCash(availCash)} available)` : ' (no cash)'}
         </span>
       </label>
 
       {/* Cost summary */}
       {total !== null && (
-        <div className={`rounded-lg px-3 py-2 text-[11px] font-mono space-y-0.5 ${insufficientCash ? 'bg-[var(--loss-light)]' : 'bg-[var(--canvas)]'}`}>
+        <div
+          className={`rounded-lg px-3 py-2 text-[11px] font-mono space-y-0.5 ${insufficientCash ? 'bg-[var(--loss-light)]' : 'bg-[var(--canvas)]'}`}
+        >
           {commNum > 0 && (
             <>
-              <div className="flex justify-between text-[var(--ink-4)]"><span>Gross</span><span>{cur}{gross!.toLocaleString(undefined, { maximumFractionDigits: 2 })}</span></div>
-              <div className="flex justify-between text-[var(--ink-4)]"><span>Commission</span><span>{cur}{commNum.toLocaleString(undefined, { maximumFractionDigits: 2 })}</span></div>
+              <div className="flex justify-between text-[var(--ink-4)]">
+                <span>Gross</span>
+                <span>
+                  {cur}
+                  {gross!.toLocaleString(undefined, { maximumFractionDigits: 2 })}
+                </span>
+              </div>
+              <div className="flex justify-between text-[var(--ink-4)]">
+                <span>Commission</span>
+                <span>
+                  {cur}
+                  {commNum.toLocaleString(undefined, { maximumFractionDigits: 2 })}
+                </span>
+              </div>
             </>
           )}
           <div className="flex justify-between font-semibold">
             <span className="text-[var(--ink-3)]">{useCash ? 'Total debit' : 'Total cost'}</span>
-            <span className={insufficientCash ? 'text-[var(--loss)]' : 'text-[var(--ink)]'}>{cur}{total.toLocaleString(undefined, { maximumFractionDigits: 2 })}</span>
+            <span className={insufficientCash ? 'text-[var(--loss)]' : 'text-[var(--ink)]'}>
+              {cur}
+              {total.toLocaleString(undefined, { maximumFractionDigits: 2 })}
+            </span>
           </div>
         </div>
       )}
 
       {errors._ && <p className="text-[11px] text-[var(--loss)]">{errors._}</p>}
       <div className="flex justify-end gap-2 pt-1">
-        <Btn variant="secondary" onClick={onClose}>Cancel</Btn>
+        <Btn variant="secondary" onClick={onClose}>
+          Cancel
+        </Btn>
         <Btn variant="primary" loading={busy} onClick={submit}>
           {existing ? 'Add to Position' : 'Add Position'}
         </Btn>
@@ -1025,7 +1075,12 @@ function BuyModal({
     }
     setBusy(true);
     try {
-      await buyShares(holding.id, { shares: sharesNum, buy_price: priceNum, commission: commNum || undefined, use_cash: useCash });
+      await buyShares(holding.id, {
+        shares: sharesNum,
+        buy_price: priceNum,
+        commission: commNum || undefined,
+        use_cash: useCash,
+      });
       onDone();
     } catch (e: any) {
       setError(e.message);
@@ -1095,24 +1150,31 @@ function BuyModal({
           disabled={availCash <= 0}
         />
         <span className="text-[11px] text-[var(--ink-3)]">
-          Fund from cash balance{availCash > 0 ? ` (${fmtCash(availCash)} available)` : ' (no cash)'}
+          Fund from cash balance
+          {availCash > 0 ? ` (${fmtCash(availCash)} available)` : ' (no cash)'}
         </span>
       </label>
       {totalCost !== null && useCash && (
-        <div className={`rounded-md px-3 py-2 text-[11px] font-mono space-y-0.5 ${insufficientCash ? 'bg-[var(--loss-light)]' : 'bg-[var(--canvas)]'}`}>
+        <div
+          className={`rounded-md px-3 py-2 text-[11px] font-mono space-y-0.5 ${insufficientCash ? 'bg-[var(--loss-light)]' : 'bg-[var(--canvas)]'}`}
+        >
           {commNum > 0 && (
             <div className="flex justify-between text-[var(--ink-4)]">
-              <span>Gross cost</span><span>{fmtCash(grossCost!)}</span>
+              <span>Gross cost</span>
+              <span>{fmtCash(grossCost!)}</span>
             </div>
           )}
           {commNum > 0 && (
             <div className="flex justify-between text-[var(--ink-4)]">
-              <span>Commission</span><span>{fmtCash(commNum)}</span>
+              <span>Commission</span>
+              <span>{fmtCash(commNum)}</span>
             </div>
           )}
           <div className="flex justify-between">
             <span className="text-[var(--ink-3)]">Total debit</span>
-            <span className={`font-semibold ${insufficientCash ? 'text-[var(--loss)]' : 'text-[var(--ink)]'}`}>
+            <span
+              className={`font-semibold ${insufficientCash ? 'text-[var(--loss)]' : 'text-[var(--ink)]'}`}
+            >
               {fmtCash(totalCost)}
             </span>
           </div>
@@ -1167,9 +1229,7 @@ function SellModal({
   const commissionNum = Number(commission) || 0;
   const grossProceeds = sharesNum > 0 && salePriceNum > 0 ? sharesNum * salePriceNum : null;
   const projPL =
-    grossProceeds !== null
-      ? (salePriceNum - holding.avg_cost) * sharesNum - commissionNum
-      : null;
+    grossProceeds !== null ? (salePriceNum - holding.avg_cost) * sharesNum - commissionNum : null;
   const fullSale = sharesNum >= holding.shares;
 
   const submit = async () => {
@@ -1256,20 +1316,29 @@ function SellModal({
           {grossProceeds !== null && commissionNum > 0 && (
             <div className="flex justify-between text-[var(--ink-4)]">
               <span>Gross proceeds</span>
-              <span>{cur}{grossProceeds.toLocaleString(undefined, { maximumFractionDigits: 2 })}</span>
+              <span>
+                {cur}
+                {grossProceeds.toLocaleString(undefined, { maximumFractionDigits: 2 })}
+              </span>
             </div>
           )}
           {commissionNum > 0 && (
             <div className="flex justify-between text-[var(--ink-4)]">
               <span>Commission</span>
-              <span>−{cur}{commissionNum.toLocaleString(undefined, { maximumFractionDigits: 2 })}</span>
+              <span>
+                −{cur}
+                {commissionNum.toLocaleString(undefined, { maximumFractionDigits: 2 })}
+              </span>
             </div>
           )}
           <div className="flex justify-between">
             <span className="text-[var(--ink-3)]">Projected P/L</span>
-            <span className={`font-semibold ${projPL >= 0 ? 'text-[var(--gain)]' : 'text-[var(--loss)]'}`}>
+            <span
+              className={`font-semibold ${projPL >= 0 ? 'text-[var(--gain)]' : 'text-[var(--loss)]'}`}
+            >
               {projPL >= 0 ? '+' : ''}
-              {cur}{Math.abs(projPL).toLocaleString(undefined, { maximumFractionDigits: 2 })}
+              {cur}
+              {Math.abs(projPL).toLocaleString(undefined, { maximumFractionDigits: 2 })}
             </span>
           </div>
           {fullSale && (
@@ -1387,8 +1456,14 @@ function DebitCashModal({
   const insufficient = amt > 0 && amt > available;
 
   const submit = async () => {
-    if (!amount || isNaN(amt) || amt <= 0) { setError('Enter a valid amount'); return; }
-    if (insufficient) { setError(`Insufficient — available: ${fmtAvail(available)}`); return; }
+    if (!amount || isNaN(amt) || amt <= 0) {
+      setError('Enter a valid amount');
+      return;
+    }
+    if (insufficient) {
+      setError(`Insufficient — available: ${fmtAvail(available)}`);
+      return;
+    }
     setBusy(true);
     try {
       const bal = await debitCash({ market, amount: amt });
@@ -1431,7 +1506,9 @@ function DebitCashModal({
       </div>
       {error && <p className="text-[11px] text-[var(--loss)]">{error}</p>}
       <div className="flex justify-end gap-2 pt-1">
-        <Btn variant="secondary" onClick={onClose}>Cancel</Btn>
+        <Btn variant="secondary" onClick={onClose}>
+          Cancel
+        </Btn>
         <Btn variant="danger" loading={busy} onClick={submit}>
           Debit Balance
         </Btn>

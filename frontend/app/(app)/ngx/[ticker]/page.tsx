@@ -3,11 +3,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { useSearchParams } from 'next/navigation';
 import Link from 'next/link';
-import {
-  fetchNGXTicker,
-  addToWatchlist,
-  removeFromWatchlist,
-} from '@/services/api';
+import { fetchNGXTicker, addToWatchlist, removeFromWatchlist } from '@/services/api';
 import ChartCard from '@/components/molecules/ChartCard';
 import { ErrorMessage } from '@/components/atoms/Feedback';
 import SignalScore, { computeSignal } from '@/components/molecules/Signalscore';
@@ -407,12 +403,17 @@ export default function NGXProfilePage() {
       .finally(() => {
         if (!c) setLoading(false);
       });
-    return () => { c = true; };
+    return () => {
+      c = true;
+    };
   }, [ticker]);
 
   // Re-fetch only price history when day range changes (skip on initial mount — main effect handles it)
   useEffect(() => {
-    if (initialLoadRef.current) { initialLoadRef.current = false; return; }
+    if (initialLoadRef.current) {
+      initialLoadRef.current = false;
+      return;
+    }
     if (!ticker) return;
     let c = false;
     setOhlcvLoad(true);
@@ -424,8 +425,12 @@ export default function NGXProfilePage() {
           setOhlcvLoad(false);
         }
       })
-      .catch(() => { if (!c) setOhlcvLoad(false); });
-    return () => { c = true; };
+      .catch(() => {
+        if (!c) setOhlcvLoad(false);
+      });
+    return () => {
+      c = true;
+    };
   }, [priceDays]);
 
   const watching = resp?.is_watching ?? null;

@@ -3,11 +3,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { useSearchParams } from 'next/navigation';
 import Link from 'next/link';
-import {
-  fetchUSTicker,
-  addToWatchlist,
-  removeFromWatchlist,
-} from '@/services/api';
+import { fetchUSTicker, addToWatchlist, removeFromWatchlist } from '@/services/api';
 import ChartCard from '@/components/molecules/ChartCard';
 import { ErrorMessage } from '@/components/atoms/Feedback';
 import SignalScore, { computeSignal } from '@/components/molecules/Signalscore';
@@ -31,7 +27,9 @@ function Sk({ w = 'w-24', h = 'h-3' }: { w?: string; h?: string }) {
 function SectionLabel({ children }: { children: React.ReactNode }) {
   return (
     <div className="flex items-center gap-2 mb-3">
-      <span className="text-[10px] font-bold uppercase tracking-[0.1em] text-[var(--ink-4)]">{children}</span>
+      <span className="text-[10px] font-bold uppercase tracking-[0.1em] text-[var(--ink-4)]">
+        {children}
+      </span>
       <div className="flex-1 h-px bg-[var(--border)]" />
     </div>
   );
@@ -49,14 +47,20 @@ function Stat({
   accent?: 'gain' | 'loss' | 'warn' | 'accent';
 }) {
   const c =
-    accent === 'gain' ? 'text-[var(--gain)]' :
-    accent === 'loss' ? 'text-[var(--loss)]' :
-    accent === 'warn' ? 'text-amber-600' :
-    accent === 'accent' ? 'text-[var(--accent)]' :
-    'text-[var(--ink-2)]';
+    accent === 'gain'
+      ? 'text-[var(--gain)]'
+      : accent === 'loss'
+        ? 'text-[var(--loss)]'
+        : accent === 'warn'
+          ? 'text-amber-600'
+          : accent === 'accent'
+            ? 'text-[var(--accent)]'
+            : 'text-[var(--ink-2)]';
   return (
     <div className="flex flex-col gap-0.5">
-      <span className="text-[9.5px] font-semibold uppercase tracking-[0.07em] text-[var(--ink-4)]">{label}</span>
+      <span className="text-[9.5px] font-semibold uppercase tracking-[0.07em] text-[var(--ink-4)]">
+        {label}
+      </span>
       {value != null && value !== '' ? (
         <span className={`text-[12px] leading-snug ${mono ? 'font-mono' : ''} ${c}`}>{value}</span>
       ) : (
@@ -86,19 +90,19 @@ function fmtPctStat(v: unknown): string {
 }
 
 const REC_COLORS: Record<string, string> = {
-  'strong_buy': 'var(--gain)',
-  'buy': '#22c55e',
-  'hold': 'var(--warn, #f59e0b)',
-  'underperform': '#f97316',
-  'sell': 'var(--loss)',
+  strong_buy: 'var(--gain)',
+  buy: '#22c55e',
+  hold: 'var(--warn, #f59e0b)',
+  underperform: '#f97316',
+  sell: 'var(--loss)',
 };
 
 const REC_LABELS: Record<string, string> = {
-  'strong_buy': 'Strong Buy',
-  'buy': 'Buy',
-  'hold': 'Hold',
-  'underperform': 'Underperform',
-  'sell': 'Sell',
+  strong_buy: 'Strong Buy',
+  buy: 'Buy',
+  hold: 'Hold',
+  underperform: 'Underperform',
+  sell: 'Sell',
 };
 
 // ── Page ──────────────────────────────────────────────────────────────────────
@@ -128,22 +132,37 @@ export default function USProfilePage() {
         setResp(r);
         setWatching(r.is_watching);
       })
-      .catch((err) => { if (!c) setError(err?.message ?? 'Failed to load ticker data'); })
-      .finally(() => { if (!c) setLoading(false); });
-    return () => { c = true; };
+      .catch((err) => {
+        if (!c) setError(err?.message ?? 'Failed to load ticker data');
+      })
+      .finally(() => {
+        if (!c) setLoading(false);
+      });
+    return () => {
+      c = true;
+    };
   }, [ticker]);
 
   // Re-fetch only when day range changes (skip initial mount)
   useEffect(() => {
-    if (initialLoadRef.current) { initialLoadRef.current = false; return; }
+    if (initialLoadRef.current) {
+      initialLoadRef.current = false;
+      return;
+    }
     if (!ticker) return;
     let c = false;
     setHistLoad(true);
     fetchUSTicker(ticker, histDays)
-      .then((r) => { if (!c) setResp(r); })
+      .then((r) => {
+        if (!c) setResp(r);
+      })
       .catch(() => {})
-      .finally(() => { if (!c) setHistLoad(false); });
-    return () => { c = true; };
+      .finally(() => {
+        if (!c) setHistLoad(false);
+      });
+    return () => {
+      c = true;
+    };
   }, [histDays]);
 
   const handleWatch = async () => {
@@ -232,10 +251,11 @@ export default function USProfilePage() {
 
   return (
     <div className="space-y-5">
-
       {/* ── Breadcrumb ────────────────────────────────────────────────── */}
       <nav className="flex items-center gap-1.5 text-[10px] text-[var(--ink-4)]">
-        <Link href="/us" className="hover:text-[var(--accent)] transition-colors">US Portfolio</Link>
+        <Link href="/us" className="hover:text-[var(--accent)] transition-colors">
+          US Portfolio
+        </Link>
         <IconChevronRight width={10} height={10} />
         <span className="font-semibold text-[var(--ink-2)]">{ticker}</span>
       </nav>
@@ -253,11 +273,16 @@ export default function USProfilePage() {
             <div className="flex items-start justify-between gap-4 flex-wrap">
               <div>
                 <div className="flex items-center gap-2 flex-wrap">
-                  <span className="font-mono font-bold text-[22px] text-[var(--ink)] leading-none">{ticker}</span>
+                  <span className="font-mono font-bold text-[22px] text-[var(--ink)] leading-none">
+                    {ticker}
+                  </span>
                   {prof?.sector && (
                     <span
                       className="text-[10px] font-bold px-2 py-0.5 rounded-full"
-                      style={{ color: sectorColor(prof.sector), background: sectorColor(prof.sector) + '22' }}
+                      style={{
+                        color: sectorColor(prof.sector),
+                        background: sectorColor(prof.sector) + '22',
+                      }}
                     >
                       {prof.sector}
                     </span>
@@ -265,14 +290,21 @@ export default function USProfilePage() {
                   {recLabel && (
                     <span
                       className="text-[10px] font-bold px-2 py-0.5 rounded-full"
-                      style={{ color: recColor ?? undefined, background: (recColor ?? '#000') + '22' }}
+                      style={{
+                        color: recColor ?? undefined,
+                        background: (recColor ?? '#000') + '22',
+                      }}
                     >
                       {recLabel}
                     </span>
                   )}
                 </div>
-                {prof?.name && <p className="text-[13px] text-[var(--ink-2)] mt-0.5">{prof.name}</p>}
-                {prof?.industry && <p className="text-[10px] text-[var(--ink-4)] mt-0.5">{prof.industry}</p>}
+                {prof?.name && (
+                  <p className="text-[13px] text-[var(--ink-2)] mt-0.5">{prof.name}</p>
+                )}
+                {prof?.industry && (
+                  <p className="text-[10px] text-[var(--ink-4)] mt-0.5">{prof.industry}</p>
+                )}
               </div>
 
               <button
@@ -295,9 +327,12 @@ export default function USProfilePage() {
                 {price != null ? `$${price.toFixed(2)}` : '—'}
               </span>
               {changePct != null && (
-                <div className={`flex flex-col pb-0.5 ${isPositive(changePct) ? 'text-[var(--gain)]' : 'text-[var(--loss)]'}`}>
+                <div
+                  className={`flex flex-col pb-0.5 ${isPositive(changePct) ? 'text-[var(--gain)]' : 'text-[var(--loss)]'}`}
+                >
                   <span className="font-mono font-semibold text-[14px] leading-none">
-                    {isPositive(changePct) ? '+' : ''}{change?.toFixed(2) ?? '—'}
+                    {isPositive(changePct) ? '+' : ''}
+                    {change?.toFixed(2) ?? '—'}
                   </span>
                   <span className="font-mono text-[12px]">{fmtPct2(changePct)}</span>
                 </div>
@@ -315,11 +350,18 @@ export default function USProfilePage() {
                     className="absolute left-0 top-0 h-full rounded-full transition-all"
                     style={{
                       width: `${rangePct}%`,
-                      background: rangePct > 70 ? 'var(--gain)' : rangePct > 35 ? 'var(--accent)' : 'var(--loss)',
+                      background:
+                        rangePct > 70
+                          ? 'var(--gain)'
+                          : rangePct > 35
+                            ? 'var(--accent)'
+                            : 'var(--loss)',
                     }}
                   />
                 </div>
-                <p className="text-[9px] text-[var(--ink-4)] mt-1">{rangePct.toFixed(0)}% of 52-week range</p>
+                <p className="text-[9px] text-[var(--ink-4)] mt-1">
+                  {rangePct.toFixed(0)}% of 52-week range
+                </p>
               </div>
             )}
 
@@ -346,7 +388,15 @@ export default function USProfilePage() {
       {!loading && resp && sig && (
         <div className="card px-5 py-4">
           <SectionLabel>Signal Score</SectionLabel>
-          <SignalScore ov={ov} perf={perf} livePrice={price} posRow={null} dividend={null} loading={false} sector={prof?.sector ?? null} />
+          <SignalScore
+            ov={ov}
+            perf={perf}
+            livePrice={price}
+            posRow={null}
+            dividend={null}
+            loading={false}
+            sector={prof?.sector ?? null}
+          />
         </div>
       )}
 
@@ -375,7 +425,9 @@ export default function USProfilePage() {
         }
       >
         {histLoad ? (
-          <div className="flex items-center justify-center h-[320px] text-[var(--ink-4)] text-[12px]">Loading…</div>
+          <div className="flex items-center justify-center h-[320px] text-[var(--ink-4)] text-[12px]">
+            Loading…
+          </div>
         ) : histDates.length > 0 ? (
           <PlotlyChart data={[priceTrace, chgTrace]} layout={chartLayout} height={320} />
         ) : (
@@ -393,13 +445,21 @@ export default function USProfilePage() {
             <Stat label="Market Cap" value={fmtBig(n(ov?.market_cap))} mono />
             <Stat label="P/E (Trailing)" value={n(ov?.pe_ratio)?.toFixed(1)} mono />
             <Stat label="P/E (Forward)" value={n(ov?.forward_pe)?.toFixed(1)} mono />
-            <Stat label="EPS" value={n(ov?.eps) != null ? `$${n(ov?.eps)?.toFixed(2)}` : null} mono />
+            <Stat
+              label="EPS"
+              value={n(ov?.eps) != null ? `$${n(ov?.eps)?.toFixed(2)}` : null}
+              mono
+            />
             <Stat label="Price / Book" value={n(ov?.price_to_book)?.toFixed(2)} mono />
             <Stat label="EV / EBITDA" value={n(ov?.ev_ebitda)?.toFixed(1)} mono />
             <Stat label="EV / Revenue" value={n(ov?.ev_revenue)?.toFixed(2)} mono />
             <Stat label="Beta" value={n(perf?.beta)?.toFixed(2)} mono />
             <Stat label="Dividend Yield" value={fmtPctStat(ov?.dividend_yield)} mono />
-            <Stat label="Div Rate / Share" value={n(ov?.dividend_rate) != null ? `$${n(ov?.dividend_rate)?.toFixed(2)}` : null} mono />
+            <Stat
+              label="Div Rate / Share"
+              value={n(ov?.dividend_rate) != null ? `$${n(ov?.dividend_rate)?.toFixed(2)}` : null}
+              mono
+            />
             <Stat label="Payout Ratio" value={fmtPctStat(ov?.payout_ratio)} mono />
             <Stat label="Volume" value={fmtVol(n(resp?.price?.volume))} mono />
           </div>
@@ -412,12 +472,51 @@ export default function USProfilePage() {
           <div className="card px-5 py-4">
             <SectionLabel>Profitability</SectionLabel>
             <div className="grid grid-cols-2 gap-x-6 gap-y-4">
-              <Stat label="Gross Margin" value={fmtPctStat(ov?.gross_margin)} mono accent={n(ov?.gross_margin) != null && n(ov?.gross_margin)! > 40 ? 'gain' : undefined} />
-              <Stat label="Operating Margin" value={fmtPctStat(ov?.operating_margin)} mono accent={n(ov?.operating_margin) != null && n(ov?.operating_margin)! > 15 ? 'gain' : undefined} />
-              <Stat label="Net Margin" value={fmtPctStat(ov?.net_margin)} mono accent={n(ov?.net_margin) != null && n(ov?.net_margin)! > 10 ? 'gain' : undefined} />
+              <Stat
+                label="Gross Margin"
+                value={fmtPctStat(ov?.gross_margin)}
+                mono
+                accent={
+                  n(ov?.gross_margin) != null && n(ov?.gross_margin)! > 40 ? 'gain' : undefined
+                }
+              />
+              <Stat
+                label="Operating Margin"
+                value={fmtPctStat(ov?.operating_margin)}
+                mono
+                accent={
+                  n(ov?.operating_margin) != null && n(ov?.operating_margin)! > 15
+                    ? 'gain'
+                    : undefined
+                }
+              />
+              <Stat
+                label="Net Margin"
+                value={fmtPctStat(ov?.net_margin)}
+                mono
+                accent={n(ov?.net_margin) != null && n(ov?.net_margin)! > 10 ? 'gain' : undefined}
+              />
               <Stat label="EBITDA Margin" value={fmtPctStat(ov?.ebitda_margin)} mono />
-              <Stat label="ROE" value={fmtPctStat(ov?.roe)} mono accent={n(ov?.roe) != null ? (n(ov?.roe)! > 15 ? 'gain' : n(ov?.roe)! < 0 ? 'loss' : undefined) : undefined} />
-              <Stat label="ROA" value={fmtPctStat(ov?.roa)} mono accent={n(ov?.roa) != null && n(ov?.roa)! > 5 ? 'gain' : undefined} />
+              <Stat
+                label="ROE"
+                value={fmtPctStat(ov?.roe)}
+                mono
+                accent={
+                  n(ov?.roe) != null
+                    ? n(ov?.roe)! > 15
+                      ? 'gain'
+                      : n(ov?.roe)! < 0
+                        ? 'loss'
+                        : undefined
+                    : undefined
+                }
+              />
+              <Stat
+                label="ROA"
+                value={fmtPctStat(ov?.roa)}
+                mono
+                accent={n(ov?.roa) != null && n(ov?.roa)! > 5 ? 'gain' : undefined}
+              />
             </div>
           </div>
 
@@ -425,13 +524,35 @@ export default function USProfilePage() {
             <SectionLabel>Financial Health</SectionLabel>
             <div className="grid grid-cols-2 gap-x-6 gap-y-4">
               <Stat label="Revenue" value={fmtBig(n(ov?.revenue))} mono />
-              <Stat label="Net Income" value={fmtBig(n(ov?.net_income))} mono accent={n(ov?.net_income) != null ? (isPositive(n(ov?.net_income)) ? 'gain' : 'loss') : undefined} />
+              <Stat
+                label="Net Income"
+                value={fmtBig(n(ov?.net_income))}
+                mono
+                accent={
+                  n(ov?.net_income) != null
+                    ? isPositive(n(ov?.net_income))
+                      ? 'gain'
+                      : 'loss'
+                    : undefined
+                }
+              />
               <Stat label="Free Cash Flow" value={fmtBig(n(ov?.free_cash_flow))} mono />
               <Stat label="Operating CF" value={fmtBig(n(ov?.operating_cash_flow))} mono />
               <Stat label="Total Cash" value={fmtBig(n(ov?.total_cash))} mono />
               <Stat label="Total Debt" value={fmtBig(n(ov?.total_debt))} mono />
               <Stat label="Debt / Equity" value={n(ov?.debt_to_equity)?.toFixed(1)} mono />
-              <Stat label="Current Ratio" value={n(ov?.current_ratio)?.toFixed(2)} mono accent={n(ov?.current_ratio) != null && n(ov?.current_ratio)! >= 1.5 ? 'gain' : n(ov?.current_ratio) != null && n(ov?.current_ratio)! < 1 ? 'loss' : undefined} />
+              <Stat
+                label="Current Ratio"
+                value={n(ov?.current_ratio)?.toFixed(2)}
+                mono
+                accent={
+                  n(ov?.current_ratio) != null && n(ov?.current_ratio)! >= 1.5
+                    ? 'gain'
+                    : n(ov?.current_ratio) != null && n(ov?.current_ratio)! < 1
+                      ? 'loss'
+                      : undefined
+                }
+              />
             </div>
           </div>
         </div>
@@ -443,12 +564,67 @@ export default function USProfilePage() {
           <div className="card px-5 py-4">
             <SectionLabel>Growth & Momentum</SectionLabel>
             <div className="grid grid-cols-2 gap-x-6 gap-y-4">
-              <Stat label="Revenue Growth (YoY)" value={fmtPctStat(ov?.revenue_growth)} mono accent={n(ov?.revenue_growth) != null ? (isPositive(n(ov?.revenue_growth)) ? 'gain' : 'loss') : undefined} />
-              <Stat label="Earnings Growth (YoY)" value={fmtPctStat(ov?.earnings_growth)} mono accent={n(ov?.earnings_growth) != null ? (isPositive(n(ov?.earnings_growth)) ? 'gain' : 'loss') : undefined} />
-              <Stat label="52W Change" value={fmtPctStat(perf?.week_52_change)} mono accent={n(perf?.week_52_change) != null ? (isPositive(n(perf?.week_52_change)) ? 'gain' : 'loss') : undefined} />
+              <Stat
+                label="Revenue Growth (YoY)"
+                value={fmtPctStat(ov?.revenue_growth)}
+                mono
+                accent={
+                  n(ov?.revenue_growth) != null
+                    ? isPositive(n(ov?.revenue_growth))
+                      ? 'gain'
+                      : 'loss'
+                    : undefined
+                }
+              />
+              <Stat
+                label="Earnings Growth (YoY)"
+                value={fmtPctStat(ov?.earnings_growth)}
+                mono
+                accent={
+                  n(ov?.earnings_growth) != null
+                    ? isPositive(n(ov?.earnings_growth))
+                      ? 'gain'
+                      : 'loss'
+                    : undefined
+                }
+              />
+              <Stat
+                label="52W Change"
+                value={fmtPctStat(perf?.week_52_change)}
+                mono
+                accent={
+                  n(perf?.week_52_change) != null
+                    ? isPositive(n(perf?.week_52_change))
+                      ? 'gain'
+                      : 'loss'
+                    : undefined
+                }
+              />
               <Stat label="Beta" value={n(perf?.beta)?.toFixed(2)} mono />
-              <Stat label="MA 50d" value={n(perf?.ma_50) != null ? `$${n(perf?.ma_50)!.toFixed(2)}` : null} mono accent={price && n(perf?.ma_50) && price > n(perf?.ma_50)! ? 'gain' : price && n(perf?.ma_50) && price < n(perf?.ma_50)! ? 'loss' : undefined} />
-              <Stat label="MA 200d" value={n(perf?.ma_200) != null ? `$${n(perf?.ma_200)!.toFixed(2)}` : null} mono accent={price && n(perf?.ma_200) && price > n(perf?.ma_200)! ? 'gain' : price && n(perf?.ma_200) && price < n(perf?.ma_200)! ? 'loss' : undefined} />
+              <Stat
+                label="MA 50d"
+                value={n(perf?.ma_50) != null ? `$${n(perf?.ma_50)!.toFixed(2)}` : null}
+                mono
+                accent={
+                  price && n(perf?.ma_50) && price > n(perf?.ma_50)!
+                    ? 'gain'
+                    : price && n(perf?.ma_50) && price < n(perf?.ma_50)!
+                      ? 'loss'
+                      : undefined
+                }
+              />
+              <Stat
+                label="MA 200d"
+                value={n(perf?.ma_200) != null ? `$${n(perf?.ma_200)!.toFixed(2)}` : null}
+                mono
+                accent={
+                  price && n(perf?.ma_200) && price > n(perf?.ma_200)!
+                    ? 'gain'
+                    : price && n(perf?.ma_200) && price < n(perf?.ma_200)!
+                      ? 'loss'
+                      : undefined
+                }
+              />
             </div>
           </div>
 
@@ -456,11 +632,35 @@ export default function USProfilePage() {
             <div className="card px-5 py-4">
               <SectionLabel>Analyst Consensus</SectionLabel>
               <div className="grid grid-cols-2 gap-x-6 gap-y-4">
-                <Stat label="Recommendation" value={recLabel} accent={rec === 'buy' || rec === 'strong_buy' ? 'gain' : rec === 'sell' ? 'loss' : undefined} />
+                <Stat
+                  label="Recommendation"
+                  value={recLabel}
+                  accent={
+                    rec === 'buy' || rec === 'strong_buy'
+                      ? 'gain'
+                      : rec === 'sell'
+                        ? 'loss'
+                        : undefined
+                  }
+                />
                 <Stat label="Analysts" value={ov?.analyst_count} mono />
-                <Stat label="Target Mean" value={n(ov?.target_mean) != null ? `$${n(ov?.target_mean)!.toFixed(2)}` : null} mono />
-                <Stat label="Target High" value={n(ov?.target_high) != null ? `$${n(ov?.target_high)!.toFixed(2)}` : null} mono accent="gain" />
-                <Stat label="Target Low" value={n(ov?.target_low) != null ? `$${n(ov?.target_low)!.toFixed(2)}` : null} mono accent="loss" />
+                <Stat
+                  label="Target Mean"
+                  value={n(ov?.target_mean) != null ? `$${n(ov?.target_mean)!.toFixed(2)}` : null}
+                  mono
+                />
+                <Stat
+                  label="Target High"
+                  value={n(ov?.target_high) != null ? `$${n(ov?.target_high)!.toFixed(2)}` : null}
+                  mono
+                  accent="gain"
+                />
+                <Stat
+                  label="Target Low"
+                  value={n(ov?.target_low) != null ? `$${n(ov?.target_low)!.toFixed(2)}` : null}
+                  mono
+                  accent="loss"
+                />
                 {price && n(ov?.target_mean) && (
                   <Stat
                     label="Upside to Target"
@@ -479,7 +679,9 @@ export default function USProfilePage() {
       {!loading && prof?.description && (
         <div className="card px-5 py-4">
           <SectionLabel>About</SectionLabel>
-          <p className="text-[11px] text-[var(--ink-3)] leading-relaxed line-clamp-4">{prof.description}</p>
+          <p className="text-[11px] text-[var(--ink-3)] leading-relaxed line-clamp-4">
+            {prof.description}
+          </p>
           {prof.website && (
             <a
               href={prof.website}

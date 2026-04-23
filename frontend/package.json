@@ -28,7 +28,7 @@
     "@types/react-dom": "^19",
     "@types/react-plotly.js": "^2.6.3",
     "autoprefixer": "^10.0.1",
-    "eslint": "^9",
+    "eslint": "^9.39.4",
     "eslint-config-next": "16.1.6",
     "postcss": "^8.5.8",
     "prettier": "^3.8.1",

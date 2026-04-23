@@ -78,7 +78,10 @@ export default function ScreenerPage() {
   const load = useCallback(() => {
     setLoading(true);
     fetchNGXScreener()
-      .then((r) => { setData(r.tickers); setLastUpdated(r.last_updated ?? null); })
+      .then((r) => {
+        setData(r.tickers);
+        setLastUpdated(r.last_updated ?? null);
+      })
       .catch(() => setData([]))
       .finally(() => setLoading(false));
   }, []);
@@ -96,7 +99,9 @@ export default function ScreenerPage() {
 
   const sectors = useMemo(() => {
     const s = new Set<string>();
-    data.forEach((d) => { if (d.sector) s.add(d.sector); });
+    data.forEach((d) => {
+      if (d.sector) s.add(d.sector);
+    });
     return Array.from(s).sort();
   }, [data]);
 
@@ -110,7 +115,8 @@ export default function ScreenerPage() {
 
     return data
       .filter((d) => {
-        if (q && !d.ticker.toLowerCase().includes(q) && !(d.name ?? '').toLowerCase().includes(q)) return false;
+        if (q && !d.ticker.toLowerCase().includes(q) && !(d.name ?? '').toLowerCase().includes(q))
+          return false;
         if (sector && d.sector !== sector) return false;
         if (peMin != null && (d.pe_ratio == null || d.pe_ratio < peMin)) return false;
         if (peMax != null && (d.pe_ratio == null || d.pe_ratio > peMax)) return false;
@@ -119,7 +125,11 @@ export default function ScreenerPage() {
         const lo = d.week_52_low;
         const hi = d.week_52_high;
         const price = d.price;
-        if ((posMin != null || posMax != null) && (lo == null || hi == null || hi <= lo || price == null)) return false;
+        if (
+          (posMin != null || posMax != null) &&
+          (lo == null || hi == null || hi <= lo || price == null)
+        )
+          return false;
         if (posMin != null || posMax != null) {
           const pos = ((price! - lo!) / (hi! - lo!)) * 100;
           if (posMin != null && pos < posMin) return false;
@@ -143,7 +153,10 @@ export default function ScreenerPage() {
 
   function toggleSort(key: SortKey) {
     if (sortKey === key) setSortDir((d) => (d === 'asc' ? 'desc' : 'asc'));
-    else { setSortKey(key); setSortDir('desc'); }
+    else {
+      setSortKey(key);
+      setSortDir('desc');
+    }
   }
 
   function SortIndicator({ k }: { k: SortKey }) {
@@ -156,7 +169,8 @@ export default function ScreenerPage() {
       className={`px-3 py-2.5 text-[9.5px] font-bold uppercase tracking-[0.07em] text-[var(--ink-4)] whitespace-nowrap cursor-pointer select-none hover:text-[var(--ink-2)] ${right ? 'text-right' : ''}`}
       onClick={() => toggleSort(k)}
     >
-      {label}<SortIndicator k={k} />
+      {label}
+      <SortIndicator k={k} />
     </th>
   );
 
@@ -174,7 +188,9 @@ export default function ScreenerPage() {
               ? 'Loading…'
               : `${filtered.length} of ${data.length} tickers · ${enriched} with fundamentals`}
             {!loading && lastUpdated && (
-              <span className="ml-2 text-[10px] text-[var(--ink-4)] opacity-70">· updated {fmtAgo(lastUpdated)}</span>
+              <span className="ml-2 text-[10px] text-[var(--ink-4)] opacity-70">
+                · updated {fmtAgo(lastUpdated)}
+              </span>
             )}
           </p>
         </div>
@@ -183,7 +199,9 @@ export default function ScreenerPage() {
       {/* Filters */}
       <div className="card px-4 py-3 flex flex-wrap gap-3 items-end">
         <div className="flex flex-col gap-1">
-          <label className="text-[9px] font-bold uppercase tracking-wide text-[var(--ink-4)]">Search</label>
+          <label className="text-[9px] font-bold uppercase tracking-wide text-[var(--ink-4)]">
+            Search
+          </label>
           <input
             value={search}
             onChange={(e) => setSearch(e.target.value)}
@@ -193,19 +211,27 @@ export default function ScreenerPage() {
         </div>
 
         <div className="flex flex-col gap-1">
-          <label className="text-[9px] font-bold uppercase tracking-wide text-[var(--ink-4)]">Sector</label>
+          <label className="text-[9px] font-bold uppercase tracking-wide text-[var(--ink-4)]">
+            Sector
+          </label>
           <select
             value={sector}
             onChange={(e) => setSector(e.target.value)}
             className="h-8 px-2.5 rounded-lg border border-[var(--border)] bg-[var(--canvas)] text-[11px] text-[var(--ink)] focus:outline-none focus:border-[var(--accent)] w-40"
           >
             <option value="">All sectors</option>
-            {sectors.map((s) => <option key={s} value={s}>{s}</option>)}
+            {sectors.map((s) => (
+              <option key={s} value={s}>
+                {s}
+              </option>
+            ))}
           </select>
         </div>
 
         <div className="flex flex-col gap-1">
-          <label className="text-[9px] font-bold uppercase tracking-wide text-[var(--ink-4)]">P/E range</label>
+          <label className="text-[9px] font-bold uppercase tracking-wide text-[var(--ink-4)]">
+            P/E range
+          </label>
           <div className="flex items-center gap-1.5">
             <input
               value={minPE}
@@ -226,7 +252,9 @@ export default function ScreenerPage() {
         </div>
 
         <div className="flex flex-col gap-1">
-          <label className="text-[9px] font-bold uppercase tracking-wide text-[var(--ink-4)]">Min ROE %</label>
+          <label className="text-[9px] font-bold uppercase tracking-wide text-[var(--ink-4)]">
+            Min ROE %
+          </label>
           <input
             value={minROE}
             onChange={(e) => setMinROE(e.target.value)}
@@ -237,14 +265,17 @@ export default function ScreenerPage() {
         </div>
 
         <div className="flex flex-col gap-1">
-          <label className="text-[9px] font-bold uppercase tracking-wide text-[var(--ink-4)]">52W Position %</label>
+          <label className="text-[9px] font-bold uppercase tracking-wide text-[var(--ink-4)]">
+            52W Position %
+          </label>
           <div className="flex items-center gap-1.5">
             <input
               value={min52WPos}
               onChange={(e) => setMin52WPos(e.target.value)}
               placeholder="Min"
               type="number"
-              min={0} max={100}
+              min={0}
+              max={100}
               className="h-8 px-2.5 rounded-lg border border-[var(--border)] bg-[var(--canvas)] text-[11px] font-mono text-[var(--ink)] placeholder:text-[var(--ink-4)] focus:outline-none focus:border-[var(--accent)] w-16"
             />
             <span className="text-[var(--ink-4)] text-[10px]">–</span>
@@ -253,7 +284,8 @@ export default function ScreenerPage() {
               onChange={(e) => setMax52WPos(e.target.value)}
               placeholder="Max"
               type="number"
-              min={0} max={100}
+              min={0}
+              max={100}
               className="h-8 px-2.5 rounded-lg border border-[var(--border)] bg-[var(--canvas)] text-[11px] font-mono text-[var(--ink)] placeholder:text-[var(--ink-4)] focus:outline-none focus:border-[var(--accent)] w-16"
             />
           </div>
@@ -261,7 +293,15 @@ export default function ScreenerPage() {
 
         {(search || sector || minPE || maxPE || minROE || min52WPos || max52WPos) && (
           <button
-            onClick={() => { setSearch(''); setSector(''); setMinPE(''); setMaxPE(''); setMinROE(''); setMin52WPos(''); setMax52WPos(''); }}
+            onClick={() => {
+              setSearch('');
+              setSector('');
+              setMinPE('');
+              setMaxPE('');
+              setMinROE('');
+              setMin52WPos('');
+              setMax52WPos('');
+            }}
             className="h-8 px-3 rounded-lg border border-[var(--border)] text-[11px] text-[var(--ink-4)] hover:text-[var(--loss)] hover:border-[var(--loss)] transition-colors self-end"
           >
             Clear
@@ -273,7 +313,10 @@ export default function ScreenerPage() {
       {loading ? (
         <div className="card overflow-hidden">
           {[...Array(8)].map((_, i) => (
-            <div key={i} className="flex items-center gap-4 px-4 py-3 border-b border-[var(--border)] last:border-0">
+            <div
+              key={i}
+              className="flex items-center gap-4 px-4 py-3 border-b border-[var(--border)] last:border-0"
+            >
               <div className="skeleton rounded w-16 h-4" />
               <div className="skeleton rounded flex-1 h-3" />
               <div className="skeleton rounded w-20 h-4" />
@@ -283,8 +326,15 @@ export default function ScreenerPage() {
         </div>
       ) : filtered.length === 0 ? (
         <div className="card px-6 py-12 text-center">
-          <IconFilter width={28} height={28} style={{ stroke: 'var(--ink-4)', strokeWidth: 1.5 }} className="mx-auto mb-3" />
-          <p className="text-[13px] font-semibold text-[var(--ink-3)]">No tickers match your filters</p>
+          <IconFilter
+            width={28}
+            height={28}
+            style={{ stroke: 'var(--ink-4)', strokeWidth: 1.5 }}
+            className="mx-auto mb-3"
+          />
+          <p className="text-[13px] font-semibold text-[var(--ink-3)]">
+            No tickers match your filters
+          </p>
           <p className="text-[11px] text-[var(--ink-4)] mt-1">Try relaxing the criteria above.</p>
         </div>
       ) : (
@@ -332,10 +382,15 @@ export default function ScreenerPage() {
                       <td className="px-3 py-2.5">
                         {item.sector ? (
                           <span className="flex items-center gap-1 text-[10px] text-[var(--ink-3)] whitespace-nowrap">
-                            <span className="w-1.5 h-1.5 rounded-full shrink-0" style={{ background: sCol }} />
+                            <span
+                              className="w-1.5 h-1.5 rounded-full shrink-0"
+                              style={{ background: sCol }}
+                            />
                             {item.sector}
                           </span>
-                        ) : <span className="text-[var(--ink-4)]">—</span>}
+                        ) : (
+                          <span className="text-[var(--ink-4)]">—</span>
+                        )}
                       </td>
 
                       <td className="px-3 py-2.5 text-right">
@@ -346,10 +401,14 @@ export default function ScreenerPage() {
 
                       <td className="px-3 py-2.5 text-right">
                         {item.change_pct != null ? (
-                          <span className={`font-mono text-[11px] font-medium ${isPositive(item.change_pct) ? 'text-[var(--gain)]' : 'text-[var(--loss)]'}`}>
+                          <span
+                            className={`font-mono text-[11px] font-medium ${isPositive(item.change_pct) ? 'text-[var(--gain)]' : 'text-[var(--loss)]'}`}
+                          >
                             {fmtPct2(item.change_pct)}
                           </span>
-                        ) : <span className="text-[var(--ink-4)]">—</span>}
+                        ) : (
+                          <span className="text-[var(--ink-4)]">—</span>
+                        )}
                       </td>
 
                       <td className="px-3 py-2.5 text-right">
@@ -372,7 +431,9 @@ export default function ScreenerPage() {
 
                       <td className="px-3 py-2.5 text-right">
                         <span className="font-mono text-[11px] text-[var(--ink-3)]">
-                          {item.dividend_yield != null ? `${Number(item.dividend_yield).toFixed(2)}%` : '—'}
+                          {item.dividend_yield != null
+                            ? `${Number(item.dividend_yield).toFixed(2)}%`
+                            : '—'}
                         </span>
                       </td>
 
@@ -382,10 +443,14 @@ export default function ScreenerPage() {
 
                       <td className="px-3 py-2.5 text-right">
                         {item.week_52_change != null ? (
-                          <span className={`font-mono text-[11px] font-medium ${isPositive(item.week_52_change) ? 'text-[var(--gain)]' : 'text-[var(--loss)]'}`}>
+                          <span
+                            className={`font-mono text-[11px] font-medium ${isPositive(item.week_52_change) ? 'text-[var(--gain)]' : 'text-[var(--loss)]'}`}
+                          >
                             {fmtPct2(item.week_52_change)}
                           </span>
-                        ) : <span className="text-[var(--ink-4)]">—</span>}
+                        ) : (
+                          <span className="text-[var(--ink-4)]">—</span>
+                        )}
                       </td>
                     </tr>
                   );
@@ -396,7 +461,8 @@ export default function ScreenerPage() {
 
           <div className="px-4 py-2.5 border-t border-[var(--border)] bg-[var(--canvas)]">
             <span className="text-[9.5px] text-[var(--ink-4)]">
-              Fundamentals (P/E, ROE) only available for tickers that have been viewed in your portfolio or watchlist.
+              Fundamentals (P/E, ROE) only available for tickers that have been viewed in your
+              portfolio or watchlist.
             </span>
           </div>
         </div>

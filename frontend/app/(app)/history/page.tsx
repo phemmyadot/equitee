@@ -42,11 +42,13 @@ export default function HistoryPage() {
 
   const load = useCallback(() => {
     fetchPortfolioHistory(days)
-      .then((r) => { setResp(r); setLastUpdated(new Date()); })
-      .catch(() => { })
+      .then((r) => {
+        setResp(r);
+        setLastUpdated(new Date());
+      })
+      .catch(() => {})
       .finally(() => setLoading(false));
-  }, [setLastUpdated])
-
+  }, [setLastUpdated]);
 
   useEffect(() => {
     if (hasFetched.current) return;
