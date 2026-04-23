@@ -1,6 +1,5 @@
 'use client';
 
-import { usePriceHistory } from '@/hooks/useHistory';
 import type { PricePoint } from '@/models/dividends';
 
 interface SparklineProps {
@@ -26,15 +25,8 @@ function buildPath(points: PricePoint[], w: number, h: number): string {
   return xs.map((x, i) => `${i === 0 ? 'M' : 'L'}${x.toFixed(1)},${ys[i].toFixed(1)}`).join(' ');
 }
 
-export default function Sparkline({ ticker, days = 90, width = 80, height = 28, points: externalPoints }: SparklineProps) {
-  const skip = externalPoints !== undefined;
-  const { data, loading } = usePriceHistory(skip ? '' : ticker, days);
+export default function Sparkline({ ticker, days = 90, width = 80, height = 28, points = [] }: SparklineProps) {
 
-  if (!skip && loading) {
-    return <div className="skeleton rounded" style={{ width, height }} />;
-  }
-
-  const points = externalPoints ?? data?.points ?? [];
   if (points.length < 2) {
     return <span className="text-[var(--ink-4)] text-[10px] font-mono">—</span>;
   }

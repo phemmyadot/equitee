@@ -165,10 +165,8 @@ import type {
 import type { TradesAll } from '@/models/trades';
 import type { SettingsInit } from '@/models/holdings';
 
-export const fetchPortfolioHistory = (days = 90, signal?: AbortSignal) =>
-  get<PortfolioHistory>(`/history/portfolio?days=${days}`, signal);
-export const fetchPriceHistory = (ticker: string, days = 90, signal?: AbortSignal) =>
-  get<PriceHistory>(`/history/prices/${ticker}?days=${days}`, signal);
+export const fetchPortfolioHistory = (days = 90) =>
+  get<PortfolioHistory>(`/history/portfolio?days=${days}`);
 export const fetchDividends = () => get<DividendsResponse>('/dividends');
 export const fetchWatchlist = () => get<WatchlistResponse>('/watchlist');
 export const addToWatchlist = (ticker: string, market: 'NGX' | 'US' = 'NGX') =>

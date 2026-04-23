@@ -11,7 +11,7 @@ import PlotlyChart from '@/components/molecules/PlotlyChart';
 import { plotlyLayout, COLORS, sectorColor } from '@/utils/theme';
 import { fmtNGN, fmtNGNFull, fmtUSD, fmtPct, fmtPct2, isPositive } from '@/utils/formatters';
 import { fetchNGXHome } from '@/services/api';
-import type { StockRow, NgxHomeResponse } from '@/models';
+import type { StockRow, NgxHomeResponse, TickerPerformance } from '@/models';
 import { usePortfolio } from '@/context/PortfolioContext';
 import { computeSignal } from '@/components/molecules/Signalscore';
 import { computeTargets } from '@/utils/targets';
@@ -62,7 +62,7 @@ export default function NGXOverviewPage() {
   const load = useCallback(() => {
     fetchNGXHome()
       .then((r) => { setResp(r); setLastUpdated(new Date()); })
-      .catch(() => {})
+      .catch(() => { })
       .finally(() => setLoading(false));
   }, [setLastUpdated]);
 
@@ -106,15 +106,15 @@ export default function NGXOverviewPage() {
     return wt > 0.01 ? wsum / wt : null;
   };
 
-  const wPE   = weightedAvg((s) => _n(s.PeRatio));
-  const wROE  = weightedAvg((s) => { const v = _n(s.Roe); return v != null && v <= 150 ? v : null; });
+  const wPE = weightedAvg((s) => _n(s.PeRatio));
+  const wROE = weightedAvg((s) => { const v = _n(s.Roe); return v != null && v <= 150 ? v : null; });
   const wBeta = weightedAvg((s) => _n(s.Beta));
   const wDivY = weightedAvg((s) => _n(s.DividendYield));
   const annualDivIncome = resp?.div_payout ?? null;
 
   // ── Today's movers ───────────────────────────────────────────────────────────
   const moversSorted = [...active].sort((a, b) => (b.LiveChangePct ?? 0) - (a.LiveChangePct ?? 0));
-  const topMover    = moversSorted[0] ?? null;
+  const topMover = moversSorted[0] ?? null;
   const bottomMover = moversSorted[moversSorted.length - 1] ?? null;
 
   // ── Chart traces ─────────────────────────────────────────────────────────────
@@ -168,7 +168,7 @@ export default function NGXOverviewPage() {
     hovertemplate: '<b>%{customdata[0]}</b><br>Equity: %{customdata[1]}<br>Return: %{customdata[2]}<extra></extra>',
     marker: {
       colors: active.map((s) => s.ReturnPct ?? 0),
-      colorscale: [[0,'#BE1B1B'],[0.35,'#D97706'],[0.5,'#F5C518'],[0.7,'#2D7D3A'],[1,'#0A7B44']],
+      colorscale: [[0, '#BE1B1B'], [0.35, '#D97706'], [0.5, '#F5C518'], [0.7, '#2D7D3A'], [1, '#0A7B44']],
       cmin: -30, cmax: 100, showscale: true,
       colorbar: { thickness: 10, len: 0.5, tickfont: { size: 9 }, ticksuffix: '%', bgcolor: 'transparent', borderwidth: 0 },
       line: { width: 2, color: '#fff' },
@@ -272,7 +272,7 @@ export default function NGXOverviewPage() {
         const ov = toOverview(row);
         const perf = toPerformance(row);
         const price = row.LivePrice ?? null;
-        const sig = computeSignal(ov, perf, price, row, null, row.Sector || null);
+        const sig = computeSignal(ov, perf as TickerPerformance, price, row, null, row.Sector || null);
         if (!sig) return <span className="text-[var(--ink-4)] text-[10px]">—</span>;
         const eps = _n(ov.eps), bv = _n(ov.book_value);
         const graham = eps && bv && eps > 0 && bv > 0 ? Math.sqrt(22.5 * eps * bv) : null;
@@ -411,7 +411,7 @@ export default function NGXOverviewPage() {
           {[{ label: "Today's Best", row: topMover, sign: 1 }, { label: "Today's Worst", row: bottomMover, sign: -1 }].map(({ label, row, sign }) => {
             const pct = row.LiveChangePct ?? 0;
             const col = sign > 0 ? 'var(--gain)' : 'var(--loss)';
-            const bg  = sign > 0 ? 'var(--gain-light)' : 'var(--loss-light)';
+            const bg = sign > 0 ? 'var(--gain-light)' : 'var(--loss-light)';
             return (
               <div key={label} className="card px-4 py-3 flex items-center gap-3" style={{ background: bg }}>
                 <div className="flex-1 min-w-0">

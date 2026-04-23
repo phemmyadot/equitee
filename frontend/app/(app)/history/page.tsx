@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { fetchPortfolioHistory } from '@/services/api';
 import KPICard from '@/components/molecules/KPICard';
 import ChartCard from '@/components/molecules/ChartCard';
@@ -10,6 +10,7 @@ import { plotlyLayout, COLORS, sectorColor } from '@/utils/theme';
 import { fmtUSD, fmtNGN, fmtPct, isPositive } from '@/utils/formatters';
 import type { PortfolioHistory, PortfolioPoint } from '@/models';
 import { IconChartHistory } from '@/components/atoms/icons';
+import { usePortfolio } from '@/context/PortfolioContext';
 
 const DAY_OPTIONS = [
   { label: '7d', value: 7 },
@@ -33,40 +34,32 @@ function periodReturn(points: PortfolioPoint[], key: keyof PortfolioPoint) {
 
 export default function HistoryPage() {
   const [days, setDays] = useState(90);
-  const [data, setData] = useState<PortfolioHistory | null>(null);
+  const [resp, setResp] = useState<PortfolioHistory | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const { refreshKey, setLastUpdated } = usePortfolio();
+  const hasFetched = useRef(false);
+
+  const load = useCallback(() => {
+    fetchPortfolioHistory(days)
+      .then((r) => { setResp(r); setLastUpdated(new Date()); })
+      .catch(() => { })
+      .finally(() => setLoading(false));
+  }, [setLastUpdated])
+
 
   useEffect(() => {
-    let mounted = true;
-    const controller = new AbortController();
+    if (hasFetched.current) return;
+    hasFetched.current = true;
+    load();
+  }, [load]);
 
-    setLoading(true);
-    setError(null);
+  useEffect(() => {
+    if (refreshKey === 0) return;
+    load();
+  }, [refreshKey, load]);
 
-    fetchPortfolioHistory(days, controller.signal)
-      .then((d) => {
-        if (mounted) {
-          setData(d);
-          setLoading(false);
-        }
-      })
-      .catch((e) => {
-        if (mounted && e instanceof Error && e.name !== 'AbortError') {
-          setError(e.message || 'Failed to fetch portfolio history');
-          setLoading(false);
-        } else if (mounted) {
-          setLoading(false);
-        }
-      });
-
-    return () => {
-      mounted = false;
-      controller.abort();
-    };
-  }, [days]);
-
-  const points = data?.points ?? [];
+  const points = resp?.points ?? [];
   const hasData = points.length >= 2;
 
   if (error && !loading) {
@@ -206,7 +199,7 @@ export default function HistoryPage() {
         <div>
           <h1 className="text-[15px] font-semibold text-[var(--ink)]">Portfolio History</h1>
           <p className="text-[11px] text-[var(--ink-4)] mt-0.5">
-            {data ? `${data.count} snapshots over ${data.days} days` : 'Loading…'}
+            {resp ? `${resp.count} snapshots over ${resp.days} days` : 'Loading…'}
           </p>
         </div>
         <div className="flex gap-1.5">
@@ -236,7 +229,7 @@ export default function HistoryPage() {
             <KPICard
               label="Current Value"
               value={fmtUSD(last?.total_usd)}
-              sub={`${data?.days}d snapshot`}
+              sub={`${resp?.days}d snapshot`}
               accent="neutral"
             />
             <KPICard
