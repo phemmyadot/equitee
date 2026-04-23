@@ -6,13 +6,8 @@ import ChartCard from '@/components/molecules/ChartCard';
 import PlotlyChart from '@/components/molecules/PlotlyChart';
 import { plotlyLayout, COLORS, sectorColor } from '@/utils/theme';
 import { fmtNGN, fmtPct } from '@/utils/formatters';
-import {
-  fetchNGXAdvanced,
-  fetchCorrelation,
-  fetchAnalytics,
-  fetchRelativeStrength,
-} from '@/services/api';
-import type { StockRow, NgxAdvancedResponse, CorrelationData, AnalyticsData, RelativeStrengthData } from '@/models';
+import { fetchNGXAdvanced } from '@/services/api';
+import type { StockRow, NgxAdvancedResponse } from '@/models';
 
 const REFRESH_MS = 5 * 60 * 1000;
 
@@ -33,9 +28,6 @@ const _n = (v: string | number | null | undefined): number | null => {
 export default function NGXAdvancedPage() {
   const [resp, setResp] = useState<NgxAdvancedResponse | null>(null);
   const [loading, setLoading] = useState(true);
-  const [correlation, setCorrelation] = useState<CorrelationData | null>(null);
-  const [analytics, setAnalytics] = useState<AnalyticsData | null>(null);
-  const [relStrength, setRelStrength] = useState<RelativeStrengthData | null>(null);
 
   const load = useCallback(() => {
     fetchNGXAdvanced().then(setResp).catch(() => {}).finally(() => setLoading(false));
@@ -47,18 +39,15 @@ export default function NGXAdvancedPage() {
     return () => clearInterval(id);
   }, [load]);
 
-  useEffect(() => {
-    fetchCorrelation(90).then(setCorrelation).catch(() => {});
-    fetchAnalytics(180).then(setAnalytics).catch(() => {});
-    fetchRelativeStrength(90).then(setRelStrength).catch(() => {});
-  }, []);
-
   if (!resp && !loading) return null;
   const isFirstLoad = loading && !resp;
 
   const active = (resp?.holdings ?? []).filter((s) => s.CurrentEquity != null);
   const wf = resp?.waterfall;
   const sectors = resp?.sectors ?? [];
+  const correlation = resp?.correlation ?? null;
+  const analytics = resp?.analytics ?? null;
+  const relStrength = resp?.relative_strength ?? null;
 
   const totalEquity = active.reduce((sum, s) => sum + (s.CurrentEquity ?? 0), 0) || 1;
   const totalCost   = active.reduce((sum, s) => sum + (s.Shares ?? 0) * (s.AvgCost ?? 0), 0) || 1;

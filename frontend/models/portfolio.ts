@@ -83,12 +83,43 @@ export interface NgxHomeResponse {
   div_payout: number | null;
 }
 
+export interface NgxAdvancedCorrelation {
+  tickers: string[];
+  matrix: number[][];
+  days: number;
+}
+
+export interface NgxAdvancedAnalytics {
+  max_drawdown_pct: number | null;
+  sharpe: number | null;
+  data_points: number;
+  days: number;
+}
+
+export interface NgxAdvancedRelativeStrengthItem {
+  ticker: string;
+  stock_return: number | null;
+  index_return: number | null;
+  rs_pct: number | null;
+  outperform: boolean | null;
+}
+
+export interface NgxAdvancedRelativeStrength {
+  days: number;
+  index_ticker: string;
+  has_index_data: boolean;
+  items: NgxAdvancedRelativeStrengthItem[];
+}
+
 export interface NgxAdvancedResponse {
   holdings: StockRow[];
   waterfall: WaterfallData;
   sectors: SectorRow[];
   div_payout: number | null;
   last_updated: string | null;
+  correlation: NgxAdvancedCorrelation | null;
+  analytics: NgxAdvancedAnalytics | null;
+  relative_strength: NgxAdvancedRelativeStrength | null;
 }
 
 // ── US home response ─────────────────────────────────────────────────────────

@@ -28,8 +28,33 @@ from app.services.portfolio import (
     _sum,
 )
 from app.models import StockRow, SectorRow, NGXKPIs, CombinedKPIs, WaterfallData
-from app.db.crud import get_cash_balance, should_write_snapshot, write_snapshot
+from app.db.crud import (
+    get_cash_balance,
+    should_write_snapshot,
+    write_snapshot,
+    get_correlation_matrix,
+    get_portfolio_analytics,
+    get_active_holdings,
+    get_daily_price_history,
+)
 from app.config import settings
+
+_INDEX_TICKER = "NGXASI"
+
+
+def _cumulative_return(rows: list[dict]):
+    if len(rows) < 2:
+        return None
+    first = rows[0].get("price")
+    last = rows[-1].get("price")
+    if first and last and first > 0:
+        return round((last / first - 1) * 100, 2)
+    result = 1.0
+    for r in rows:
+        chg = r.get("change_pct")
+        if chg is not None:
+            result *= 1 + chg / 100
+    return round((result - 1) * 100, 2) if result != 1.0 else None
 
 log = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/ngx", tags=["ngx-pages"])
@@ -56,12 +81,43 @@ class NgxHomeResponse(BaseModel):
     div_payout: Optional[float] = None
 
 
+class AdvancedCorrelation(BaseModel):
+    tickers: list[str]
+    matrix: list[list[float]]
+    days: int
+
+
+class AdvancedAnalytics(BaseModel):
+    max_drawdown_pct: Optional[float] = None
+    sharpe: Optional[float] = None
+    data_points: int
+    days: int
+
+
+class AdvancedRelativeStrengthItem(BaseModel):
+    ticker: str
+    stock_return: Optional[float] = None
+    index_return: Optional[float] = None
+    rs_pct: Optional[float] = None
+    outperform: Optional[bool] = None
+
+
+class AdvancedRelativeStrength(BaseModel):
+    days: int
+    index_ticker: str
+    has_index_data: bool
+    items: list[AdvancedRelativeStrengthItem]
+
+
 class NgxAdvancedResponse(BaseModel):
     holdings: list[StockRow]
     waterfall: WaterfallData
     sectors: list[SectorRow]
     div_payout: Optional[float] = None
     last_updated: Optional[str] = None
+    correlation: Optional[AdvancedCorrelation] = None
+    analytics: Optional[AdvancedAnalytics] = None
+    relative_strength: Optional[AdvancedRelativeStrength] = None
 
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
@@ -197,7 +253,7 @@ def ngx_home(
                 prices_live=sum(1 for s in ngx_stocks if s.PriceSource == "ngx"),
                 prices_total=len(ngx_stocks),
                 price_age=ngx_job.cache_age(),
-                last_updated=ngx_job.last_updated(),
+                last_updated=(ts.isoformat() if (ts := ngx_job.last_updated()) else None),
             ),
             div_payout=_div_payout(ngx_h, cache_rows),
         )
@@ -232,6 +288,69 @@ def ngx_advanced(
         sold = get_closed_positions(db, current_user.id)
         ngx_realized = sum(float(s.realized_pl) for s in sold if s.market.upper() == "NGX") + ngx_partial_realized
 
+        # Correlation (90d)
+        corr_out: Optional[AdvancedCorrelation] = None
+        try:
+            tickers = [s.Ticker for s in ngx_stocks]
+            if len(tickers) >= 2:
+                corr = get_correlation_matrix(db, tickers=tickers, days=90)
+                corr_out = AdvancedCorrelation(
+                    tickers=corr["tickers"], matrix=corr["matrix"], days=90
+                )
+        except Exception:
+            log.warning("Could not compute correlation for advanced page")
+
+        # Analytics (180d)
+        analytics_out: Optional[AdvancedAnalytics] = None
+        try:
+            anl = get_portfolio_analytics(db, user_id=current_user.id, days=180)
+            analytics_out = AdvancedAnalytics(
+                max_drawdown_pct=anl["max_drawdown_pct"],
+                sharpe=anl["sharpe"],
+                data_points=anl["data_points"],
+                days=180,
+            )
+        except Exception:
+            log.warning("Could not compute analytics for advanced page")
+
+        # Relative strength (90d)
+        rs_out: Optional[AdvancedRelativeStrength] = None
+        try:
+            from app.services.history import refresh_ticker_history
+            try:
+                refresh_ticker_history(_INDEX_TICKER)
+            except Exception:
+                pass
+            index_rows = get_daily_price_history(db, _INDEX_TICKER, 90)
+            index_ret = _cumulative_return(index_rows)
+            has_index = index_ret is not None
+            active_holdings = get_active_holdings(db, market="ngx", user_id=current_user.id)
+            rs_items: list[AdvancedRelativeStrengthItem] = []
+            for h in active_holdings:
+                rows = get_daily_price_history(db, h.ticker, 90)
+                stock_ret = _cumulative_return(rows)
+                rs = (
+                    round(stock_ret - index_ret, 2)
+                    if (stock_ret is not None and index_ret is not None)
+                    else None
+                )
+                rs_items.append(AdvancedRelativeStrengthItem(
+                    ticker=h.ticker,
+                    stock_return=stock_ret,
+                    index_return=index_ret,
+                    rs_pct=rs,
+                    outperform=(rs > 0) if rs is not None else None,
+                ))
+            rs_items.sort(key=lambda x: (x.rs_pct is None, -(x.rs_pct or 0)))
+            rs_out = AdvancedRelativeStrength(
+                days=90,
+                index_ticker=_INDEX_TICKER,
+                has_index_data=has_index,
+                items=rs_items,
+            )
+        except Exception:
+            log.warning("Could not compute relative strength for advanced page")
+
         return NgxAdvancedResponse(
             holdings=ngx_stocks,
             waterfall=WaterfallData(
@@ -242,7 +361,10 @@ def ngx_advanced(
             ),
             sectors=build_sectors(ngx_stocks),
             div_payout=_div_payout(ngx_h, cache_rows),
-            last_updated=ngx_job.last_updated(),
+            last_updated=(ts.isoformat() if (ts := ngx_job.last_updated()) else None),
+            correlation=corr_out,
+            analytics=analytics_out,
+            relative_strength=rs_out,
         )
     except Exception:
         log.exception("Error building NGX advanced response")
