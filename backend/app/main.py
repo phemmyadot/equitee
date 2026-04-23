@@ -30,6 +30,7 @@ from app.routers import alerts as alerts_router
 from app.routers import ngx_pages as ngx_pages_router
 from app.routers import us_pages as us_pages_router
 from app.routers import combined_pages as combined_pages_router
+from app.routers import dividends_pages as dividends_pages_router
 from app.db.engine import engine, SessionLocal
 from app.db import models as db_models  # registers all ORM tables
 from app.db.seed import seed_from_json
@@ -132,6 +133,7 @@ app.include_router(alerts_router.router)
 app.include_router(ngx_pages_router.router)
 app.include_router(us_pages_router.router)
 app.include_router(combined_pages_router.router)
+app.include_router(dividends_pages_router.router)
 
 
 # ── Health check ─────────────────────────────────────────────────────────────

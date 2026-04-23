@@ -36,6 +36,7 @@ from app.db.crud import (
     get_cash_balance,
     credit_cash,
     debit_cash,
+    list_invite_codes,
 )
 
 log = logging.getLogger(__name__)
@@ -129,10 +130,18 @@ class SellResponse(BaseModel):
 # ── Endpoints ──────────────────────────────────────────────────────────────────
 
 
+class InviteOut(BaseModel):
+    code: str
+    used: bool
+    used_at: Optional[str] = None
+    created_at: str
+
+
 class SettingsInitResponse(BaseModel):
     holdings: list[HoldingOut]
     closed: list[ClosedOut]
     cash: CashBalanceOut
+    invites: Optional[list[InviteOut]] = None
 
 
 @router.get("/init", response_model=SettingsInitResponse)
@@ -140,19 +149,25 @@ def settings_init(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
+    invites = None
+    if current_user.is_admin:
+        codes = list_invite_codes(db, current_user.id)
+        invites = [
+            InviteOut(
+                code=c.code,
+                used=c.used_by is not None,
+                used_at=c.used_at.isoformat() if c.used_at else None,
+                created_at=c.created_at.isoformat(),
+            )
+            for c in codes
+        ]
     return SettingsInitResponse(
-        holdings=get_all_holdings(db, current_user.id),
-        closed=get_closed_positions(db, current_user.id),
-        cash=get_cash_balance(db, current_user.id),
+        holdings=[HoldingOut.model_validate(h) for h in get_all_holdings(db, current_user.id)],
+        closed=[ClosedOut.model_validate(c) for c in get_closed_positions(db, current_user.id)],
+        cash=CashBalanceOut.model_validate(get_cash_balance(db, current_user.id)),
+        invites=invites,
     )
 
-
-@router.get("/holdings", response_model=list[HoldingOut])
-def list_holdings(
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
-):
-    return get_all_holdings(db, current_user.id)
 
 
 @router.get("/ticker-info")
@@ -388,23 +403,8 @@ def sell_shares(
     )
 
 
-@router.get("/closed", response_model=list[ClosedOut])
-def list_closed(
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
-):
-    return get_closed_positions(db, current_user.id)
-
 
 # ── Cash balance ───────────────────────────────────────────────────────────────
-
-
-@router.get("/cash", response_model=CashBalanceOut)
-def get_cash(
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
-):
-    return get_cash_balance(db, current_user.id)
 
 
 @router.post("/cash/credit", response_model=CashBalanceOut)

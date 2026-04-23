@@ -9,8 +9,8 @@ import {
   useRef,
   type ReactNode,
 } from 'react';
-import { fetchPortfolioData, fetchDividends } from '@/services/api';
-import type { PortfolioData, DividendsResponse } from '@/models';
+import { fetchPortfolioData } from '@/services/api';
+import type { PortfolioData } from '@/models';
 import { useAuth } from '@/context/AuthContext';
 import { REFRESH_INTERVALS, type RefreshInterval } from '@/constants/refresh';
 
@@ -25,8 +25,6 @@ interface PortfolioContextValue {
   autoRefreshInterval: RefreshInterval;
   setAutoRefreshInterval: (v: RefreshInterval) => void;
   nextRefreshIn: number | null;
-  dividendsData: DividendsResponse | null;
-  dividendsLoading: boolean;
 }
 
 const PortfolioContext = createContext<PortfolioContextValue | null>(null);
@@ -37,8 +35,6 @@ export function PortfolioProvider({ children }: { children: ReactNode }) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
-  const [dividendsData, setDividendsData] = useState<DividendsResponse | null>(null);
-  const [dividendsLoading, setDividendsLoading] = useState(true);
   const [autoRefreshInterval, setAutoRefreshInterval] = useState<RefreshInterval>(300);
   const [nextRefreshIn, setNextRefreshIn] = useState<number | null>(null);
 
@@ -49,31 +45,15 @@ export function PortfolioProvider({ children }: { children: ReactNode }) {
 
   const refresh = useCallback(async () => {
     setLoading(true);
-    setDividendsLoading(true);
     setError(null);
     try {
-      const [portfolioResult, dividendsResult] = await Promise.allSettled([
-        fetchPortfolioData(),
-        fetchDividends(),
-      ]);
-
-      if (portfolioResult.status === 'fulfilled') {
-        setData(portfolioResult.value);
-        setLastUpdated(new Date());
-      } else {
-        setError(
-          portfolioResult.reason instanceof Error
-            ? portfolioResult.reason.message
-            : 'Unknown error',
-        );
-      }
-
-      if (dividendsResult.status === 'fulfilled') {
-        setDividendsData(dividendsResult.value);
-      }
+      const result = await fetchPortfolioData();
+      setData(result);
+      setLastUpdated(new Date());
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Unknown error');
     } finally {
       setLoading(false);
-      setDividendsLoading(false);
     }
   }, []);
 
@@ -134,8 +114,6 @@ export function PortfolioProvider({ children }: { children: ReactNode }) {
         autoRefreshInterval,
         setAutoRefreshInterval,
         nextRefreshIn,
-        dividendsData,
-        dividendsLoading,
       }}
     >
       {children}

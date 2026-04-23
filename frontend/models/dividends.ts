@@ -63,6 +63,7 @@ export interface PortfolioDrip {
 export interface DividendHolding {
   ticker: string;
   name: string;
+  sector: string | null;
   shares: number;
   avg_cost: number;
   dividend: DividendInfo | null;

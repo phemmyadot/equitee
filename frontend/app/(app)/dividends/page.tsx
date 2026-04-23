@@ -1,11 +1,11 @@
 'use client';
 
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect, useCallback } from 'react';
 import Link from 'next/link';
 import { fmtNGN, fmtNGNFull } from '@/utils/formatters';
 import { sectorColor } from '@/utils/theme';
-import { usePortfolio } from '@/context/PortfolioContext';
-import type { DividendHolding } from '@/models';
+import { fetchDividends } from '@/services/api';
+import type { DividendHolding, DividendsResponse } from '@/models';
 import { IconTrendingUp, IconCheck, IconChartLine } from '@/components/atoms/icons';
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -336,22 +336,15 @@ type Filter = 'all' | 'upcoming' | 'no-data';
 
 export default function DividendsPage() {
   const [filter, setFilter] = useState<Filter>('all');
+  const [resp, setResp] = useState<DividendsResponse | null>(null);
+  const [loading, setLoading] = useState(true);
 
-  const {
-    data: portfolio,
-    dividendsData: resp,
-    dividendsLoading: loading,
-    refresh,
-  } = usePortfolio();
+  const load = useCallback(async (force = false) => {
+    setLoading(true);
+    try { setResp(await fetchDividends(force)); } catch { /* silent */ } finally { setLoading(false); }
+  }, []);
 
-  // Sector lookup from portfolio context
-  const sectorMap = useMemo(() => {
-    const m: Record<string, string> = {};
-    portfolio?.ngx_stocks.forEach((s) => {
-      m[s.Ticker] = s.Sector;
-    });
-    return m;
-  }, [portfolio]);
+  useEffect(() => { load(); }, [load]);
 
   const holdings = resp?.holdings ?? [];
 
@@ -383,7 +376,7 @@ export default function DividendsPage() {
           </p>
         </div>
         <button
-          onClick={refresh}
+          onClick={() => load(true)}
           disabled={loading}
           className="flex items-center gap-1.5 h-8 px-3 text-[11px] font-semibold bg-[var(--accent)] text-white rounded-lg hover:bg-[#17A06B] disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
         >
@@ -593,7 +586,7 @@ export default function DividendsPage() {
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           {filtered.map((h) => (
-            <DividendCard key={h.ticker} h={h} sector={sectorMap[h.ticker]} />
+            <DividendCard key={h.ticker} h={h} sector={h.sector ?? undefined} />
           ))}
         </div>
       )}

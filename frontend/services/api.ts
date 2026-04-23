@@ -63,7 +63,7 @@ export type {
 
 export type { WatchlistItem, WatchlistResponse, PriceAlert, TriggeredAlert, ScreenerItem, ScreenerResponse } from '@/models/watchlist';
 export type { TradesAll, SaleEvent, BuyEvent } from '@/models/trades';
-export type { HoldingRecord, ClosedRecord, CashBalance, SettingsInit } from '@/models/holdings';
+export type { HoldingRecord, ClosedRecord, CashBalance, SettingsInit, InviteCode } from '@/models/holdings';
 
 export type {
   AnalysisContext,

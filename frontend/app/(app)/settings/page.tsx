@@ -11,7 +11,7 @@ import {
   debitCash,
 } from '@/services/settingsApi';
 import { fetchSettingsInit } from '@/services/api';
-import type { HoldingRecord, ClosedRecord, SellResult, CashBalance } from '@/models';
+import type { HoldingRecord, ClosedRecord, SellResult, CashBalance, InviteCode } from '@/models';
 import { fmtNGN, fmtUSD, fmtPct } from '@/utils/formatters';
 import { useAuth } from '@/context/AuthContext';
 import { usePortfolio } from '@/context/PortfolioContext';
@@ -210,16 +210,6 @@ type ModalState =
 
 type Tab = 'active' | 'closed';
 
-// ─────────────────────────────────────────────────────────────────────────────
-// Invite code types
-// ─────────────────────────────────────────────────────────────────────────────
-
-interface InviteCode {
-  code: string;
-  created_at: string;
-  used: boolean;
-  used_at: string | null;
-}
 
 function fmtDate(iso: string | null | undefined): string {
   if (!iso) return '—';
@@ -234,28 +224,15 @@ function fmtDate(iso: string | null | undefined): string {
 // ─────────────────────────────────────────────────────────────────────────────
 
 function AdminInvitePanel({
+  initialInvites,
   showToast,
 }: {
+  initialInvites: InviteCode[];
   showToast: (msg: string, type?: 'success' | 'error') => void;
 }) {
-  const [invites, setInvites] = useState<InviteCode[]>([]);
-  const [loading, setLoading] = useState(false);
+  const [invites, setInvites] = useState<InviteCode[]>(initialInvites);
   const [genBusy, setGenBusy] = useState(false);
   const [copied, setCopied] = useState<string | null>(null);
-
-  const loadInvites = useCallback(async () => {
-    setLoading(true);
-    try {
-      const res = await fetch('/api/auth/invites');
-      if (res.ok) setInvites(await res.json());
-    } finally {
-      setLoading(false);
-    }
-  }, []);
-
-  useEffect(() => {
-    loadInvites();
-  }, [loadInvites]);
 
   const generate = async () => {
     setGenBusy(true);
@@ -293,9 +270,7 @@ function AdminInvitePanel({
         </Btn>
       </div>
 
-      {loading ? (
-        <p className="text-[11px] text-[var(--ink-4)]">Loading…</p>
-      ) : invites.length === 0 ? (
+      {invites.length === 0 ? (
         <p className="text-[11px] text-[var(--ink-4)]">No invite codes yet.</p>
       ) : (
         <div className="overflow-x-auto">
@@ -355,6 +330,7 @@ export default function SettingsPage() {
   const [holdings, setHoldings] = useState<HoldingRecord[]>([]);
   const [closed, setClosed] = useState<ClosedRecord[]>([]);
   const [cash, setCash] = useState<CashBalance>({ ngn: 0, usd: 0 });
+  const [invites, setInvites] = useState<InviteCode[]>([]);
   const [modal, setModal] = useState<ModalState>(null);
   const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' } | null>(null);
   const [busy, setBusy] = useState(false);
@@ -366,6 +342,7 @@ export default function SettingsPage() {
     setHoldings(r.holdings);
     setClosed(r.closed);
     setCash(r.cash);
+    if (r.invites) setInvites(r.invites);
   }, []);
 
   useEffect(() => {
@@ -388,7 +365,7 @@ export default function SettingsPage() {
   return (
     <div className="space-y-5">
       {/* ── Admin: invite codes ── */}
-      {user?.is_admin && <AdminInvitePanel showToast={showToast} />}
+      {user?.is_admin && <AdminInvitePanel initialInvites={invites} showToast={showToast} />}
 
       {/* ── Page header ── */}
       <div className="flex items-center justify-between">

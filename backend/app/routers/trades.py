@@ -1,10 +1,7 @@
 """
 Trades Router
 =============
-Read-only log of all trade events (buys and sells).
-
-GET /api/trades        — all sale events for the current user, newest first
-GET /api/trades/buys   — all buy events for the current user, newest first
+GET /api/trades/all  — all buy and sell events for the current user
 """
 
 import logging
@@ -70,19 +67,3 @@ def list_all_trades(
         sells=get_sale_events(db, current_user.id),
         buys=get_buy_events(db, current_user.id),
     )
-
-
-@router.get("", response_model=list[SaleEventOut])
-def list_sells(
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
-):
-    return get_sale_events(db, current_user.id)
-
-
-@router.get("/buys", response_model=list[BuyEventOut])
-def list_buys(
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
-):
-    return get_buy_events(db, current_user.id)

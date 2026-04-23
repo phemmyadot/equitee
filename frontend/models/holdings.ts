@@ -32,8 +32,16 @@ export interface CashBalance {
   usd: number;
 }
 
+export interface InviteCode {
+  code: string;
+  used: boolean;
+  used_at: string | null;
+  created_at: string;
+}
+
 export interface SettingsInit {
   holdings: HoldingRecord[];
   closed: ClosedRecord[];
   cash: CashBalance;
+  invites: InviteCode[] | null;
 }
