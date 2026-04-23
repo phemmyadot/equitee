@@ -180,17 +180,56 @@ def list_watchlist(
         ]
         return WatchlistResponse(items=[], count=0, alerts=alerts_out, last_updated=(_ngx_job.last_updated().isoformat() if _ngx_job.last_updated() else None))
 
-    # Fetch all tickers in parallel (one thread per ticker, max 10)
+    # Separate NGX and US tickers for optimized batch loading
     row_map = {r.ticker: r for r in rows}
+    ngx_tickers = [r.ticker for r in rows if r.market.upper() == "NGX"]
+    us_tickers = [r.ticker for r in rows if r.market.upper() == "US"]
 
-    with ThreadPoolExecutor(max_workers=min(len(rows), 10)) as ex:
-        futures = {ex.submit(_fetch_ticker_full, r.ticker, r.market): r.ticker for r in rows}
-        results: dict[str, dict] = {}
-        from concurrent.futures import as_completed
+    # Batch-load NGX tickers from cache (1 query, not per-ticker)
+    ngx_cache = {}
+    if ngx_tickers:
+        ngx_all = _ngx_job.get_all()
+        ngx_cache = {t["ticker"]: t for t in ngx_all if t["ticker"] in [ut.upper() for ut in ngx_tickers]}
 
-        for future in as_completed(futures):
-            t = futures[future]
-            results[t] = future.result()
+    # Fetch US tickers in parallel (increased workers from 10 to 20)
+    results: dict[str, dict] = {}
+    if us_tickers:
+        with ThreadPoolExecutor(max_workers=min(len(us_tickers), 20)) as ex:
+            futures = {ex.submit(_fetch_ticker_full, t, "US"): t for t in us_tickers}
+            from concurrent.futures import as_completed
+            for future in as_completed(futures):
+                t = futures[future]
+                results[t] = future.result()
+
+    # Fetch NGX tickers in parallel (but use cache first for faster response)
+    if ngx_tickers:
+        def _fetch_ngx_with_cache(ticker):
+            cached = ngx_cache.get(ticker.upper())
+            if cached:
+                return {
+                    "ticker": ticker,
+                    "price": {
+                        "symbol": ticker,
+                        "price": cached.get("price"),
+                        "change": cached.get("change"),
+                        "change_pct": cached.get("change_pct"),
+                        "volume": cached.get("volume"),
+                        "high": cached.get("high"),
+                        "low": cached.get("low"),
+                    } if cached.get("price") else None,
+                    "profile": {k: cached.get(k) for k in ("name", "sector", "industry", "description", "website", "headquarters", "founded", "employees")} if cached.get("name") else None,
+                    "overview": {k: cached.get(k) for k in ("market_cap", "pe_ratio", "eps", "book_value", "dividend_yield", "roe", "roa", "debt_to_equity", "current_ratio", "gross_margin", "net_margin", "revenue", "net_income")} if cached.get("market_cap") else None,
+                    "performance": {k: cached.get(k) for k in ("beta", "week_52_high", "week_52_low", "week_52_change", "return_1y", "return_ytd", "return_1m", "return_3m", "return_6m", "volatility", "sharpe_ratio", "max_drawdown", "rsi_14", "ma_50", "ma_200", "golden_cross", "piotroski_score", "altman_zscore")} if cached.get("week_52_high") else None,
+                    "cached_at": cached.get("cached_at"),
+                }
+            return _fetch_ticker_full(ticker, "NGX")
+
+        with ThreadPoolExecutor(max_workers=min(len(ngx_tickers), 10)) as ex:
+            futures = {ex.submit(_fetch_ngx_with_cache, t): t for t in ngx_tickers}
+            from concurrent.futures import as_completed
+            for future in as_completed(futures):
+                t = futures[future]
+                results[t] = future.result()
 
     items = []
     for r in rows:

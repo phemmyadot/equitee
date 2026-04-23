@@ -231,18 +231,18 @@ def ngx_home(
         hhi = compute_hhi(ngx_stocks)
         hhi_label = "LOW" if hhi < 1000 else ("MODERATE" if hhi < 1800 else "HIGH")
 
-        # Sparkline data for all holdings (90d, from DB — no extra HTTP calls)
+        # Sparkline data for all holdings (90d, from DB — batch query, not per-ticker)
         price_histories: dict[str, list[SparklinePoint]] = {}
-        for h in ngx_h:
-            t = h["ticker"]
-            try:
-                rows = get_daily_price_history(db, t, 90)
+        if ngx_h:
+            from app.db.crud import get_daily_price_history_batch
+            tickers = [h["ticker"] for h in ngx_h]
+            batch_data = get_daily_price_history_batch(db, tickers, 90)
+            for t in tickers:
+                rows = batch_data.get(t, [])
                 price_histories[t] = [
                     SparklinePoint(ts=r["ts"], price=r.get("price"), change_pct=r.get("change_pct"))
                     for r in rows
                 ]
-            except Exception:
-                price_histories[t] = []
 
         return NgxHomeResponse(
             holdings=ngx_stocks,
@@ -342,33 +342,43 @@ def ngx_advanced(
                 refresh_ticker_history(_INDEX_TICKER)
             except Exception:
                 pass
-            index_rows = get_daily_price_history(db, _INDEX_TICKER, 90)
-            index_ret = _cumulative_return(index_rows)
-            has_index = index_ret is not None
+
+            # Get all active holdings first
             active_holdings = get_active_holdings(db, market="ngx", user_id=current_user.id)
-            rs_items: list[AdvancedRelativeStrengthItem] = []
-            for h in active_holdings:
-                rows = get_daily_price_history(db, h.ticker, 90)
-                stock_ret = _cumulative_return(rows)
-                rs = (
-                    round(stock_ret - index_ret, 2)
-                    if (stock_ret is not None and index_ret is not None)
-                    else None
+            if active_holdings:
+                # Batch query: get all price history in ONE query (not per-ticker)
+                from app.db.crud import get_daily_price_history_batch
+                tickers_to_fetch = [h.ticker for h in active_holdings] + [_INDEX_TICKER]
+                price_data = get_daily_price_history_batch(db, tickers_to_fetch, 90)
+
+                # Now compute returns from batched data
+                index_rows = price_data.get(_INDEX_TICKER, [])
+                index_ret = _cumulative_return(index_rows)
+                has_index = index_ret is not None
+
+                rs_items: list[AdvancedRelativeStrengthItem] = []
+                for h in active_holdings:
+                    rows = price_data.get(h.ticker, [])
+                    stock_ret = _cumulative_return(rows)
+                    rs = (
+                        round(stock_ret - index_ret, 2)
+                        if (stock_ret is not None and index_ret is not None)
+                        else None
+                    )
+                    rs_items.append(AdvancedRelativeStrengthItem(
+                        ticker=h.ticker,
+                        stock_return=stock_ret,
+                        index_return=index_ret,
+                        rs_pct=rs,
+                        outperform=(rs > 0) if rs is not None else None,
+                    ))
+                rs_items.sort(key=lambda x: (x.rs_pct is None, -(x.rs_pct or 0)))
+                rs_out = AdvancedRelativeStrength(
+                    days=90,
+                    index_ticker=_INDEX_TICKER,
+                    has_index_data=has_index,
+                    items=rs_items,
                 )
-                rs_items.append(AdvancedRelativeStrengthItem(
-                    ticker=h.ticker,
-                    stock_return=stock_ret,
-                    index_return=index_ret,
-                    rs_pct=rs,
-                    outperform=(rs > 0) if rs is not None else None,
-                ))
-            rs_items.sort(key=lambda x: (x.rs_pct is None, -(x.rs_pct or 0)))
-            rs_out = AdvancedRelativeStrength(
-                days=90,
-                index_ticker=_INDEX_TICKER,
-                has_index_data=has_index,
-                items=rs_items,
-            )
         except Exception:
             log.warning("Could not compute relative strength for advanced page")
 

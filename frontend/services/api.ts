@@ -81,23 +81,32 @@ async function tryRefresh(): Promise<boolean> {
   return r.ok;
 }
 
-async function get<T>(path: string): Promise<T> {
-  let res = await fetch(`${BASE}${path}`, { cache: 'no-store' });
+async function get<T>(path: string, signal?: AbortSignal): Promise<T> {
+  try {
+    let res = await fetch(`${BASE}${path}`, { cache: 'no-store', signal });
 
-  if (res.status === 401) {
-    const refreshed = await tryRefresh();
-    if (!refreshed) {
-      window.location.href = '/login';
-      throw new Error('Session expired');
+    if (res.status === 401) {
+      const refreshed = await tryRefresh();
+      if (!refreshed) {
+        window.location.href = '/login';
+        throw new Error('Session expired');
+      }
+      // Retry without signal to ensure refresh succeeds even if original request was aborted
+      res = await fetch(`${BASE}${path}`, { cache: 'no-store' });
     }
-    res = await fetch(`${BASE}${path}`, { cache: 'no-store' });
-  }
 
-  if (!res.ok) {
-    const err = await res.json().catch(() => ({}));
-    throw new Error((err as { detail?: string }).detail ?? res.statusText);
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error((err as { detail?: string }).detail ?? res.statusText);
+    }
+    return res.json() as Promise<T>;
+  } catch (e) {
+    // Re-throw AbortError with a clear message, other errors pass through
+    if (e instanceof Error && e.name === 'AbortError') {
+      throw new Error('Request was cancelled');
+    }
+    throw e;
   }
-  return res.json() as Promise<T>;
 }
 
 async function post<T>(path: string): Promise<T> {
@@ -156,10 +165,10 @@ import type {
 import type { TradesAll } from '@/models/trades';
 import type { SettingsInit } from '@/models/holdings';
 
-export const fetchPortfolioHistory = (days = 90) =>
-  get<PortfolioHistory>(`/history/portfolio?days=${days}`);
-export const fetchPriceHistory = (ticker: string, days = 90) =>
-  get<PriceHistory>(`/history/prices/${ticker}?days=${days}`);
+export const fetchPortfolioHistory = (days = 90, signal?: AbortSignal) =>
+  get<PortfolioHistory>(`/history/portfolio?days=${days}`, signal);
+export const fetchPriceHistory = (ticker: string, days = 90, signal?: AbortSignal) =>
+  get<PriceHistory>(`/history/prices/${ticker}?days=${days}`, signal);
 export const fetchDividends = () => get<DividendsResponse>('/dividends');
 export const fetchWatchlist = () => get<WatchlistResponse>('/watchlist');
 export const addToWatchlist = (ticker: string, market: 'NGX' | 'US' = 'NGX') =>

@@ -36,6 +36,11 @@ _HEADERS = {
 # process lifetime (prevents hammering 404 pages on every /full request).
 _no_history_page: set[str] = set()
 
+# In-process TTL cache for get_ticker_prices_from_db — avoids redundant HTTP
+# scrapes when multiple callers request the same ticker within a short window.
+_price_cache: dict[str, tuple[float, list[dict]]] = {}  # ticker → (ts, rows)
+_PRICE_CACHE_TTL = 900  # 15 minutes
+
 
 def _scrape_history_page(ticker: str) -> list[dict]:
     """

@@ -1,14 +1,14 @@
 'use client';
 
-import { useState } from 'react';
-import { usePortfolioHistory } from '@/hooks/useHistory';
+import { useState, useEffect } from 'react';
+import { fetchPortfolioHistory } from '@/services/api';
 import KPICard from '@/components/molecules/KPICard';
 import ChartCard from '@/components/molecules/ChartCard';
 import { ChartSkeleton } from '@/components/atoms/Feedback';
 import PlotlyChart from '@/components/molecules/PlotlyChart';
 import { plotlyLayout, COLORS, sectorColor } from '@/utils/theme';
 import { fmtUSD, fmtNGN, fmtPct, isPositive } from '@/utils/formatters';
-import type { PortfolioPoint } from '@/models';
+import type { PortfolioHistory, PortfolioPoint } from '@/models';
 import { IconChartHistory } from '@/components/atoms/icons';
 
 const DAY_OPTIONS = [
@@ -33,10 +33,57 @@ function periodReturn(points: PortfolioPoint[], key: keyof PortfolioPoint) {
 
 export default function HistoryPage() {
   const [days, setDays] = useState(90);
-  const { data, loading, error } = usePortfolioHistory(days);
+  const [data, setData] = useState<PortfolioHistory | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    let mounted = true;
+    const controller = new AbortController();
+
+    setLoading(true);
+    setError(null);
+
+    fetchPortfolioHistory(days, controller.signal)
+      .then((d) => {
+        if (mounted) {
+          setData(d);
+          setLoading(false);
+        }
+      })
+      .catch((e) => {
+        if (mounted && e instanceof Error && e.name !== 'AbortError') {
+          setError(e.message || 'Failed to fetch portfolio history');
+          setLoading(false);
+        } else if (mounted) {
+          setLoading(false);
+        }
+      });
+
+    return () => {
+      mounted = false;
+      controller.abort();
+    };
+  }, [days]);
 
   const points = data?.points ?? [];
   const hasData = points.length >= 2;
+
+  if (error && !loading) {
+    return (
+      <div className="card px-6 py-12 flex flex-col items-center gap-3 text-center">
+        <h1 className="text-[15px] font-semibold text-[var(--ink)]">Portfolio History</h1>
+        <p className="text-[13px] font-medium text-[var(--loss)]">Failed to load data</p>
+        <p className="text-[11px] text-[var(--ink-4)] max-w-[320px]">{error}</p>
+        <button
+          onClick={() => window.location.reload()}
+          className="mt-2 px-4 py-2 bg-[var(--accent)] text-white rounded-md text-[12px] font-semibold hover:opacity-90"
+        >
+          Retry
+        </button>
+      </div>
+    );
+  }
 
   // ── Derived period stats ──────────────────────────────────────────────────
   const totalRet = periodReturn(points, 'total_usd');

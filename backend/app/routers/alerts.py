@@ -46,16 +46,6 @@ def _fmt(alert) -> AlertOut:
         created_at=alert.created_at.isoformat(),
     )
 
-
-@router.get("", response_model=AlertsResponse)
-def list_alerts(
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
-):
-    rows = get_alerts(db, current_user.id)
-    return AlertsResponse(alerts=[_fmt(r) for r in rows])
-
-
 @router.post("", status_code=201, response_model=AlertOut)
 def add_alert(
     ticker: str = Query(...),

@@ -102,16 +102,16 @@ def us_home(
     )
 
     price_histories: dict[str, list[SparklinePoint]] = {}
-    for h in holdings["us"]:
-        t = h["ticker"]
-        try:
-            rows = get_price_history(db, ticker=t, days=90, user_id=current_user.id)
+    if holdings["us"]:
+        from app.db.crud import get_price_history_batch
+        tickers = [h["ticker"] for h in holdings["us"]]
+        batch_data = get_price_history_batch(db, tickers, 90, current_user.id)
+        for t in tickers:
+            rows = batch_data.get(t.upper(), [])
             price_histories[t] = [
                 SparklinePoint(ts=r["ts"], price=r.get("price"), change_pct=r.get("change_pct"))
                 for r in rows
             ]
-        except Exception:
-            price_histories[t] = []
 
     return UsHomeResponse(
         kpis=kpis,

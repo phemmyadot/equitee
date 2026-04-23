@@ -24,6 +24,7 @@ from app.db.crud import (
     get_portfolio_analytics,
     get_active_holdings,
     get_daily_price_history,
+    get_daily_price_history_batch,
 )
 
 log = logging.getLogger(__name__)
@@ -261,15 +262,21 @@ def relative_strength(
         except Exception:
             pass
 
-        index_rows = get_daily_price_history(db, _INDEX_TICKER, days)
-        index_ret = _cumulative_return(index_rows)
-        has_index = index_ret is not None
-
         holdings = get_active_holdings(db, market="ngx", user_id=current_user.id)
         items: list[RelativeStrengthItem] = []
 
+        # Batch query: get all price history in ONE query (including index)
+        tickers_to_fetch = [h.ticker for h in holdings] + [_INDEX_TICKER]
+        price_data = get_daily_price_history_batch(db, tickers_to_fetch, days)
+
+        # Get index returns from batch data
+        index_rows = price_data.get(_INDEX_TICKER, [])
+        index_ret = _cumulative_return(index_rows)
+        has_index = index_ret is not None
+
+        # Compute relative strength for each holding
         for h in holdings:
-            rows = get_daily_price_history(db, h.ticker, days)
+            rows = price_data.get(h.ticker.upper(), [])
             stock_ret = _cumulative_return(rows)
             rs = (
                 round(stock_ret - index_ret, 2)

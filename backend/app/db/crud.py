@@ -592,6 +592,37 @@ def get_price_history(db: Session, ticker: str, days: int, user_id: int) -> list
     ]
 
 
+def get_price_history_batch(db: Session, tickers: list[str], days: int, user_id: int) -> dict[str, list[dict]]:
+    """Return price history for multiple tickers in ONE query. Returns {ticker: [...rows...]}.
+    MUCH faster than calling get_price_history per ticker (avoids N+1 problem)."""
+    if not tickers:
+        return {}
+
+    since = datetime.now(timezone.utc) - timedelta(days=days)
+    upper_tickers = [t.upper() for t in tickers]
+
+    stmt = (
+        select(PriceHistory, PortfolioSnapshot.ts)
+        .join(PortfolioSnapshot, PriceHistory.snapshot_id == PortfolioSnapshot.id)
+        .where(
+            PortfolioSnapshot.user_id == user_id,
+            PriceHistory.ticker.in_(upper_tickers),
+            PortfolioSnapshot.ts >= since,
+        )
+        .order_by(PriceHistory.ticker, PortfolioSnapshot.ts)
+    )
+
+    result: dict[str, list[dict]] = {t: [] for t in upper_tickers}
+    for row in db.execute(stmt).all():
+        result[row.PriceHistory.ticker].append({
+            "ts": row.ts.isoformat(),
+            "price": row.PriceHistory.price,
+            "change_pct": row.PriceHistory.change_pct,
+        })
+
+    return result
+
+
 # ── Users ─────────────────────────────────────────────────────────────────────
 
 
@@ -945,6 +976,37 @@ def get_daily_price_history(db: Session, ticker: str, days: int) -> list[dict]:
         }
         for r in db.scalars(stmt).all()
     ]
+
+
+def get_daily_price_history_batch(db: Session, tickers: list[str], days: int) -> dict[str, list[dict]]:
+    """Return daily price rows for multiple tickers in ONE query. Returns {ticker: [...rows...]}.
+    MUCH faster than calling get_daily_price_history per ticker (avoids N+1 problem)."""
+    from datetime import date, timedelta
+
+    if not tickers:
+        return {}
+
+    since = (date.today() - timedelta(days=days)).isoformat()
+    upper = [t.upper() for t in tickers]
+
+    stmt = (
+        select(DailyPriceHistory)
+        .where(
+            DailyPriceHistory.ticker.in_(upper),
+            DailyPriceHistory.date >= since,
+        )
+        .order_by(DailyPriceHistory.ticker, DailyPriceHistory.date)
+    )
+
+    result: dict[str, list[dict]] = {t: [] for t in upper}
+    for r in db.scalars(stmt).all():
+        result[r.ticker].append({
+            "ts": r.date,
+            "price": r.close,
+            "change_pct": r.change_pct,
+        })
+
+    return result
 
 
 def get_correlation_matrix(db: Session, tickers: list[str], days: int) -> dict:
