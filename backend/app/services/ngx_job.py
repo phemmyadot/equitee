@@ -5,8 +5,12 @@ Hourly job that scrapes all NGX ticker data and stores it in the DB.
 FE and all API endpoints read only from ngx_ticker_cache — no live scrapes.
 
 Phases per run:
-  A. Prices   — list __data.json (fast, ~5s, all tickers)
-  B. Enrich   — per-ticker statistics + quote + dividend pages (slow, ~10-15min, rate-limited)
+  A. Prices    — list __data.json (fast, ~5s, all tickers)
+  B. Enrich    — per-ticker stats + quote pages (slow, ~10-15min, rate-limited, skips fresh tickers)
+  C. Dividends — ALL tickers, serial with rate-limit delay (independent of enrich skip)
+
+Phase C runs for every ticker every job cycle regardless of enrichment age so that
+newly-paying tickers and prod deployments with a warm DB always get dividend data.
 
 Lock: a row in ngx_job_log with status='running' acts as the mutex.
 Stale lock: any running row older than 30 min is treated as crashed and ignored.
@@ -111,14 +115,14 @@ def _scrape_prices(db, job: NgxJobLog) -> int:
 
 def _enrich_one(ticker: str) -> dict:
     """
-    Fetch statistics + quote + company + dividend pages for one ticker.
+    Fetch statistics + quote + company pages for one ticker.
     Returns a dict of fields to write. Never raises — returns partial data on failure.
+    Dividends are handled separately in Phase C so the enrich-skip logic doesn't affect them.
     """
     from app.services.performance import get_overview      # stats blob → fundamentals
     from app.services.overview import get_performance      # stats blob + quote → performance
     from app.services.profile import get_profile           # company page → profile
     from app.services.ngx import _get_quote_intraday       # quote page → high/low/volume
-    from app.services.dividends import get_dividend        # dividend page → dividend snapshot
 
     result: dict = {}
 
@@ -197,15 +201,6 @@ def _enrich_one(ticker: str) -> dict:
     except Exception as exc:
         log.debug("[NGXJob] intraday failed %s: %s", ticker, exc)
 
-    try:
-        div = get_dividend(ticker, force=True)
-        if div:
-            result["dividend_amount"] = div.cash_amount
-            result["dividend_ex_date"] = div.ex_dividend_date
-            result["dividend_pay_date"] = div.pay_date
-    except Exception as exc:
-        log.debug("[NGXJob] dividend failed %s: %s", ticker, exc)
-
     return result
 
 
@@ -265,6 +260,43 @@ def _enrich_all(db, job: NgxJobLog) -> None:
     log.info("[NGXJob] Phase B done — %d enriched, %d errors", done, errors)
 
 
+# ── Phase C — dividends (all tickers, serial, rate-limited) ──────────────────
+
+DIVIDEND_SLEEP = 1.0  # seconds between dividend page requests
+
+def _enrich_dividends_all() -> None:
+    """
+    Fetch dividend snapshot for every ticker in the DB, serially with rate-limit delay.
+    Runs regardless of fundamentals_updated_at so a warm prod DB always gets fresh data.
+    """
+    from app.services.dividends import get_dividend
+
+    with SessionLocal() as db:
+        tickers = [r[0] for r in db.query(NgxTickerCache.ticker).all()]
+
+    log.info("[NGXJob] Phase C — dividends for %d tickers", len(tickers))
+    updated, errors = 0, 0
+
+    for ticker in tickers:
+        try:
+            div = get_dividend(ticker, force=True)
+            if div:
+                with SessionLocal() as db:
+                    row = db.get(NgxTickerCache, ticker)
+                    if row:
+                        row.dividend_amount = div.cash_amount
+                        row.dividend_ex_date = div.ex_dividend_date
+                        row.dividend_pay_date = div.pay_date
+                        db.commit()
+                updated += 1
+        except Exception as exc:
+            log.debug("[NGXJob] dividend failed %s: %s", ticker, exc)
+            errors += 1
+        time.sleep(DIVIDEND_SLEEP)
+
+    log.info("[NGXJob] Phase C done — %d updated, %d errors", updated, errors)
+
+
 # ── Job runner ────────────────────────────────────────────────────────────────
 
 def run_job() -> None:
@@ -292,6 +324,8 @@ def run_job() -> None:
             if not job_ref:
                 return
             _enrich_all(db, job_ref)
+
+        _enrich_dividends_all()
 
         with SessionLocal() as db:
             job_ref = db.get(NgxJobLog, job.id)
