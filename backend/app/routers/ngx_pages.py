@@ -8,6 +8,7 @@ GET /api/ngx/{ticker}     — NGX profile all-in-one: replaces 6 separate profil
 
 import logging
 from concurrent.futures import ThreadPoolExecutor, as_completed
+from datetime import datetime, date
 from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel
@@ -149,16 +150,57 @@ def _embed_fundamentals(rows: list[StockRow], cache: dict) -> list[StockRow]:
     return rows
 
 
+_DATE_FMTS = [
+    "%Y-%m-%d", "%b %d, %Y", "%B %d, %Y",
+    "%d/%m/%Y", "%m/%d/%Y", "%b %d %Y", "%d %b %Y",
+]
+
+def _parse_date(s: Optional[str]) -> Optional[date]:
+    if not s:
+        return None
+    s = " ".join(s.strip().split())
+    try:
+        return datetime.fromisoformat(s.replace("Z", "+00:00")).date()
+    except ValueError:
+        pass
+    for fmt in _DATE_FMTS:
+        try:
+            return datetime.strptime(s, fmt).date()
+        except ValueError:
+            continue
+    return None
+
+
+def _is_qualified(purchase_date_str: Optional[str], ex_div_str: Optional[str], pay_date_str: Optional[str]) -> Optional[bool]:
+    pay = _parse_date(pay_date_str)
+    if pay is not None and pay < date.today():
+        return None
+    buy = _parse_date(purchase_date_str)
+    ex = _parse_date(ex_div_str)
+    if buy is None or ex is None:
+        return None
+    return buy < ex
+
+
 def _div_payout(ngx_holdings: list[dict], cache: dict) -> Optional[float]:
-    """Sum shares × dividend_amount from cache for held tickers."""
+    """Sum shares × dividend_amount from cache for eligible holdings only."""
     total = 0.0
     found = False
     for h in ngx_holdings:
         row = cache.get(h["ticker"]) or {}
         amt = row.get("dividend_amount")
-        if amt:
-            total += float(h["shares"]) * float(amt)
-            found = True
+        if not amt:
+            continue
+        purchase_date_str = h.get("purchase_date") or h.get("created_at")
+        qualified = _is_qualified(
+            purchase_date_str,
+            row.get("dividend_ex_date"),
+            row.get("dividend_pay_date"),
+        )
+        if qualified is False:
+            continue
+        total += float(h["shares"]) * float(amt)
+        found = True
     return round(total, 2) if found else None
 
 
