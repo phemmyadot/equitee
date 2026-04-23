@@ -6,8 +6,7 @@ FE and all API endpoints read only from ngx_ticker_cache — no live scrapes.
 
 Phases per run:
   A. Prices   — list __data.json (fast, ~5s, all tickers)
-  B. Enrich   — per-ticker statistics + quote pages (slow, ~10-15min, rate-limited)
-  C. Dividends — per-ticker dividend page (reuses existing scraper)
+  B. Enrich   — per-ticker statistics + quote + dividend pages (slow, ~10-15min, rate-limited)
 
 Lock: a row in ngx_job_log with status='running' acts as the mutex.
 Stale lock: any running row older than 30 min is treated as crashed and ignored.
@@ -112,13 +111,14 @@ def _scrape_prices(db, job: NgxJobLog) -> int:
 
 def _enrich_one(ticker: str) -> dict:
     """
-    Fetch statistics + quote + company pages for one ticker.
+    Fetch statistics + quote + company + dividend pages for one ticker.
     Returns a dict of fields to write. Never raises — returns partial data on failure.
     """
     from app.services.performance import get_overview      # stats blob → fundamentals
     from app.services.overview import get_performance      # stats blob + quote → performance
     from app.services.profile import get_profile           # company page → profile
     from app.services.ngx import _get_quote_intraday       # quote page → high/low/volume
+    from app.services.dividends import get_dividend        # dividend page → dividend snapshot
 
     result: dict = {}
 
@@ -197,6 +197,15 @@ def _enrich_one(ticker: str) -> dict:
     except Exception as exc:
         log.debug("[NGXJob] intraday failed %s: %s", ticker, exc)
 
+    try:
+        div = get_dividend(ticker, force=True)
+        if div:
+            result["dividend_amount"] = div.cash_amount
+            result["dividend_ex_date"] = div.ex_dividend_date
+            result["dividend_pay_date"] = div.pay_date
+    except Exception as exc:
+        log.debug("[NGXJob] dividend failed %s: %s", ticker, exc)
+
     return result
 
 
@@ -256,31 +265,6 @@ def _enrich_all(db, job: NgxJobLog) -> None:
     log.info("[NGXJob] Phase B done — %d enriched, %d errors", done, errors)
 
 
-# ── Phase C — dividends ───────────────────────────────────────────────────────
-
-def _enrich_dividends() -> None:
-    """Write latest dividend snapshot into ngx_ticker_cache for screener/watchlist display."""
-    from app.services.dividends import get_dividends
-
-    with SessionLocal() as db:
-        tickers = [r[0] for r in db.query(NgxTickerCache.ticker).all()]
-
-    log.info("[NGXJob] Phase C — dividends for %d tickers", len(tickers))
-    div_map = get_dividends(tickers)
-
-    with SessionLocal() as db:
-        for ticker, div in div_map.items():
-            row = db.get(NgxTickerCache, ticker)
-            if not row or not div:
-                continue
-            row.dividend_amount = div.cash_amount
-            row.dividend_ex_date = div.ex_dividend_date
-            row.dividend_pay_date = div.pay_date
-        db.commit()
-
-    log.info("[NGXJob] Phase C done")
-
-
 # ── Job runner ────────────────────────────────────────────────────────────────
 
 def run_job() -> None:
@@ -308,8 +292,6 @@ def run_job() -> None:
             if not job_ref:
                 return
             _enrich_all(db, job_ref)
-
-        _enrich_dividends()
 
         with SessionLocal() as db:
             job_ref = db.get(NgxJobLog, job.id)

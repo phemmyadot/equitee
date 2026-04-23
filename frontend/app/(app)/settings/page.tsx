@@ -218,6 +218,112 @@ function fmtDate(iso: string | null | undefined): string {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
+// Admin job panel
+// ─────────────────────────────────────────────────────────────────────────────
+
+function AdminJobPanel({
+  showToast,
+}: {
+  showToast: (msg: string, type?: 'success' | 'error') => void;
+}) {
+  const [status, setStatus] = useState<Record<string, any> | null>(null);
+  const [busy, setBusy] = useState(false);
+
+  const fetchStatus = useCallback(async () => {
+    try {
+      const res = await fetch('/api/screener/ngx/status');
+      if (res.ok) setStatus(await res.json());
+    } catch {}
+  }, []);
+
+  useEffect(() => {
+    fetchStatus();
+  }, [fetchStatus]);
+
+  const runJob = async () => {
+    setBusy(true);
+    try {
+      const res = await fetch('/api/screener/ngx/warm', { method: 'POST' });
+      if (!res.ok) throw new Error((await res.json()).detail ?? 'Failed to start job');
+      showToast('Job started — data will refresh in the background');
+      setTimeout(fetchStatus, 1500);
+    } catch (e: any) {
+      showToast(e.message, 'error');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const statusLabel = status?.status ?? '—';
+  const isRunning = statusLabel === 'running';
+
+  return (
+    <div className="card p-5 space-y-4">
+      <div className="flex items-center justify-between">
+        <div>
+          <h2 className="text-[13px] font-semibold text-[var(--ink)]">Data Scrape Job</h2>
+          <p className="text-[11px] text-[var(--ink-4)] mt-0.5">
+            Manually trigger a full NGX data scrape
+          </p>
+        </div>
+        <Btn variant="primary" size="sm" loading={busy || isRunning} onClick={runJob}>
+          Run Job Now
+        </Btn>
+      </div>
+
+      {status && (
+        <div className="bg-[var(--canvas)] rounded-lg px-3 py-2.5 text-[11px] font-mono space-y-1">
+          <div className="flex justify-between">
+            <span className="text-[var(--ink-4)]">Status</span>
+            <span
+              className={
+                isRunning
+                  ? 'text-[var(--accent)] font-semibold'
+                  : statusLabel === 'failed'
+                    ? 'text-[var(--loss)] font-semibold'
+                    : 'text-[var(--ink)]'
+              }
+            >
+              {statusLabel}
+            </span>
+          </div>
+          {status.last_updated && (
+            <div className="flex justify-between">
+              <span className="text-[var(--ink-4)]">Last updated</span>
+              <span className="text-[var(--ink-3)]">
+                {new Date(status.last_updated).toLocaleString()}
+              </span>
+            </div>
+          )}
+          {status.tickers_in_db != null && (
+            <div className="flex justify-between">
+              <span className="text-[var(--ink-4)]">Tickers in DB</span>
+              <span>{status.tickers_in_db}</span>
+            </div>
+          )}
+          {isRunning && status.tickers_total > 0 && (
+            <div className="flex justify-between">
+              <span className="text-[var(--ink-4)]">Progress</span>
+              <span>
+                {status.tickers_done ?? 0} / {status.tickers_total}
+              </span>
+            </div>
+          )}
+          {status.next_run_at && !isRunning && (
+            <div className="flex justify-between">
+              <span className="text-[var(--ink-4)]">Next run</span>
+              <span className="text-[var(--ink-3)]">
+                {new Date(status.next_run_at).toLocaleString()}
+              </span>
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 // Admin invite panel
 // ─────────────────────────────────────────────────────────────────────────────
 
@@ -365,6 +471,9 @@ export default function SettingsPage() {
 
   return (
     <div className="space-y-5">
+      {/* ── Admin: job control ── */}
+      {user?.is_admin && <AdminJobPanel showToast={showToast} />}
+
       {/* ── Admin: invite codes ── */}
       {user?.is_admin && <AdminInvitePanel initialInvites={invites} showToast={showToast} />}
 
