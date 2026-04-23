@@ -70,11 +70,69 @@ def _parse_currency_value(text: str) -> Optional[float]:
     return None
 
 
+def _parse_dividend_table(table, ticker: str) -> Optional[DividendInfo]:
+    """
+    Parse a single HTML table element for dividend data.
+    Uses header row to detect column positions; falls back to positional guessing.
+    Returns DividendInfo if cash_amount and at least one date are found, else None.
+    """
+    rows = table.find_all("tr")
+    if len(rows) < 2:
+        return None
+
+    # Build column index map from header row
+    header_cells = rows[0].find_all(["th", "td"])
+    col_map: dict[str, int] = {}
+    for i, cell in enumerate(header_cells):
+        text = cell.get_text(strip=True).lower()
+        if "ex" in text and "div" in text:
+            col_map["ex"] = i
+        elif "cash" in text or "amount" in text or "dividend" in text:
+            col_map["cash"] = i
+        elif "record" in text:
+            col_map["record"] = i
+        elif "pay" in text:
+            col_map["pay"] = i
+
+    # Positional fallback if header detection found nothing useful
+    if not col_map:
+        col_map = {"ex": 0, "cash": 1, "record": 2, "pay": 3}
+
+    for row in rows[1:]:
+        cells = row.find_all(["td", "th"])
+        if len(cells) < 2:
+            continue
+        texts = [c.get_text(strip=True) for c in cells]
+
+        def _get(key: str) -> str:
+            idx = col_map.get(key, -1)
+            return texts[idx] if 0 <= idx < len(texts) else ""
+
+        ex_div_date = _get("ex") if _is_date(_get("ex")) else None
+        cash_text = _get("cash")
+        cash_amount = _parse_currency_value(cash_text) if cash_text else None
+        record_date = _get("record") if _is_date(_get("record")) else None
+        pay_date = _get("pay") if _is_date(_get("pay")) else None
+
+        # Only require cash_amount + at least one date
+        if cash_amount is not None and (ex_div_date or pay_date):
+            return DividendInfo(
+                symbol=ticker,
+                ex_dividend_date=ex_div_date,
+                record_date=record_date,
+                pay_date=pay_date,
+                cash_amount=cash_amount,
+                currency="NGN",
+                timestamp=datetime.now().isoformat(),
+            )
+
+    return None
+
+
 def _fetch_dividend_beautifulsoup(ticker: str) -> Optional[DividendInfo]:
     """
     Scrape upcoming dividend information using BeautifulSoup.
-    Returns the most recent dividend information.
-    First row = header, second row = latest dividend data.
+    Tries all tables on the page and returns the first usable result.
     """
     url = f"{settings.NGX_SOURCE_BASE_URL}/quote/ngx/{ticker}/dividend/"
 
@@ -88,63 +146,29 @@ def _fetch_dividend_beautifulsoup(ticker: str) -> Optional[DividendInfo]:
         response.raise_for_status()
 
         soup = BeautifulSoup(response.text, "html.parser")
-        tables = soup.find_all("table")
+        for table in soup.find_all("table"):
+            result = _parse_dividend_table(table, ticker)
+            if result:
+                return result
 
-        for table in tables:
-            rows = table.find_all("tr")
-
-            # Need at least header row + 1 data row
-            if len(rows) < 2:
-                continue
-
-            # Skip header row (row 0), process first data row (row 1)
-            row = rows[1]
-            cells = row.find_all(["td", "th"])
-
-            if len(cells) < 4:
-                continue
-
-            cell_texts = [cell.get_text(strip=True) for cell in cells]
-            # Extract dividend fields by column index
-            # Table structure: [Ex-Dividend Date, Cash Amount, Record Date, Pay Date]
-            ex_div_date = cell_texts[0] if _is_date(cell_texts[0]) else None
-            cash_amount = (
-                _parse_currency_value(cell_texts[1])
-                if _is_currency(cell_texts[1])
-                else None
-            )
-            record_date = cell_texts[2] if _is_date(cell_texts[2]) else None
-            pay_date = cell_texts[3] if _is_date(cell_texts[3]) else None
-            # If we found a complete dividend record, return it
-            if all([ex_div_date, pay_date, record_date, cash_amount]):
-                return DividendInfo(
-                    symbol=ticker,
-                    ex_dividend_date=ex_div_date,
-                    record_date=record_date,
-                    pay_date=pay_date,
-                    cash_amount=cash_amount,
-                    currency="NGN",
-                    timestamp=datetime.now().isoformat(),
-                )
-
-        log.warning(f"[Dividends] {ticker}: could not extract dividend data from table")
+        log.debug("[Dividends] %s: no dividend data found in any table", ticker)
         return None
 
     except requests.exceptions.HTTPError as e:
         if e.response.status_code == 404:
-            log.debug(f"[Dividends] {ticker}: not found (404)")
+            log.debug("[Dividends] %s: not found (404)", ticker)
         else:
-            log.warning(f"[Dividends] {ticker} HTTP error {e.response.status_code}")
+            log.warning("[Dividends] %s HTTP error %d", ticker, e.response.status_code)
         return None
     except Exception as exc:
-        log.warning(f"[Dividends] {ticker} failed: {exc}")
+        log.warning("[Dividends] %s failed: %s", ticker, exc)
         return None
 
 
 def _fetch_dividend_urllib(ticker: str) -> Optional[DividendInfo]:
     """
     Scrape upcoming dividend information using urllib (fallback).
-    Returns the most recent dividend information.
+    Scans all table rows; only requires cash_amount + at least one date.
     """
     url = f"{settings.NGX_SOURCE_BASE_URL}/quote/ngx/{ticker}/dividend/"
 
@@ -160,17 +184,19 @@ def _fetch_dividend_urllib(ticker: str) -> Optional[DividendInfo]:
         with urllib.request.urlopen(req, timeout=10) as r:
             html = r.read().decode("utf-8", errors="ignore")
 
-        # Simple HTML parsing with regex
-        # Look for table data
         rows_match = re.findall(r"<tr[^>]*>(.*?)</tr>", html, re.DOTALL | re.IGNORECASE)
+        header_seen = False
 
         for row_html in rows_match:
-            cells = re.findall(
-                r"<t[dh][^>]*>(.*?)</t[dh]>", row_html, re.DOTALL | re.IGNORECASE
-            )
-            cell_texts = [re.sub(r"<[^>]+>", "", cell).strip() for cell in cells]
+            cells = re.findall(r"<t[dh][^>]*>(.*?)</t[dh]>", row_html, re.DOTALL | re.IGNORECASE)
+            cell_texts = [re.sub(r"<[^>]+>", "", c).strip() for c in cells]
 
-            if len(cell_texts) < 4:
+            if len(cell_texts) < 2:
+                continue
+
+            # Skip header rows
+            if not header_seen:
+                header_seen = True
                 continue
 
             ex_div_date = None
@@ -188,7 +214,7 @@ def _fetch_dividend_urllib(ticker: str) -> Optional[DividendInfo]:
                 elif _is_date(text) and ex_div_date and record_date and not pay_date:
                     pay_date = text
 
-            if all([ex_div_date, pay_date, record_date, cash_amount]):
+            if cash_amount is not None and (ex_div_date or pay_date):
                 return DividendInfo(
                     symbol=ticker,
                     ex_dividend_date=ex_div_date,
@@ -199,17 +225,17 @@ def _fetch_dividend_urllib(ticker: str) -> Optional[DividendInfo]:
                     timestamp=datetime.now().isoformat(),
                 )
 
-        log.warning(f"[Dividends] {ticker}: could not extract dividend data")
+        log.debug("[Dividends] %s: no dividend data found", ticker)
         return None
 
     except urllib.error.HTTPError as e:
         if e.code == 404:
-            log.debug(f"[Dividends] {ticker}: not found (404)")
+            log.debug("[Dividends] %s: not found (404)", ticker)
         else:
-            log.warning(f"[Dividends] {ticker} HTTP error {e.code}")
+            log.warning("[Dividends] %s HTTP error %d", ticker, e.code)
         return None
     except Exception as exc:
-        log.warning(f"[Dividends] {ticker} failed: {exc}")
+        log.warning("[Dividends] %s failed: %s", ticker, exc)
         return None
 
 
