@@ -72,6 +72,12 @@ class NgxHomeMeta(BaseModel):
     last_updated: Optional[str] = None
 
 
+class SparklinePoint(BaseModel):
+    ts: str
+    price: Optional[float] = None
+    change_pct: Optional[float] = None
+
+
 class NgxHomeResponse(BaseModel):
     holdings: list[StockRow]
     kpis: NGXKPIs
@@ -79,6 +85,7 @@ class NgxHomeResponse(BaseModel):
     sectors: list[SectorRow]
     meta: NgxHomeMeta
     div_payout: Optional[float] = None
+    price_histories: dict[str, list[SparklinePoint]] = {}
 
 
 class AdvancedCorrelation(BaseModel):
@@ -224,6 +231,19 @@ def ngx_home(
         hhi = compute_hhi(ngx_stocks)
         hhi_label = "LOW" if hhi < 1000 else ("MODERATE" if hhi < 1800 else "HIGH")
 
+        # Sparkline data for all holdings (90d, from DB — no extra HTTP calls)
+        price_histories: dict[str, list[SparklinePoint]] = {}
+        for h in ngx_h:
+            t = h["ticker"]
+            try:
+                rows = get_daily_price_history(db, t, 90)
+                price_histories[t] = [
+                    SparklinePoint(ts=r["ts"], price=r.get("price"), change_pct=r.get("change_pct"))
+                    for r in rows
+                ]
+            except Exception:
+                price_histories[t] = []
+
         return NgxHomeResponse(
             holdings=ngx_stocks,
             kpis=NGXKPIs(
@@ -256,6 +276,7 @@ def ngx_home(
                 last_updated=(ts.isoformat() if (ts := ngx_job.last_updated()) else None),
             ),
             div_payout=_div_payout(ngx_h, cache_rows),
+            price_histories=price_histories,
         )
     except Exception:
         log.exception("Error building NGX home response")

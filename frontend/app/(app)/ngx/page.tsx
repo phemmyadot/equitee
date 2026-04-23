@@ -287,7 +287,9 @@ export default function NGXOverviewPage() {
     {
       key: 'sparkline' as keyof StockRow,
       label: '90d',
-      render: (_: unknown, row: StockRow) => <Sparkline ticker={row.Ticker} />,
+      render: (_: unknown, row: StockRow) => (
+        <Sparkline ticker={row.Ticker} points={resp?.price_histories?.[row.Ticker] ?? []} />
+      ),
     },
   ];
 

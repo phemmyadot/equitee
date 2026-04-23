@@ -74,6 +74,12 @@ export interface NgxHomeMeta {
   last_updated?: string | null;
 }
 
+export interface NgxSparklinePoint {
+  ts: string;
+  price: number | null;
+  change_pct: number | null;
+}
+
 export interface NgxHomeResponse {
   holdings: StockRow[];
   kpis: NGXKPIs;
@@ -81,6 +87,7 @@ export interface NgxHomeResponse {
   sectors: SectorRow[];
   meta: NgxHomeMeta;
   div_payout: number | null;
+  price_histories: Record<string, NgxSparklinePoint[]>;
 }
 
 export interface NgxAdvancedCorrelation {
