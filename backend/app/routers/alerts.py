@@ -1,7 +1,6 @@
 """
 Alerts Router
 =============
-GET    /api/alerts           — list all user alerts (active + recently triggered)
 POST   /api/alerts           — create a price alert
 DELETE /api/alerts/{id}      — delete an alert
 """
@@ -14,7 +13,7 @@ from sqlalchemy.orm import Session
 
 from app.db.engine import get_db
 from app.db.models import User
-from app.db.crud import get_alerts, create_alert, delete_alert
+from app.db.crud import create_alert, delete_alert
 from app.auth.dependencies import get_current_user
 
 log = logging.getLogger(__name__)
@@ -32,10 +31,6 @@ class AlertOut(BaseModel):
     triggered_at: Optional[str] = None
     note: Optional[str] = None
     created_at: str
-
-
-class AlertsResponse(BaseModel):
-    alerts: list[AlertOut]
 
 
 def _fmt(alert) -> AlertOut:

@@ -137,16 +137,9 @@ async function del<T>(path: string): Promise<T> {
 // ── Public API ────────────────────────────────────────────────────────────────
 
 import type {
-  FXRate,
-  NGXPrice,
-  USPrice,
-  PortfolioData,
   PortfolioHistory,
   PriceHistory,
   DividendsResponse,
-  CorrelationData,
-  AnalyticsData,
-  RelativeStrengthData,
   WatchlistResponse,
   AnalysisContextResponse,
   AnalysisSummary,
@@ -163,25 +156,12 @@ import type {
 import type { TradesAll } from '@/models/trades';
 import type { SettingsInit } from '@/models/holdings';
 
-export const fetchPortfolioData = () => get<PortfolioData>('/data');
-export const fetchFX = () => get<FXRate>('/fx');
-export const fetchNGXPrices = () =>
-  get<{ count: number; prices: Record<string, NGXPrice> }>('/prices/ngx');
-export const fetchUSPrices = () =>
-  get<{ count: number; prices: Record<string, USPrice> }>('/prices/us');
 export const fetchPortfolioHistory = (days = 90) =>
   get<PortfolioHistory>(`/history/portfolio?days=${days}`);
 export const fetchPriceHistory = (ticker: string, days = 90) =>
   get<PriceHistory>(`/history/prices/${ticker}?days=${days}`);
 export const fetchDividends = () => get<DividendsResponse>('/dividends');
-export const fetchCorrelation = (days = 90) =>
-  get<CorrelationData>(`/history/correlation?days=${days}`);
-export const fetchAnalytics = (days = 180) => get<AnalyticsData>(`/history/analytics?days=${days}`);
-export const fetchRelativeStrength = (days = 90) =>
-  get<RelativeStrengthData>(`/history/relative-strength?days=${days}`);
 export const fetchWatchlist = () => get<WatchlistResponse>('/watchlist');
-export const fetchWatchlistCheck = (ticker: string) =>
-  get<{ ticker: string; watching: boolean }>(`/watchlist/check/${ticker}`);
 export const addToWatchlist = (ticker: string, market: 'NGX' | 'US' = 'NGX') =>
   post<{ ticker: string; market: string; added_at: string }>(`/watchlist/${ticker}?market=${market}`);
 export const removeFromWatchlist = (ticker: string) =>
@@ -219,8 +199,6 @@ export const fetchJobStatus = () =>
   get<{ status: string; last_updated: string | null; next_run_at: string | null; job_interval_sec: number }>('/screener/ngx/status');
 
 // ── Alerts ────────────────────────────────────────────────────────────────────
-
-export const fetchAlerts = () => get<{ alerts: PriceAlert[] }>('/alerts');
 
 export const createAlert = (
   ticker: string,

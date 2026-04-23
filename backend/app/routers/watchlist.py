@@ -17,12 +17,12 @@ from app.db.engine import get_db
 from app.db.models import User
 from app.db.crud import (
     get_watchlist,
-    watchlist_has,
     add_to_watchlist,
     remove_from_watchlist,
     check_and_trigger_alerts,
     get_alerts,
     get_daily_price_history,
+    watchlist_has,
 )
 from app.auth.dependencies import get_current_user
 
@@ -157,24 +157,7 @@ class WatchlistResponse(BaseModel):
     price_histories: dict[str, list[SparklinePoint]] = {}
 
 
-class WatchCheckResponse(BaseModel):
-    ticker: str
-    watching: bool
-
-
 # ── Endpoints ─────────────────────────────────────────────────────────────────
-
-
-@router.get("/check/{ticker}", response_model=WatchCheckResponse)
-def check_watchlist(
-    ticker: str,
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
-):
-    return WatchCheckResponse(
-        ticker=ticker.upper(),
-        watching=watchlist_has(db, current_user.id, ticker),
-    )
 
 
 @router.get("", response_model=WatchlistResponse)
