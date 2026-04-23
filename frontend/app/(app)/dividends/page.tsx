@@ -63,8 +63,8 @@ function StreakBadge({ streak, growing }: { streak: number | null; growing: bool
   return (
     <span
       className={`inline-flex items-center gap-1 text-[9px] font-bold px-2 py-0.5 rounded-full ${isGrowing
-          ? 'bg-[var(--gain-light)] text-[var(--gain)]'
-          : 'bg-[var(--accent-light)] text-[var(--accent)]'
+        ? 'bg-[var(--gain-light)] text-[var(--gain)]'
+        : 'bg-[var(--accent-light)] text-[var(--accent)]'
         }`}
       title={`${streak}-year dividend streak${isGrowing ? ' · growing' : ''}`}
     >
@@ -190,11 +190,6 @@ function DividendCard({ h, sector }: { h: DividendHolding; sector?: string }) {
             <DateCell label="Record Date" value={div!.record_date} />
             <DateCell label="Pay Date" value={div!.pay_date} />
           </div>
-          {missed && (
-            <div className="mb-3 px-3 py-2 rounded-lg bg-[var(--loss-light)] border border-[#F5C6C6] text-[10px] text-[var(--loss)]">
-              Bought on or after ex-dividend date — not eligible for this payout.
-            </div>
-          )}
 
           {/* ── Metrics row ── */}
           <div className="flex flex-wrap gap-x-6 gap-y-2 pt-3 border-t border-[var(--border)]">
@@ -298,10 +293,10 @@ function Timeline({ holdings }: { holdings: DividendHolding[] }) {
                 {/* Dot */}
                 <div
                   className={`w-[23px] h-[23px] rounded-full border-2 flex items-center justify-center shrink-0 z-10 ${isNext
-                      ? 'bg-[var(--gain)] border-[var(--gain)]'
-                      : days <= 14
-                        ? 'bg-white border-[var(--warn)]'
-                        : 'bg-white border-[var(--border-strong)]'
+                    ? 'bg-[var(--gain)] border-[var(--gain)]'
+                    : days <= 14
+                      ? 'bg-white border-[var(--warn)]'
+                      : 'bg-white border-[var(--border-strong)]'
                     }`}
                 >
                   {isNext && <IconCheck width={10} height={10} style={{ stroke: 'white' }} />}
