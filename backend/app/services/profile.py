@@ -7,17 +7,12 @@ Returns company name, sector, industry, headquarters, description, etc.
 """
 
 import logging
-import time
 import requests
 from typing import Optional, Dict
 from bs4 import BeautifulSoup
 from app.config import settings
 
 log = logging.getLogger(__name__)
-
-# ── Cache for profiles ────────────────────────────────────────────────────────
-_profile_cache: Dict = {}
-_profile_ts: Dict = {}
 
 USER_AGENT = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36"
 
@@ -111,32 +106,20 @@ def _scrape_profile(ticker: str) -> Optional[Dict]:
     return profile
 
 
-def get_profile(ticker: str, force_refresh: bool = False) -> Optional[Dict]:
+def get_profile(ticker: str) -> Optional[Dict]:
     """
-    Get cached profile for a ticker, or fetch if cache is expired.
+    Fetch fresh profile data for a ticker.
 
     Args:
         ticker: Stock ticker symbol
-        force_refresh: Skip cache and fetch fresh data
 
     Returns:
         Dict with profile data or None if fetch fails
     """
     ticker = ticker.upper()
-    now = time.time()
-
-    # Check cache
-    if not force_refresh and ticker in _profile_cache:
-        cache_time = _profile_ts.get(ticker, 0)
-        if (now - cache_time) < settings.NGX_PRICE_TTL:
-            log.info(f"[Profile] cache hit for {ticker}")
-            return _profile_cache[ticker]
 
     # Fetch fresh data
     profile = _scrape_profile(ticker)
-    if profile:
-        _profile_cache[ticker] = profile
-        _profile_ts[ticker] = now
 
     return profile
 
@@ -144,15 +127,3 @@ def get_profile(ticker: str, force_refresh: bool = False) -> Optional[Dict]:
 def get_profiles(tickers: list) -> Dict[str, Optional[Dict]]:
     """Get profiles for multiple tickers."""
     return {ticker: get_profile(ticker) for ticker in tickers}
-
-
-def clear_cache(ticker: Optional[str] = None):
-    """Clear profile cache for a ticker or all tickers."""
-    global _profile_cache, _profile_ts
-    if ticker:
-        ticker = ticker.upper()
-        _profile_cache.pop(ticker, None)
-        _profile_ts.pop(ticker, None)
-    else:
-        _profile_cache.clear()
-        _profile_ts.clear()

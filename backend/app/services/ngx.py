@@ -25,18 +25,6 @@ from app.models import NGXPrice
 
 log = logging.getLogger(__name__)
 
-# ── In-memory cache ──────────────────────────────────────────────────────────
-_cache: Dict = {
-    "prices": {},
-    "dividends": {},
-    "profiles": {},
-    "overview": {},
-    "performance": {},
-    "ts": 0.0,
-}
-_intraday_cache: Dict[str, Dict] = {}
-_intraday_ts: Dict[str, float] = {}
-
 NGX_LIST_URL = f"{settings.NGX_SOURCE_BASE_URL}/list/nigerian-stock-exchange/"
 NGX_DATA_URL = f"{settings.NGX_SOURCE_BASE_URL}/list/nigerian-stock-exchange/__data.json"
 
@@ -82,12 +70,6 @@ def _get_quote_intraday(ticker: str) -> Dict[str, Optional[float]]:
     Returns dict with keys: high, low, volume (all may be None).
     """
     out: Dict[str, Optional[float]] = {"high": None, "low": None, "volume": None}
-    now = time.time()
-    if (
-        ticker in _intraday_cache
-        and (now - _intraday_ts.get(ticker, 0)) < settings.NGX_PRICE_TTL
-    ):
-        return _intraday_cache[ticker]
     try:
         url = f"{settings.NGX_SOURCE_BASE_URL}/quote/ngx/{ticker.lower()}/"
         headers = {"User-Agent": USER_AGENT}
@@ -108,8 +90,6 @@ def _get_quote_intraday(ticker: str) -> Dict[str, Optional[float]]:
         vm = re.search(r"\bv:(\d+)", block)
         if vm:
             out["volume"] = float(vm.group(1))
-        _intraday_cache[ticker] = out
-        _intraday_ts[ticker] = now
     except Exception as exc:
         log.debug("[NGX] Could not fetch intraday data for %s: %s", ticker, exc)
     return out
@@ -189,90 +169,69 @@ def _fetch_all_data():
     return prices, {}, profiles
 
 
-def _refresh_cache():
-    """Refresh all cached data if TTL has expired."""
-    global _cache
-    now = time.time()
-
-    if _cache["prices"] and (now - _cache["ts"]) < settings.NGX_PRICE_TTL:
-        age = int(now - _cache["ts"])
-        log.info(f"[NGX] cache hit — {len(_cache['prices'])} tickers, {age}s old")
-        return
-
-    log.info("[NGX] refreshing cache from NGX_SOURCE_BASE_URL...")
+def get_prices() -> Dict[str, NGXPrice]:
+    """Return all NGX equity prices (fresh fetch)."""
+    log.info("[NGX] fetching prices from NGX_SOURCE_BASE_URL...")
     result = _fetch_all_data()
     if result:
         prices, dividends, profiles = result
-        _cache = {
-            "prices": prices,
-            "dividends": dividends,
-            "profiles": profiles,
-            "overview": {},
-            "performance": {},
-            "ts": now,
-        }
-
-
-def get_prices() -> Dict[str, NGXPrice]:
-    """Return all NGX equity prices."""
-    _refresh_cache()
-    return _cache["prices"]
+        return prices
+    return {}
 
 
 def get_price(ticker: str) -> Optional[NGXPrice]:
-    """Return price for a single ticker."""
-    _refresh_cache()
-    return _cache["prices"].get(ticker.upper())
+    """Return price for a single ticker (fresh fetch)."""
+    prices = get_prices()
+    return prices.get(ticker.upper())
 
 
 def get_dividends() -> Dict:
-    """Return all dividend data."""
-    _refresh_cache()
-    return _cache["dividends"]
+    """Return all dividend data (fresh fetch)."""
+    log.info("[NGX] fetching dividends from NGX_SOURCE_BASE_URL...")
+    result = _fetch_all_data()
+    if result:
+        prices, dividends, profiles = result
+        return dividends
+    return {}
 
 
 def get_dividend(ticker: str) -> Optional[Dict]:
-    """Return dividend data for a single ticker."""
-    _refresh_cache()
-    return _cache["dividends"].get(ticker.upper())
+    """Return dividend data for a single ticker (fresh fetch)."""
+    dividends = get_dividends()
+    return dividends.get(ticker.upper())
 
 
 def get_profiles() -> Dict:
-    """Return all company profiles."""
-    _refresh_cache()
-    return _cache["profiles"]
+    """Return all company profiles (fresh fetch)."""
+    log.info("[NGX] fetching profiles from NGX_SOURCE_BASE_URL...")
+    result = _fetch_all_data()
+    if result:
+        prices, dividends, profiles = result
+        return profiles
+    return {}
 
 
 def get_profile(ticker: str) -> Optional[Dict]:
-    """Return profile for a single ticker."""
-    _refresh_cache()
-    return _cache["profiles"].get(ticker.upper())
+    """Return profile for a single ticker (fresh fetch)."""
+    profiles = get_profiles()
+    return profiles.get(ticker.upper())
 
 
 def get_overview() -> Dict:
-    """Return all overview table data."""
-    _refresh_cache()
-    return _cache["overview"]
+    """Return all overview table data (currently empty)."""
+    return {}
 
 
 def get_overview_ticker(ticker: str) -> Optional[Dict]:
-    """Return overview data for a single ticker."""
-    _refresh_cache()
-    return _cache["overview"].get(ticker.upper())
+    """Return overview data for a single ticker (currently empty)."""
+    return None
 
 
 def get_performance() -> Dict:
-    """Return all performance table data."""
-    _refresh_cache()
-    return _cache["performance"]
+    """Return all performance table data (currently empty)."""
+    return {}
 
 
 def get_performance_ticker(ticker: str) -> Optional[Dict]:
-    """Return performance data for a single ticker."""
-    _refresh_cache()
-    return _cache["performance"].get(ticker.upper())
-
-
-def cache_age() -> Optional[int]:
-    """Return how many seconds old the cache is."""
-    return int(time.time() - _cache["ts"]) if _cache["ts"] else None
+    """Return performance data for a single ticker (currently empty)."""
+    return None

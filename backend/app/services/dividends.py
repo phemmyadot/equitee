@@ -33,12 +33,6 @@ from app.db import crud
 
 log = logging.getLogger(__name__)
 
-# Per-ticker timestamps so one fetch doesn't reset the TTL for every other ticker.
-_cache: dict[str, object] = {}   # ticker → DividendInfo | None
-_cache_ts: dict[str, float] = {}  # ticker → epoch seconds when cached
-
-_FAILURE_TTL = 3600  # retry failed/missing tickers after 1 h (vs 24 h for successes)
-
 
 def _is_date(text: str) -> bool:
     """Check if text looks like a date (simple heuristic)"""
@@ -250,57 +244,14 @@ def _fetch_dividend(ticker: str) -> Optional[DividendInfo]:
         return _fetch_dividend_urllib(ticker)
 
 
-def get_dividend(ticker: str, force: bool = False) -> Optional[DividendInfo]:
-    """
-    Two-level cache: L1 = in-memory (per-ticker TTL), L2 = DB (survives restarts).
-    Falls back to scraping only when both levels are stale.
-    Failed/missing results use a shorter 1-hour TTL so transient errors self-heal.
-    Pass force=True to bypass both caches and re-scrape immediately.
-    """
-    now = time.time()
+def get_dividend(ticker: str) -> Optional[DividendInfo]:
+    """Fetch fresh dividend data from scraper."""
     ticker_up = ticker.upper()
 
-    def _ttl(result) -> float:
-        return _FAILURE_TTL if result is None else float(settings.DIVIDEND_TTL)
-
-    # L1 — per-ticker in-memory cache
-    if not force and ticker_up in _cache:
-        age = now - _cache_ts.get(ticker_up, 0)
-        if age < _ttl(_cache[ticker_up]):
-            return _cache[ticker_up]  # type: ignore[return-value]
-
-    # L2 — database
     db = SessionLocal()
     try:
-        row = crud.get_dividend_cache(db, ticker_up)
-        if not force and row is not None:
-            db_age = (datetime.now(timezone.utc) - row.fetched_at).total_seconds()
-            result: Optional[DividendInfo] = (
-                DividendInfo(
-                    symbol=row.symbol,
-                    ex_dividend_date=row.ex_dividend_date,
-                    record_date=row.record_date,
-                    pay_date=row.pay_date,
-                    cash_amount=row.cash_amount,
-                    currency=row.currency,
-                    timestamp=row.fetched_at.isoformat() if row.fetched_at else row.dividend_ts,
-                )
-                if row.cash_amount is not None
-                else None
-            )
-            if db_age < _ttl(result):
-                _cache[ticker_up] = result
-                _cache_ts[ticker_up] = now
-                log.debug("[Dividends] %s from DB cache (age %.0fs)", ticker_up, db_age)
-                return result
-
-        # Scrape
-        log.info("[Dividends] fetching %s (force=%s)", ticker_up, force)
+        log.info("[Dividends] fetching %s", ticker_up)
         result = _fetch_dividend(ticker_up)
-
-        crud.upsert_dividend_cache(db, ticker_up, result)
-        _cache[ticker_up] = result
-        _cache_ts[ticker_up] = now
 
         if result:
             log.info(
@@ -311,24 +262,16 @@ def get_dividend(ticker: str, force: bool = False) -> Optional[DividendInfo]:
                 result.ex_dividend_date,
             )
         else:
-            log.info("[Dividends] %s → no data (will retry in %ds)", ticker_up, _FAILURE_TTL)
+            log.info("[Dividends] %s → no data", ticker_up)
         return result
 
     finally:
         db.close()
 
 
-def get_dividends(tickers: list[str], force: bool = False) -> dict[str, Optional[DividendInfo]]:
+def get_dividends(tickers: list[str]) -> dict[str, Optional[DividendInfo]]:
     """Get dividend information for multiple tickers."""
-    return {ticker: get_dividend(ticker, force=force) for ticker in tickers}
-
-
-def cache_age() -> Optional[int]:
-    """Returns age of the oldest cached entry in seconds, or None if empty."""
-    if not _cache_ts:
-        return None
-    oldest = min(_cache_ts.values())
-    return int(time.time() - oldest)
+    return {ticker: get_dividend(ticker) for ticker in tickers}
 
 
 # ── Dividend history (streak) ─────────────────────────────────────────────────
@@ -411,42 +354,13 @@ def compute_streak(history: list[dict]) -> dict:
     return {"streak": streak, "years_paid": len(history), "growing": growing}
 
 
-_history_cache: dict = {}
-_history_cache_ts: dict = {}
-
-
 def get_dividend_history(ticker: str) -> dict:
-    """
-    Two-level cache for dividend history.
-    Returns {'streak': int, 'years_paid': int, 'growing': bool, 'history': list}.
-    """
+    """Fetch fresh dividend history and compute streak."""
     global _history_cache, _history_cache_ts
     t = ticker.upper()
-    now = time.time()
-    key = f"divhist:{t}"
-
-    if (
-        key in _history_cache
-        and (now - _history_cache_ts.get(key, 0)) < settings.FINANCIALS_TTL
-    ):
-        return _history_cache[key]
 
     db = SessionLocal()
     try:
-        row = crud.get_financials_cache(db, t, "dividends")
-        if row is not None:
-            age = (datetime.now(timezone.utc) - row.fetched_at).total_seconds()
-            if age < settings.FINANCIALS_TTL and row.periods:
-                history = [
-                    {"year": y, "cash_amount": a}
-                    for y, a in zip(row.periods, row.col_a)
-                    if a is not None
-                ]
-                result = {**compute_streak(history), "history": history}
-                _history_cache[key] = result
-                _history_cache_ts[key] = now
-                return result
-
         log.info("[DividendHistory] fetching %s", t)
         if not HAS_BEAUTIFULSOUP:
             result = {"streak": 0, "years_paid": 0, "growing": False, "history": []}
@@ -455,15 +369,6 @@ def get_dividend_history(ticker: str) -> dict:
             streak_data = compute_streak(history)
             result = {**streak_data, "history": history}
             if history:
-                crud.upsert_financials_cache(
-                    db,
-                    t,
-                    "dividends",
-                    {
-                        "periods": [h["year"] for h in history],
-                        "amounts": [h["cash_amount"] for h in history],
-                    },
-                )
                 log.info(
                     "[DividendHistory] %s → %d years, streak=%d",
                     t,
@@ -471,8 +376,6 @@ def get_dividend_history(ticker: str) -> dict:
                     result["streak"],
                 )
 
-        _history_cache[key] = result
-        _history_cache_ts[key] = now
         return result
     finally:
         db.close()

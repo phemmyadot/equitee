@@ -31,14 +31,12 @@ from app.services.portfolio import (
 from app.models import StockRow, SectorRow, NGXKPIs, CombinedKPIs, WaterfallData
 from app.db.crud import (
     get_cash_balance,
-    should_write_snapshot,
     write_snapshot,
     get_correlation_matrix,
     get_portfolio_analytics,
     get_active_holdings,
     get_daily_price_history,
 )
-from app.config import settings
 
 _INDEX_TICKER = "NGXASI"
 
@@ -256,19 +254,18 @@ def ngx_home(
         ngx_pct = _ngx_base / _total_base * 100 if _total_base else None
         us_pct  = _us_base  / _total_base * 100 if _total_base else None
 
-        # Portfolio snapshot
+        # Portfolio snapshot (write on every call since caching is disabled)
         total_usd = ngx_usd + us_equity
-        if should_write_snapshot(db, settings.NGX_PRICE_TTL, current_user.id):
-            price_rows = [
-                {"ticker": s.Ticker, "market": "ngx", "price": s.LivePrice, "change_pct": s.LiveChangePct}
-                for s in ngx_stocks
-            ] + [
-                {"ticker": s.Ticker, "market": "us", "price": s.LivePrice, "change_pct": s.LiveChangePct}
-                for s in us_stocks
-            ]
-            write_snapshot(db, user_id=current_user.id, ngx_equity=ngx_equity, ngx_cost=ngx_cost,
-                           us_equity=us_equity, us_cost=us_cost, usdngn=usdngn, total_usd=total_usd,
-                           price_rows=price_rows)
+        price_rows = [
+            {"ticker": s.Ticker, "market": "ngx", "price": s.LivePrice, "change_pct": s.LiveChangePct}
+            for s in ngx_stocks
+        ] + [
+            {"ticker": s.Ticker, "market": "us", "price": s.LivePrice, "change_pct": s.LiveChangePct}
+            for s in us_stocks
+        ]
+        write_snapshot(db, user_id=current_user.id, ngx_equity=ngx_equity, ngx_cost=ngx_cost,
+                       us_equity=us_equity, us_cost=us_cost, usdngn=usdngn, total_usd=total_usd,
+                       price_rows=price_rows)
 
         hhi = compute_hhi(ngx_stocks)
         hhi_label = "LOW" if hhi < 1000 else ("MODERATE" if hhi < 1800 else "HIGH")

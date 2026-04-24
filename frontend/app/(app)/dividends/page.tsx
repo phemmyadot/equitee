@@ -398,9 +398,6 @@ export default function DividendsPage() {
           <h1 className="text-[15px] font-semibold text-[var(--ink)]">Dividends</h1>
           <p className="text-[11px] text-[var(--ink-4)] mt-0.5">
             {loading ? 'Loading…' : `${holdings.length} NGX positions · ${upcomingCount} upcoming`}
-            {resp?.cache_age_sec != null && (
-              <span className="ml-2">· cached {Math.round(resp.cache_age_sec / 60)}m ago</span>
-            )}
           </p>
         </div>
         <button

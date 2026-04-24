@@ -223,7 +223,7 @@ class ClosedPosition(Base):
 
 class PortfolioSnapshot(Base):
     """
-    One row written per /api/data call (rate-limited by NGX_PRICE_TTL).
+    One row written per /api/data call
     Backbone of all historical charts.
     """
 

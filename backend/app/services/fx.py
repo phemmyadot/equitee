@@ -104,10 +104,6 @@ def get_rate() -> dict:
     """
     global _cache
     now = time.time()
-
-    if _cache["rate"] and (now - _cache["ts"]) < settings.FX_TTL:
-        return _cache
-
     for name, fn in _SOURCES:
         rate = fn()
         if rate:

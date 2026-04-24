@@ -551,28 +551,8 @@ def get_performance(ticker: str, force_refresh: bool = False) -> Optional[Dict]:
     ticker = ticker.upper()
     now = time.time()
 
-    # Check cache
-    if not force_refresh and ticker in _performance_cache:
-        cache_time = _performance_ts.get(ticker, 0)
-        if (now - cache_time) < settings.NGX_PRICE_TTL:
-            log.info(f"[Performance] cache hit for {ticker}")
-            return _performance_cache[ticker]
-
     # Fetch fresh data
     performance = _scrape_performance(ticker)
-    if performance:
-        _performance_cache[ticker] = performance
-        # If derived data (growth, technicals) is still missing — likely because
-        # financials or chart history weren't scraped yet — use a short TTL so
-        # the next request retries rather than serving stale Nones for the full cycle.
-        _RETRY_TTL = 90  # seconds
-        incomplete = all(
-            performance.get(f) is None
-            for f in ("revenue_growth_yoy", "earnings_growth_yoy", "rsi_14", "ma_50")
-        )
-        _performance_ts[ticker] = (
-            now - (settings.NGX_PRICE_TTL - _RETRY_TTL) if incomplete else now
-        )
 
     return performance
 

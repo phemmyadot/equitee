@@ -19,7 +19,6 @@ from app.db.crud import (
     get_active_holdings,
     get_closed_positions,
     get_cash_balance,
-    should_write_snapshot,
     write_snapshot,
 )
 from app.models import (
@@ -277,36 +276,35 @@ def build_portfolio_response(
     ngx_pct = _ngx_base / _total_base * 100 if _total_base else None
     us_pct  = _us_base  / _total_base * 100 if _total_base else None
 
-    # ── Snapshot (write at most once per NGX_PRICE_TTL seconds per user) ─────
-    if should_write_snapshot(db, settings.NGX_PRICE_TTL, user_id):
-        price_rows = [
-            {
-                "ticker": s.Ticker,
-                "market": "ngx",
-                "price": s.LivePrice,
-                "change_pct": s.LiveChangePct,
-            }
-            for s in ngx_stocks
-        ] + [
-            {
-                "ticker": s.Ticker,
-                "market": "us",
-                "price": s.LivePrice,
-                "change_pct": s.LiveChangePct,
-            }
-            for s in us_stocks
-        ]
-        write_snapshot(
-            db,
-            user_id=user_id,
-            ngx_equity=ngx_equity,
-            ngx_cost=ngx_cost,
-            us_equity=us_equity,
-            us_cost=us_cost,
-            usdngn=usdngn,
-            total_usd=total_usd,
-            price_rows=price_rows,
-        )
+    # ── Snapshot (write on every call since caching is disabled) ───────────
+    price_rows = [
+        {
+            "ticker": s.Ticker,
+            "market": "ngx",
+            "price": s.LivePrice,
+            "change_pct": s.LiveChangePct,
+        }
+        for s in ngx_stocks
+    ] + [
+        {
+            "ticker": s.Ticker,
+            "market": "us",
+            "price": s.LivePrice,
+            "change_pct": s.LiveChangePct,
+        }
+        for s in us_stocks
+    ]
+    write_snapshot(
+        db,
+        user_id=user_id,
+        ngx_equity=ngx_equity,
+        ngx_cost=ngx_cost,
+        us_equity=us_equity,
+        us_cost=us_cost,
+        usdngn=usdngn,
+        total_usd=total_usd,
+        price_rows=price_rows,
+    )
 
     # ── HHI ──────────────────────────────────────────────────────────────────
     hhi = compute_hhi(ngx_stocks)

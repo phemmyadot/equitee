@@ -21,7 +21,6 @@ class Settings:
 
     # ── NGX ─────────────────────────────────────────────────────────────
     NGX_PAGE_SIZE: int = int(os.getenv("NGX_PAGE_SIZE", "300"))
-    NGX_PRICE_TTL: int = int(os.getenv("NGX_PRICE_TTL", "900"))  # seconds
     NGX_SOURCE_BASE_URL: str = os.getenv(
         "NGX_SOURCE_BASE_URL", "https://stockanalysis.com"
     ).rstrip("/")
@@ -30,14 +29,8 @@ class Settings:
     YAHOO_API: str = os.getenv(
         "YAHOO_API", "https://query1.finance.yahoo.com/v8/finance/chart/{ticker}"
     )
-    US_PRICE_TTL: int = int(os.getenv("US_PRICE_TTL", "120"))  # seconds
-
-    # ── Dividends ────────────────────────────────────────────────────────────
-    DIVIDEND_TTL: int = int(os.getenv("DIVIDEND_TTL", "86400"))  # seconds (1 day)
-    FINANCIALS_TTL: int = int(os.getenv("FINANCIALS_TTL", "86400"))  # seconds (1 day)
 
     # ── FX ───────────────────────────────────────────────────────────────────
-    FX_TTL: int = int(os.getenv("FX_TTL", "600"))  # seconds
     USDNGN_FALLBACK: float = float(os.getenv("USDNGN_FALLBACK", "1580"))
 
     # ── CORS ─────────────────────────────────────────────────────────────────

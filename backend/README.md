@@ -119,7 +119,6 @@ backend/
 | `DATABASE_URL` | — | SQLite file | SQLite or Postgres URL |
 | `PORTFOLIO_FILE` | — | `portfolio.json` | Path to admin seed file (Render secret file) |
 | `NGX_SOURCE_BASE_URL` | — | `https://stockanalysis.com` | Base URL for the NGX scraper |
-| `NGX_PRICE_TTL` | — | `900` | NGX price cache TTL in seconds |
 | `REGISTRATION_MODE` | — | `invite` | `invite` or `open` |
 | `CORS_ORIGINS` | — | `http://localhost:3000` | Comma-separated list of allowed origins |
 

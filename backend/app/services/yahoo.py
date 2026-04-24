@@ -99,20 +99,13 @@ def get_prices(tickers: list[str]) -> dict[str, USPrice]:
     """
     global _cache
     now = time.time()
-    stale = [
-        t
-        for t in tickers
-        if t not in _cache["data"] or (now - _cache["ts"]) > settings.US_PRICE_TTL
-    ]
 
-    if stale:
-        log.info(f"[Yahoo] fetching {len(stale)} tickers: {stale}")
-        for ticker in stale:
-            result = _fetch_ticker(ticker)
-            if result:
-                _cache["data"][ticker] = result
-                log.info(f"[Yahoo] {ticker} → ${result.price}")
-        _cache["ts"] = now
+    for ticker in tickers:
+        result = _fetch_ticker(ticker)
+        if result:
+            _cache["data"][ticker] = result
+            log.info(f"[Yahoo] {ticker} → ${result.price}")
+    _cache["ts"] = now
 
     return _cache["data"]
 
@@ -161,6 +154,7 @@ def get_fundamentals(ticker: str) -> Optional[dict]:
     ks = result.get("defaultKeyStatistics") or {}
     fd = result.get("financialData") or {}
     sd = result.get("summaryDetail") or {}
+    financial_currency = fd.get("financialCurrency") or sd.get("currency")
 
     # ── Profile ────────────────────────────────────────────────────────────
     profile = {
@@ -234,7 +228,12 @@ def get_fundamentals(ticker: str) -> Optional[dict]:
         "return_1y": pct(ks, "52WeekChange"),          # same as week_52_change
     }
 
-    data = {"profile": profile, "overview": overview, "performance": performance}
+    data = {
+        "profile": profile,
+        "overview": overview,
+        "performance": performance,
+        "financial_currency": financial_currency,
+    }
     _fund_cache[ticker] = {"data": data, "ts": now}
     log.info(f"[Yahoo fundamentals] {ticker} cached")
     return data

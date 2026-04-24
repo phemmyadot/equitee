@@ -80,7 +80,6 @@ export interface DividendHolding {
 
 export interface DividendsResponse {
   holdings: DividendHolding[];
-  cache_age_sec: number | null;
   total_projected_payout: number | null;
   portfolio_drip: PortfolioDrip | null;
 }

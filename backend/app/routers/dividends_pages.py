@@ -106,7 +106,6 @@ class PortfolioDrip(BaseModel):
 
 class DividendsResponse(BaseModel):
     holdings: list[DividendHolding]
-    cache_age_sec: Optional[int] = None
     total_projected_payout: Optional[float] = None
     portfolio_drip: Optional[PortfolioDrip] = None
 
@@ -215,12 +214,8 @@ async def get_dividends(
                 blended_yield_pct=blended_yield,
             )
 
-        last_updated_ts = _ngx_job.last_updated()
-        cache_age = int((datetime.now(timezone.utc) - last_updated_ts).total_seconds()) if last_updated_ts else None
-
         return DividendsResponse(
             holdings=result,
-            cache_age_sec=cache_age,
             total_projected_payout=round(total_payout, 2) if total_payout else None,
             portfolio_drip=portfolio_drip,
         )

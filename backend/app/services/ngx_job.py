@@ -246,6 +246,21 @@ def _enrich_one(ticker: str) -> dict:
     except Exception as exc:
         log.debug("[NGXJob] dividend failed %s: %s", ticker, exc)
 
+    # Cross-listing overlay: fill null fundamentals from Yahoo Finance
+    try:
+        from app.services.cross_listings import yahoo_ticker as _yt, overlay_yahoo_fundamentals
+        from app.services.yahoo import get_fundamentals as _yf
+        from app.services.fx import get_rate as _get_rate
+        yt = _yt(ticker)
+        if yt:
+            ydata = _yf(yt)
+            if ydata:
+                fx_info = _get_rate()
+                overlay_yahoo_fundamentals(result, ydata, usdngn=fx_info.get("rate"))
+                log.info("[NGXJob] %s: overlaid Yahoo fundamentals from %s", ticker, yt)
+    except Exception as exc:
+        log.debug("[NGXJob] Yahoo overlay failed %s: %s", ticker, exc)
+
     return result
 
 

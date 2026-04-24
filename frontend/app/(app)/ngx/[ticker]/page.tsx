@@ -1199,11 +1199,6 @@ export default function NGXProfilePage() {
                 Dividend
               </span>
             </div>
-            {dividend?.timestamp && (
-              <span className="text-[10px] font-mono text-[var(--ink-4)]">
-                cached {new Date(dividend.timestamp).toLocaleDateString()}
-              </span>
-            )}
           </div>
           {divLoading ? (
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
