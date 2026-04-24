@@ -221,6 +221,30 @@ export interface NgxTickerPerformance {
   golden_cross: boolean | null;
   piotroski_score: number | null;
   altman_zscore: number | null;
+  roa: number | null;
+  roic: number | null;
+  roce: number | null;
+  ebitda_margin: number | null;
+  operating_margin: number | null;
+  fcf_margin: number | null;
+  operating_cash_flow: number | null;
+  free_cash_flow: number | null;
+  capex: number | null;
+  fcf_per_share: number | null;
+  fcf_yield: number | null;
+  net_debt: number | null;
+  quick_ratio: number | null;
+  interest_coverage: number | null;
+  debt_ebitda: number | null;
+  asset_turnover: number | null;
+  revenue_growth_yoy: number | null;
+  earnings_growth_yoy: number | null;
+  fcf_growth_yoy: number | null;
+  dividend_growth_yoy: number | null;
+  price_to_book: number | null;
+  price_to_sales: number | null;
+  ev_ebitda: number | null;
+  ev_fcf: number | null;
 }
 
 export interface NgxTickerPriceHistory {

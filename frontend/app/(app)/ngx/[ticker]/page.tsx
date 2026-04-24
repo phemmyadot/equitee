@@ -378,17 +378,20 @@ export default function NGXProfilePage() {
   const [ohlcvLoad, setOhlcvLoad] = useState(true);
   const [priceDays, setPriceDays] = useState(90);
   const [watchBusy, setWatchBusy] = useState(false);
-  const initialLoadRef = useRef(true);
+  const lastTickerRef = useRef('');
 
   const posRow = undefined as StockRow | undefined;
 
-  // Single consolidated fetch on ticker change — replaces 6 separate calls
   useEffect(() => {
     if (!ticker) return;
-    // eslint-disable-next-line react-hooks/set-state-in-effect
+    const isNewTicker = ticker !== lastTickerRef.current;
+    if (isNewTicker) {
+      lastTickerRef.current = ticker;
+      setLoading(true);
+      setError(null);
+    }
+
     let c = false;
-    setLoading(true);
-    setError(null);
     setOhlcvLoad(true);
     fetchNGXTicker(ticker, priceDays)
       .then((r) => {
@@ -407,33 +410,7 @@ export default function NGXProfilePage() {
     return () => {
       c = true;
     };
-  }, [ticker]);
-
-  // Re-fetch only price history when day range changes (skip on initial mount — main effect handles it)
-  useEffect(() => {
-    if (initialLoadRef.current) {
-      initialLoadRef.current = false;
-      return;
-    }
-    if (!ticker) return;
-    // eslint-disable-next-line react-hooks/set-state-in-effect
-    let c = false;
-    setOhlcvLoad(true);
-    setOhlcv(null);
-    fetchNGXTicker(ticker, priceDays)
-      .then((r) => {
-        if (!c) {
-          setOhlcv(r.price_history);
-          setOhlcvLoad(false);
-        }
-      })
-      .catch(() => {
-        if (!c) setOhlcvLoad(false);
-      });
-    return () => {
-      c = true;
-    };
-  }, [priceDays]);
+  }, [ticker, priceDays]);
 
   const watching = resp?.is_watching ?? null;
   const dividend: NgxTickerDividend | null = resp?.dividend ?? null;
@@ -736,6 +713,13 @@ export default function NGXProfilePage() {
               )}
             </div>
           )}
+
+        {/* Company description */}
+        {!loading && prof?.description && (
+          <p className="mt-3 text-[12px] text-[var(--ink-3)] leading-relaxed">
+            {prof.description}
+          </p>
+        )}
 
         {/* 52-Week Range bar — NEW */}
         {!loading && (perf?.week_52_low || perf?.week_52_high) && (

@@ -474,12 +474,30 @@ class NgxTickerOverview(BaseModel):
     dividend_yield: Optional[float] = None
     roe: Optional[float] = None
     roa: Optional[float] = None
+    roic: Optional[float] = None
+    roce: Optional[float] = None
     debt_to_equity: Optional[float] = None
     current_ratio: Optional[float] = None
+    quick_ratio: Optional[float] = None
     gross_margin: Optional[float] = None
     net_margin: Optional[float] = None
+    operating_margin: Optional[float] = None
+    fcf_margin: Optional[float] = None
     revenue: Optional[float] = None
     net_income: Optional[float] = None
+    operating_cash_flow: Optional[float] = None
+    free_cash_flow: Optional[float] = None
+    capex_ttm: Optional[float] = None
+    fcf_per_share: Optional[float] = None
+    fcf_yield: Optional[float] = None
+    net_debt: Optional[float] = None
+    interest_coverage: Optional[float] = None
+    debt_ebitda: Optional[float] = None
+    asset_turnover: Optional[float] = None
+    revenue_growth_yoy: Optional[float] = None
+    earnings_growth_yoy: Optional[float] = None
+    fcf_growth_yoy: Optional[float] = None
+    dividend_growth_yoy: Optional[float] = None
 
 
 class NgxTickerPerformance(BaseModel):
@@ -501,6 +519,31 @@ class NgxTickerPerformance(BaseModel):
     golden_cross: Optional[bool] = None
     piotroski_score: Optional[float] = None
     altman_zscore: Optional[float] = None
+    # Extended metrics (frontend reads these from performance)
+    roa: Optional[float] = None
+    roic: Optional[float] = None
+    roce: Optional[float] = None
+    ebitda_margin: Optional[float] = None
+    operating_margin: Optional[float] = None
+    fcf_margin: Optional[float] = None
+    operating_cash_flow: Optional[float] = None
+    free_cash_flow: Optional[float] = None
+    capex: Optional[float] = None
+    fcf_per_share: Optional[float] = None
+    fcf_yield: Optional[float] = None
+    net_debt: Optional[float] = None
+    quick_ratio: Optional[float] = None
+    interest_coverage: Optional[float] = None
+    debt_ebitda: Optional[float] = None
+    asset_turnover: Optional[float] = None
+    revenue_growth_yoy: Optional[float] = None
+    earnings_growth_yoy: Optional[float] = None
+    fcf_growth_yoy: Optional[float] = None
+    dividend_growth_yoy: Optional[float] = None
+    price_to_book: Optional[float] = None
+    price_to_sales: Optional[float] = None
+    ev_ebitda: Optional[float] = None
+    ev_fcf: Optional[float] = None
 
 
 class NgxTickerPriceHistory(BaseModel):
@@ -623,17 +666,35 @@ def ngx_ticker(
             dividend_yield=row.get("dividend_yield"),
             roe=row.get("roe"),
             roa=row.get("roa"),
+            roic=row.get("roic"),
+            roce=row.get("roce"),
             debt_to_equity=row.get("debt_to_equity"),
             current_ratio=row.get("current_ratio"),
+            quick_ratio=row.get("quick_ratio"),
             gross_margin=row.get("gross_margin"),
             net_margin=row.get("net_margin"),
+            operating_margin=row.get("operating_margin"),
+            fcf_margin=row.get("fcf_margin"),
             revenue=row.get("revenue"),
             net_income=row.get("net_income"),
+            operating_cash_flow=row.get("operating_cash_flow"),
+            free_cash_flow=row.get("free_cash_flow"),
+            capex_ttm=row.get("capex_ttm"),
+            fcf_per_share=row.get("fcf_per_share"),
+            fcf_yield=row.get("fcf_yield"),
+            net_debt=row.get("net_debt"),
+            interest_coverage=row.get("interest_coverage"),
+            debt_ebitda=row.get("debt_ebitda"),
+            asset_turnover=row.get("asset_turnover"),
+            revenue_growth_yoy=row.get("revenue_growth_yoy"),
+            earnings_growth_yoy=row.get("earnings_growth_yoy"),
+            fcf_growth_yoy=row.get("fcf_growth_yoy"),
+            dividend_growth_yoy=row.get("dividend_growth_yoy"),
         )
 
     # Performance
     perf_out = None
-    if row and row.get("week_52_high") is not None:
+    if row:
         perf_out = NgxTickerPerformance(
             beta=row.get("beta"),
             week_52_high=row.get("week_52_high"),
@@ -653,6 +714,30 @@ def ngx_ticker(
             golden_cross=row.get("golden_cross"),
             piotroski_score=row.get("piotroski_score"),
             altman_zscore=row.get("altman_zscore"),
+            roa=row.get("roa"),
+            roic=row.get("roic"),
+            roce=row.get("roce"),
+            ebitda_margin=row.get("ebitda_margin"),
+            operating_margin=row.get("operating_margin"),
+            fcf_margin=row.get("fcf_margin"),
+            operating_cash_flow=row.get("operating_cash_flow"),
+            free_cash_flow=row.get("free_cash_flow"),
+            capex=row.get("capex_ttm"),
+            fcf_per_share=row.get("fcf_per_share"),
+            fcf_yield=row.get("fcf_yield"),
+            net_debt=row.get("net_debt"),
+            quick_ratio=row.get("quick_ratio"),
+            interest_coverage=row.get("interest_coverage"),
+            debt_ebitda=row.get("debt_ebitda"),
+            asset_turnover=row.get("asset_turnover"),
+            revenue_growth_yoy=row.get("revenue_growth_yoy"),
+            earnings_growth_yoy=row.get("earnings_growth_yoy"),
+            fcf_growth_yoy=row.get("fcf_growth_yoy"),
+            dividend_growth_yoy=row.get("dividend_growth_yoy"),
+            price_to_book=row.get("price_to_book"),
+            price_to_sales=row.get("price_to_sales"),
+            ev_ebitda=row.get("ev_ebitda"),
+            ev_fcf=row.get("ev_fcf"),
         )
 
     # Price history
@@ -696,6 +781,81 @@ def ngx_ticker(
             fcf=cf["fcf"],
             net_debt=cf["net_debt"],
         )
+
+    # Derive performance metrics from arrays when DB cache is missing them
+    if perf_out and (earn or cf):
+        def _ttm(arr):
+            vals = [v for v in (arr or [])[-4:] if v is not None]
+            return sum(vals) if len(vals) == 4 else None
+
+        def _yoy(arr):
+            arr = arr or []
+            if len(arr) >= 8:
+                ttm = [v for v in arr[-4:] if v is not None]
+                prior = [v for v in arr[-8:-4] if v is not None]
+                if len(ttm) == 4 and len(prior) == 4:
+                    t_val, p_val = sum(ttm), sum(prior)
+                    if p_val != 0:
+                        return round((t_val - p_val) / abs(p_val) * 100, 2)
+            return None
+
+        rev = (earn or {}).get("revenue", [])
+        ni = (earn or {}).get("net_income", [])
+        fcf_arr = (cf or {}).get("fcf", [])
+        capex_arr = (cf or {}).get("capex", [])
+        nd_arr = (cf or {}).get("net_debt", [])
+
+        ttm_fcf = _ttm(fcf_arr)
+        ttm_capex = _ttm(capex_arr)
+        ttm_rev = _ttm(rev)
+
+        if perf_out.free_cash_flow is None and ttm_fcf is not None:
+            perf_out.free_cash_flow = round(ttm_fcf)
+        if perf_out.capex is None and ttm_capex is not None:
+            perf_out.capex = round(ttm_capex)
+        if perf_out.operating_cash_flow is None and ttm_fcf is not None and ttm_capex is not None:
+            perf_out.operating_cash_flow = round(ttm_fcf - ttm_capex)
+        if perf_out.net_debt is None and nd_arr and nd_arr[-1] is not None:
+            perf_out.net_debt = round(nd_arr[-1])
+        if perf_out.fcf_margin is None and ttm_fcf is not None and ttm_rev and ttm_rev > 0:
+            perf_out.fcf_margin = round(ttm_fcf / ttm_rev * 100, 2)
+        if perf_out.revenue_growth_yoy is None:
+            perf_out.revenue_growth_yoy = _yoy(rev)
+        if perf_out.earnings_growth_yoy is None:
+            perf_out.earnings_growth_yoy = _yoy(ni)
+        if perf_out.fcf_growth_yoy is None:
+            perf_out.fcf_growth_yoy = _yoy(fcf_arr)
+
+        # P/B = price / book_value
+        if perf_out.price_to_book is None and price_out and price_out.price and overview_out and overview_out.book_value:
+            perf_out.price_to_book = round(price_out.price / overview_out.book_value, 3)
+
+        # P/S = market_cap / TTM revenue
+        if perf_out.price_to_sales is None and overview_out and overview_out.market_cap and ttm_rev and ttm_rev > 0:
+            perf_out.price_to_sales = round(overview_out.market_cap / ttm_rev, 3)
+
+        # FCF Yield = TTM FCF / market_cap * 100
+        if perf_out.fcf_yield is None and ttm_fcf is not None and overview_out and overview_out.market_cap and overview_out.market_cap > 0:
+            perf_out.fcf_yield = round(ttm_fcf / overview_out.market_cap * 100, 2)
+
+        # Asset Turnover = TTM revenue / latest total assets
+        if perf_out.asset_turnover is None and ttm_rev and bs:
+            assets_arr = (bs or {}).get("assets", [])
+            if assets_arr and assets_arr[-1]:
+                perf_out.asset_turnover = round(ttm_rev / assets_arr[-1], 3)
+
+        # FCF/Share = TTM FCF / shares outstanding (market_cap / price)
+        if perf_out.fcf_per_share is None and ttm_fcf is not None and price_out and price_out.price and overview_out and overview_out.market_cap:
+            shares = overview_out.market_cap / price_out.price
+            if shares > 0:
+                perf_out.fcf_per_share = round(ttm_fcf / shares, 2)
+
+        # EV/FCF = (market_cap + net_debt) / TTM FCF
+        if perf_out.ev_fcf is None and ttm_fcf and ttm_fcf > 0 and overview_out and overview_out.market_cap:
+            net_debt_val = perf_out.net_debt or 0
+            ev = overview_out.market_cap + net_debt_val
+            if ev > 0:
+                perf_out.ev_fcf = round(ev / ttm_fcf, 2)
 
     # Dividend
     div_out = get_dividend(t)

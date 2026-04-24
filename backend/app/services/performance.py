@@ -95,6 +95,7 @@ def _scrape_overview(ticker: str) -> Optional[Dict]:
         "book_value": raw.get("bvps"),
         "dividend_yield": raw.get("dividendYield"),
         "roe": _roe,
+        "roa": raw.get("roa"),
         "debt_to_equity": raw.get("debtEquity"),
         "current_ratio": raw.get("currentRatio"),
         "gross_margin": raw.get("grossMargin"),

@@ -57,7 +57,16 @@ def _scrape_profile(ticker: str) -> Optional[Dict]:
     # Try to extract company name from page title or heading
     title = soup.find("h1")
     if title:
-        profile["name"] = title.text.strip()
+        _PAGE_SUFFIXES = (
+            " Company Description", " Company Profile", " About",
+            " Overview", " Profile", " Description",
+        )
+        name = title.text.strip()
+        for suffix in _PAGE_SUFFIXES:
+            if name.endswith(suffix):
+                name = name[: -len(suffix)].strip()
+                break
+        profile["name"] = name
 
     # Extract data from tables on the company page
     tables = soup.find_all("table")
@@ -87,6 +96,16 @@ def _scrape_profile(ticker: str) -> Optional[Dict]:
                         profile["website"] = value
                 elif "hq" in label or "headquarters" in label:
                     profile["headquarters"] = value
+                elif "description" in label or "about" in label or "overview" in label:
+                    profile["description"] = value
+
+    # Fallback: first non-trivial paragraph on the page
+    if not profile["description"]:
+        for p in soup.find_all("p"):
+            text = p.get_text(strip=True)
+            if len(text) > 80:
+                profile["description"] = text
+                break
 
     log.info(f"[Profile] Scraped profile for {ticker}")
     return profile

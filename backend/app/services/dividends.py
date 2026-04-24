@@ -283,7 +283,7 @@ def get_dividend(ticker: str, force: bool = False) -> Optional[DividendInfo]:
                     pay_date=row.pay_date,
                     cash_amount=row.cash_amount,
                     currency=row.currency,
-                    timestamp=row.dividend_ts,
+                    timestamp=row.fetched_at.isoformat() if row.fetched_at else row.dividend_ts,
                 )
                 if row.cash_amount is not None
                 else None

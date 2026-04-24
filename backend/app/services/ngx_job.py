@@ -147,6 +147,18 @@ def _enrich_one(ticker: str) -> dict:
     except Exception as exc:
         log.debug("[NGXJob] overview failed %s: %s", ticker, exc)
 
+    # ROA fallback: net_income / latest total_assets from balance sheet
+    if result.get("roa") is None and result.get("net_income"):
+        try:
+            from app.services.financials import get_balance_sheet
+            bs = get_balance_sheet(ticker)
+            if bs and bs.get("assets"):
+                latest_assets = bs["assets"][-1]
+                if latest_assets:
+                    result["roa"] = round(result["net_income"] / latest_assets * 100, 3)
+        except Exception as exc:
+            log.debug("[NGXJob] roa fallback failed %s: %s", ticker, exc)
+
     try:
         perf = get_performance(ticker, force_refresh=True)
         if perf:
@@ -169,6 +181,29 @@ def _enrich_one(ticker: str) -> dict:
                 "golden_cross": perf.get("golden_cross"),
                 "piotroski_score": perf.get("piotroski_score"),
                 "altman_zscore": perf.get("altman_zscore"),
+                "ebitda_margin": perf.get("ebitda_margin"),
+                "operating_margin": perf.get("operating_margin"),
+                "fcf_margin": perf.get("fcf_margin"),
+                "roic": perf.get("roic"),
+                "roce": perf.get("roce"),
+                "operating_cash_flow": perf.get("operating_cash_flow"),
+                "free_cash_flow": perf.get("free_cash_flow"),
+                "capex_ttm": perf.get("capex"),
+                "fcf_per_share": perf.get("fcf_per_share"),
+                "fcf_yield": perf.get("fcf_yield"),
+                "quick_ratio": perf.get("quick_ratio"),
+                "net_debt": perf.get("net_debt"),
+                "interest_coverage": perf.get("interest_coverage"),
+                "debt_ebitda": perf.get("debt_ebitda"),
+                "asset_turnover": perf.get("asset_turnover"),
+                "revenue_growth_yoy": perf.get("revenue_growth_yoy"),
+                "earnings_growth_yoy": perf.get("earnings_growth_yoy"),
+                "fcf_growth_yoy": perf.get("fcf_growth_yoy"),
+                "dividend_growth_yoy": perf.get("dividend_growth_yoy"),
+                "price_to_book": perf.get("price_to_book"),
+                "price_to_sales": perf.get("price_to_sales"),
+                "ev_ebitda": perf.get("ev_ebitda"),
+                "ev_fcf": perf.get("ev_fcf"),
             })
     except Exception as exc:
         log.debug("[NGXJob] performance failed %s: %s", ticker, exc)
