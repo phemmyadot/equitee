@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { fetchPortfolioHistory } from '@/services/api';
 import KPICard from '@/components/molecules/KPICard';
 import ChartCard from '@/components/molecules/ChartCard';
@@ -38,9 +38,8 @@ export default function HistoryPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const { refreshKey, setLastUpdated } = usePortfolio();
-  const hasFetched = useRef(false);
-
   const load = useCallback(() => {
+    setLoading(true);
     fetchPortfolioHistory(days)
       .then((r) => {
         setResp(r);
@@ -48,11 +47,9 @@ export default function HistoryPage() {
       })
       .catch(() => { })
       .finally(() => setLoading(false));
-  }, [setLastUpdated]);
+  }, [days, setLastUpdated]);
 
   useEffect(() => {
-    if (hasFetched.current) return;
-    hasFetched.current = true;
     load();
   }, [load]);
 
