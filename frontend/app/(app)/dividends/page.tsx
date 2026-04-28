@@ -151,7 +151,7 @@ function DividendCard({ h, sector }: { h: DividendHolding; sector?: string }) {
               {hasDividend && !missed && <CountdownPill payDate={div!.pay_date} />}
               {!hasDividend && (
                 <span className="text-[9px] font-semibold px-2 py-0.5 rounded-full bg-[var(--sidebar)] text-[var(--ink-4)]">
-                  No data
+                  Upcoming ex-date
                 </span>
               )}
             </div>
@@ -380,7 +380,11 @@ export default function DividendsPage() {
         (h) => h.dividend?.pay_date && (daysUntil(h.dividend.pay_date) ?? -1) >= 0 && h.qualified !== false,
       );
     if (filter === 'missed') return holdings.filter((h) => h.qualified === false);
-    if (filter === 'no-data') return holdings.filter((h) => !h.dividend);
+    if (filter === 'no-data')
+      return holdings.filter((h) => {
+        const days = daysUntil(h.dividend?.ex_dividend_date ?? null);
+        return days != null && days >= 0 && days <= 30;
+      });
     return holdings;
   }, [holdings, filter]);
 
@@ -388,7 +392,10 @@ export default function DividendsPage() {
     (h) => h.dividend?.pay_date && (daysUntil(h.dividend.pay_date) ?? -1) >= 0 && h.qualified !== false,
   ).length;
   const missedCount = holdings.filter((h) => h.qualified === false).length;
-  const noDataCount = holdings.filter((h) => !h.dividend).length;
+  const noDataCount = holdings.filter((h) => {
+    const days = daysUntil(h.dividend?.ex_dividend_date ?? null);
+    return days != null && days >= 0 && days <= 30;
+  }).length;
 
   return (
     <div className="space-y-5">
@@ -429,9 +436,9 @@ export default function DividendsPage() {
 
       {/* ── KPI strip ── */}
       {(loading || resp) && (
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+        <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
           {loading ? (
-            [...Array(4)].map((_, i) => <div key={i} className="skeleton rounded-lg h-20" />)
+            [...Array(5)].map((_, i) => <div key={i} className="skeleton rounded-lg h-20" />)
           ) : (
             <>
               {/* Total projected payout */}
@@ -525,6 +532,45 @@ export default function DividendsPage() {
                   </div>
                 );
               })()}
+
+              {/* Received this year */}
+              {(() => {
+                const currentYear = new Date().getFullYear();
+                const receivedThisYear = holdings
+                  .filter((h) => {
+                    if (!h.dividend?.pay_date || h.qualified === false) return false;
+                    const payDate = new Date(h.dividend.pay_date);
+                    return (
+                      !isNaN(payDate.getTime()) &&
+                      payDate.getFullYear() === currentYear &&
+                      (daysUntil(h.dividend.pay_date) ?? 0) < 0
+                    );
+                  })
+                  .reduce((sum, h) => {
+                    const amt =
+                      h.dividend!.cash_amount != null ? h.dividend!.cash_amount * h.shares : 0;
+                    return sum + amt;
+                  }, 0);
+                return (
+                  <div
+                    className="kpi-animate card flex flex-col gap-1 px-4 py-3.5"
+                    style={{ animationDelay: '200ms' }}
+                  >
+                    <div className="flex items-center gap-1.5">
+                      <span className="w-1.5 h-1.5 rounded-full shrink-0 bg-[var(--purple,#8b5cf6)]" />
+                      <span className="text-[10px] font-semibold uppercase tracking-[0.07em] text-[var(--ink-4)]">
+                        Received {currentYear}
+                      </span>
+                    </div>
+                    <span className="font-mono text-[18px] font-semibold leading-tight mt-0.5 text-[var(--purple,#8b5cf6)]">
+                      {receivedThisYear > 0 ? fmtNGN(receivedThisYear) : '—'}
+                    </span>
+                    <span className="text-[10px] text-[var(--ink-4)] font-mono mt-0.5">
+                      paid out this year
+                    </span>
+                  </div>
+                );
+              })()}
             </>
           )}
         </div>
@@ -589,7 +635,7 @@ export default function DividendsPage() {
             ['all', `All (${holdings.length})`],
             ['upcoming', `Upcoming (${upcomingCount})`],
             ['missed', `Missed (${missedCount})`],
-            ['no-data', `No data (${noDataCount})`],
+            ['no-data', `Upcoming ex-date (${noDataCount})`],
           ] as [Filter, string][]
         ).map(([f, label]) => (
           <button
