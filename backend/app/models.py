@@ -147,6 +147,8 @@ class USKPIs(BaseModel):
     gain: float
     return_pct: float
     positions: int
+    realized_pl: float = 0.0
+    cash_balance_ngn: float = 0.0
 
 
 class CombinedKPIs(BaseModel):

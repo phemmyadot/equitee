@@ -193,6 +193,7 @@ def get_fundamentals(ticker: str) -> Optional[dict]:
         "forward_pe": _rv(sd, "forwardPE"),
         "payout_ratio": pct(sd, "payoutRatio"),        # 0.15 → 15 %
         "dividend_rate": _rv(sd, "dividendRate"),
+        "ex_dividend_date": (sd.get("exDividendDate") or {}).get("fmt"),
         "quick_ratio": _rv(fd, "quickRatio"),
         "operating_margin": pct(fd, "operatingMargins"),
         "ebitda_margin": pct(fd, "ebitdaMargins"),

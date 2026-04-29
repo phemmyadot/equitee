@@ -11,9 +11,15 @@ import Sparkline from '@/components/atoms/Sparkline';
 import { ChartSkeleton, PriceBanner } from '@/components/atoms/Feedback';
 import PlotlyChart from '@/components/molecules/PlotlyChart';
 import { plotlyLayout, COLORS, sectorColor } from '@/utils/theme';
-import { fmtUSD, fmtPct, fmtPct2, isPositive } from '@/utils/formatters';
+import { fmtUSD, fmtNGN, fmtPct, fmtPct2, isPositive } from '@/utils/formatters';
 import { exportUSSnapshot } from '@/utils/csv';
 import type { StockRow, UsHomeResponse } from '@/models';
+
+const _n = (v: string | number | null | undefined): number | null => {
+  if (v == null) return null;
+  const f = parseFloat(String(v).replace(/[^0-9.-]/g, ''));
+  return isNaN(f) ? null : f;
+};
 
 export default function USPortfolioPage() {
   const [data, setData] = useState<UsHomeResponse | null>(null);
@@ -46,6 +52,30 @@ export default function USPortfolioPage() {
   const us_stocks = data?.stocks ?? [];
   const us_sectors = data?.sectors ?? [];
   const meta = data?.meta;
+
+  const active = us_stocks.filter((s) => s.CurrentEquity != null);
+  const totalCost = active.reduce((sum, s) => sum + (s.Shares ?? 0) * (s.AvgCost ?? 0), 0) || 1;
+
+  const weightedAvg = (field: (row: typeof active[0]) => number | null) => {
+    let wsum = 0, wt = 0;
+    active.forEach((s) => {
+      const val = field(s);
+      if (val == null || !isFinite(val)) return;
+      const w = ((s.Shares ?? 0) * (s.AvgCost ?? 0)) / totalCost;
+      wsum += val * w;
+      wt += w;
+    });
+    return wt > 0.01 ? wsum / wt : null;
+  };
+
+  const wPE = weightedAvg((s) => _n(s.PeRatio));
+  const wROE = weightedAvg((s) => {
+    const v = _n(s.Roe);
+    return v != null && v <= 150 ? v : null;
+  });
+  const wBeta = weightedAvg((s) => _n(s.Beta));
+  const wDivY = weightedAvg((s) => _n(s.DividendYield));
+  const annualDivIncome = data?.div_payout ?? null;
 
   const equityBar = {
     type: 'bar',
@@ -231,12 +261,19 @@ export default function USPortfolioPage() {
 
   return (
     <div className="space-y-5">
-      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
+      {/* KPI strip — portfolio summary */}
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
         {isFirstLoad ? (
-          [...Array(5)].map((_, i) => <ChartSkeleton key={i} height={88} />)
+          [...Array(6)].map((_, i) => <ChartSkeleton key={i} height={88} />)
         ) : (
           <>
-            <KPICard label="Total Equity" value={fmtUSD(k?.equity)} accent="neutral" delay={0} />
+            <KPICard
+              label="Total Equity"
+              value={fmtUSD(k?.equity)}
+              sub={`${k?.positions ?? '—'} positions`}
+              accent="neutral"
+              delay={0}
+            />
             <KPICard label="Total Cost" value={fmtUSD(k?.cost)} accent="neutral" delay={50} />
             <KPICard
               label="Unrealized G/L"
@@ -250,7 +287,63 @@ export default function USPortfolioPage() {
               accent={isPositive(k?.return_pct) ? 'gain' : 'loss'}
               delay={150}
             />
-            <KPICard label="Positions" value={k?.positions ?? '—'} accent="accent" delay={200} />
+            <KPICard
+              label="Realized P/L"
+              value={fmtUSD(k?.realized_pl)}
+              accent={isPositive(k?.realized_pl) ? 'gain' : 'loss'}
+              delay={200}
+            />
+            <KPICard
+              label="Cash Balance"
+              value={fmtNGN(k?.cash_balance_ngn ?? 0)}
+              accent="teal"
+              delay={250}
+            />
+          </>
+        )}
+      </div>
+
+      {/* KPI strip — weighted fundamentals */}
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
+        {isFirstLoad ? (
+          [...Array(5)].map((_, i) => <ChartSkeleton key={i} height={88} />)
+        ) : (
+          <>
+            <KPICard
+              label="Wtd P/E"
+              value={wPE != null ? wPE.toFixed(1) : '—'}
+              sub="weighted avg"
+              accent="neutral"
+              delay={0}
+            />
+            <KPICard
+              label="Wtd ROE"
+              value={wROE != null ? wROE.toFixed(1) + '%' : '—'}
+              sub="weighted avg"
+              accent={wROE != null && wROE > 0 ? 'gain' : 'neutral'}
+              delay={50}
+            />
+            <KPICard
+              label="Wtd Beta"
+              value={wBeta != null ? wBeta.toFixed(2) : '—'}
+              sub="market sensitivity"
+              accent={wBeta != null && wBeta < 1 ? 'gain' : 'neutral'}
+              delay={100}
+            />
+            <KPICard
+              label="Wtd Div Yield"
+              value={wDivY != null ? wDivY.toFixed(2) + '%' : '—'}
+              sub="weighted avg"
+              accent="neutral"
+              delay={150}
+            />
+            <KPICard
+              label="Div Payout"
+              value={annualDivIncome != null ? fmtUSD(annualDivIncome) : '—'}
+              sub="from announced divs"
+              accent="accent"
+              delay={200}
+            />
           </>
         )}
       </div>

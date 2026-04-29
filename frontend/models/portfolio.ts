@@ -17,6 +17,8 @@ export interface USKPIs {
   gain: number;
   return_pct: number;
   positions: number;
+  realized_pl: number;
+  cash_balance_ngn: number;
 }
 
 export interface CombinedKPIs {
@@ -144,6 +146,7 @@ export interface UsHomeResponse {
   sectors: SectorRow[];
   meta: UsHomeMeta;
   price_histories: Record<string, NgxSparklinePoint[]>;
+  div_payout?: number | null;
 }
 
 // ── Combined home response ────────────────────────────────────────────────────

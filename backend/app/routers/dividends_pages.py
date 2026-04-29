@@ -5,6 +5,7 @@ GET /api/dividends  — all dividend data for the dividends page (one call, all 
 """
 
 import logging
+from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timezone, date
 from typing import Optional
 
@@ -17,6 +18,7 @@ from app.db.models import User
 from app.auth.dependencies import get_current_user
 from app.services import dividends as dividends_service
 from app.services import ngx_job as _ngx_job
+from app.services import yahoo as _yahoo
 from app.services.portfolio import load_holdings_from_db
 from app.models import DividendInfo
 
@@ -94,6 +96,7 @@ class DividendHolding(BaseModel):
     dividend_growing: Optional[bool] = None
     # True = bought before ex-date (qualifies), False = bought on/after (missed), None = unknown
     qualified: Optional[bool] = None
+    currency: str = "NGN"
 
 
 class PortfolioDrip(BaseModel):
@@ -193,6 +196,74 @@ async def get_dividends(
                     qualified=qualified,
                 )
             )
+
+        # ── US holdings ────────────────────────────────────────────────────────
+        us = holdings["us"]
+        if us:
+            us_tickers = [h["ticker"] for h in us]
+            us_fund_futures: dict[str, object] = {}
+            with ThreadPoolExecutor(max_workers=min(len(us_tickers), 10)) as ex:
+                for t in us_tickers:
+                    us_fund_futures[t] = ex.submit(_yahoo.get_fundamentals, t)
+            us_fund_map: dict[str, dict] = {}
+            for t, f in us_fund_futures.items():
+                try:
+                    us_fund_map[t] = f.result() or {}  # type: ignore[union-attr]
+                except Exception:
+                    us_fund_map[t] = {}
+
+            for h in us:
+                ticker = h["ticker"]
+                shares = float(h["shares"])
+                avg_cost = float(h["avg_cost"])
+                f = us_fund_map.get(ticker) or {}
+                ov = f.get("overview") or {}
+                dividend_rate = ov.get("dividend_rate")
+                ex_date = ov.get("ex_dividend_date")
+
+                div: Optional[DividendInfo] = None
+                if dividend_rate:
+                    div = DividendInfo(
+                        symbol=ticker,
+                        ex_dividend_date=ex_date,
+                        record_date=None,
+                        pay_date=None,
+                        cash_amount=float(dividend_rate),
+                        currency="USD",
+                        timestamp=None,
+                    )
+
+                purchase_date_str = h.get("purchase_date") or h.get("created_at")
+                qualified = (
+                    _is_qualified(purchase_date_str, ex_date, None)
+                    if div else None
+                )
+
+                projected: Optional[float] = None
+                yoc: Optional[float] = None
+                if div and div.cash_amount and qualified is not False:
+                    projected = round(shares * div.cash_amount, 2)
+                    yoc = round((div.cash_amount / avg_cost) * 100, 4) if avg_cost else None
+
+                result.append(
+                    DividendHolding(
+                        ticker=ticker,
+                        name=h.get("name", ticker),
+                        sector=h.get("sector"),
+                        shares=shares,
+                        avg_cost=avg_cost,
+                        dividend=div,
+                        projected_payout=projected,
+                        yield_on_cost=yoc,
+                        annual_yield_pct=None,
+                        drip=None,
+                        dividend_streak=None,
+                        years_with_dividend=None,
+                        dividend_growing=None,
+                        qualified=qualified,
+                        currency="USD",
+                    )
+                )
 
         result.sort(
             key=lambda d: (

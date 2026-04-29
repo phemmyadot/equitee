@@ -16,7 +16,7 @@ from sqlalchemy.orm import Session
 
 from app.db.engine import get_db
 from app.db.models import User
-from app.db.crud import watchlist_has, get_price_history
+from app.db.crud import watchlist_has, get_price_history, get_cash_balance
 from app.auth.dependencies import get_current_user
 from app.services import yahoo as _yahoo
 from app.services.portfolio import (
@@ -49,6 +49,7 @@ class UsHomeResponse(BaseModel):
     sectors: list[SectorRow]
     meta: UsHomeMeta
     price_histories: dict[str, list[SparklinePoint]] = {}
+    div_payout: Optional[float] = None
 
 
 class UsTickerPrice(BaseModel):
@@ -82,16 +83,65 @@ def us_home(
     current_user: User = Depends(get_current_user),
 ):
     holdings = load_holdings_from_db(db, current_user.id)
-    us_tickers = [h["ticker"] for h in holdings["us"]]
+    us_holdings = holdings["us"]
+    us_tickers = [h["ticker"] for h in us_holdings]
     us_prices = _yahoo.get_prices(us_tickers)
 
-    stocks = build_stock_rows(holdings["us"], us_prices, "yahoo", avg_cpi=_US_AVG_CPI)
+    stocks = build_stock_rows(us_holdings, us_prices, "yahoo", avg_cpi=_US_AVG_CPI)
     sectors = build_sectors(stocks)
+
+    # Fetch fundamentals in parallel and embed into stock rows
+    fund_map: dict[str, dict] = {}
+    if us_tickers:
+        futures: dict[str, Any] = {}
+        with ThreadPoolExecutor(max_workers=min(len(us_tickers), 10)) as ex:
+            for t in us_tickers:
+                futures[t] = ex.submit(_yahoo.get_fundamentals, t)
+        for t, f in futures.items():
+            try:
+                fund_map[t] = f.result() or {}
+            except Exception:
+                fund_map[t] = {}
+
+    for row in stocks:
+        f = fund_map.get(row.Ticker) or {}
+        ov = f.get("overview") or {}
+        perf = f.get("performance") or {}
+        row.PeRatio = ov.get("pe_ratio")
+        row.Roe = ov.get("roe")
+        row.Eps = ov.get("eps")
+        row.BookValue = ov.get("book_value")
+        row.DividendYield = ov.get("dividend_yield")
+        row.Beta = perf.get("beta")
+        row.Ma50 = perf.get("ma_50")
+        row.Ma200 = perf.get("ma_200")
+        row.Week52High = perf.get("week_52_high")
+        row.Week52Low = perf.get("week_52_low")
 
     equity = _sum(stocks, "CurrentEquity")
     cost = _sum(stocks, "RemainingCost")
     unrealized = _sum(stocks, "UnrealizedPL")
     ret_pct = (unrealized / cost * 100) if cost else 0
+
+    # Realized P/L: closed US positions + partial realized on active holdings
+    sold = holdings.get("sold", [])
+    us_realized = (
+        sum(float(s["realized_pl"]) for s in sold if (s.get("market") or "").upper() == "US") +
+        sum(float(h.get("realized_pl", 0)) for h in us_holdings)
+    )
+
+    cash = get_cash_balance(db, current_user.id)
+    cash_balance_ngn = round(float(cash.get("ngn") or 0), 2)
+
+    # Annual dividend payout from US holdings
+    div_payout: Optional[float] = None
+    dp_total = sum(
+        float(h["shares"]) * float(ov_r)
+        for h in us_holdings
+        if (ov_r := (fund_map.get(h["ticker"]) or {}).get("overview", {}).get("dividend_rate"))
+    )
+    if dp_total > 0:
+        div_payout = round(dp_total, 2)
 
     kpis = USKPIs(
         equity=equity,
@@ -99,14 +149,15 @@ def us_home(
         gain=unrealized,
         return_pct=ret_pct,
         positions=sum(1 for s in stocks if s.CurrentEquity is not None),
+        realized_pl=round(us_realized, 2),
+        cash_balance_ngn=cash_balance_ngn,
     )
 
     price_histories: dict[str, list[SparklinePoint]] = {}
-    if holdings["us"]:
+    if us_holdings:
         from app.db.crud import get_price_history_batch
-        tickers = [h["ticker"] for h in holdings["us"]]
-        batch_data = get_price_history_batch(db, tickers, 90, current_user.id)
-        for t in tickers:
+        batch_data = get_price_history_batch(db, us_tickers, 90, current_user.id)
+        for t in us_tickers:
             rows = batch_data.get(t.upper(), [])
             price_histories[t] = [
                 SparklinePoint(ts=r["ts"], price=r.get("price"), change_pct=r.get("change_pct"))
@@ -124,6 +175,7 @@ def us_home(
             price_age=_yahoo.cache_age(),
         ),
         price_histories=price_histories,
+        div_payout=div_payout,
     )
 
 

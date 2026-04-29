@@ -3,7 +3,7 @@
 import { useState, useMemo, useEffect, useCallback, useRef } from 'react';
 import { usePortfolio } from '@/context/PortfolioContext';
 import Link from 'next/link';
-import { fmtNGN, fmtNGNFull } from '@/utils/formatters';
+import { fmtNGN, fmtNGNFull, fmtUSD } from '@/utils/formatters';
 import { sectorColor } from '@/utils/theme';
 import { fetchDividends } from '@/services/api';
 import type { DividendHolding, DividendsResponse } from '@/models';
@@ -119,6 +119,9 @@ function DividendCard({ h, sector }: { h: DividendHolding; sector?: string }) {
   const hasDividend = div != null;
   const missed = h.qualified === false;
   const sCol = sectorColor(sector ?? '');
+  const isUSD = h.currency === 'USD';
+  const fmt = isUSD ? fmtUSD : fmtNGN;
+  const fmtFull = isUSD ? fmtUSD : fmtNGNFull;
 
   return (
     <div
@@ -163,14 +166,14 @@ function DividendCard({ h, sector }: { h: DividendHolding; sector?: string }) {
         {missed ? (
           <div className="text-right shrink-0">
             <div className="font-mono text-[13px] text-[var(--loss)] line-through leading-none">
-              {div?.cash_amount != null ? fmtNGN(h.shares * div.cash_amount) : '—'}
+              {div?.cash_amount != null ? fmt(h.shares * div.cash_amount) : '—'}
             </div>
             <div className="text-[9px] text-[var(--loss)] mt-0.5">not eligible</div>
           </div>
         ) : h.projected_payout != null ? (
           <div className="text-right shrink-0">
             <div className="font-mono font-bold text-[16px] text-[var(--gain)] leading-none">
-              {fmtNGN(h.projected_payout)}
+              {fmt(h.projected_payout!)}
             </div>
             <div className="text-[9px] text-[var(--ink-4)] mt-0.5">projected payout</div>
           </div>
@@ -198,7 +201,7 @@ function DividendCard({ h, sector }: { h: DividendHolding; sector?: string }) {
                 Cash / Share
               </span>
               <span className="font-mono font-semibold text-[12px] text-[var(--ink)]">
-                {div!.cash_amount != null ? fmtNGNFull(div!.cash_amount) : '—'}
+                {div!.cash_amount != null ? fmtFull(div!.cash_amount) : '—'}
               </span>
             </div>
             <div className="flex flex-col gap-0.5">
@@ -214,7 +217,7 @@ function DividendCard({ h, sector }: { h: DividendHolding; sector?: string }) {
                 Avg Cost
               </span>
               <span className="font-mono text-[12px] text-[var(--ink-2)]">
-                {fmtNGNFull(h.avg_cost)}
+                {fmtFull(h.avg_cost)}
               </span>
             </div>
             {h.yield_on_cost != null && (
@@ -341,8 +344,10 @@ function Timeline({ holdings }: { holdings: DividendHolding[] }) {
 // ─────────────────────────────────────────────────────────────────────────────
 
 type Filter = 'all' | 'upcoming' | 'missed' | 'no-data';
+type Market = 'ngx' | 'us';
 
 export default function DividendsPage() {
+  const [market, setMarket] = useState<Market>('ngx');
   const [filter, setFilter] = useState<Filter>('all');
   const [resp, setResp] = useState<DividendsResponse | null>(null);
   const [loading, setLoading] = useState(true);
@@ -374,28 +379,36 @@ export default function DividendsPage() {
 
   const holdings = resp?.holdings ?? [];
 
+  const marketHoldings = useMemo(
+    () => holdings.filter((h) => (market === 'ngx' ? h.currency !== 'USD' : h.currency === 'USD')),
+    [holdings, market],
+  );
+
   const filtered = useMemo(() => {
     if (filter === 'upcoming')
-      return holdings.filter(
+      return marketHoldings.filter(
         (h) => h.dividend?.pay_date && (daysUntil(h.dividend.pay_date) ?? -1) >= 0 && h.qualified !== false,
       );
-    if (filter === 'missed') return holdings.filter((h) => h.qualified === false);
+    if (filter === 'missed') return marketHoldings.filter((h) => h.qualified === false);
     if (filter === 'no-data')
-      return holdings.filter((h) => {
+      return marketHoldings.filter((h) => {
         const days = daysUntil(h.dividend?.ex_dividend_date ?? null);
         return days != null && days >= 0 && days <= 30;
       });
-    return holdings;
-  }, [holdings, filter]);
+    return marketHoldings;
+  }, [marketHoldings, filter]);
 
-  const upcomingCount = holdings.filter(
+  const upcomingCount = marketHoldings.filter(
     (h) => h.dividend?.pay_date && (daysUntil(h.dividend.pay_date) ?? -1) >= 0 && h.qualified !== false,
   ).length;
-  const missedCount = holdings.filter((h) => h.qualified === false).length;
-  const noDataCount = holdings.filter((h) => {
+  const missedCount = marketHoldings.filter((h) => h.qualified === false).length;
+  const noDataCount = marketHoldings.filter((h) => {
     const days = daysUntil(h.dividend?.ex_dividend_date ?? null);
     return days != null && days >= 0 && days <= 30;
   }).length;
+
+  const ngxCount = holdings.filter((h) => h.currency !== 'USD').length;
+  const usCount = holdings.filter((h) => h.currency === 'USD').length;
 
   return (
     <div className="space-y-5">
@@ -404,7 +417,9 @@ export default function DividendsPage() {
         <div>
           <h1 className="text-[15px] font-semibold text-[var(--ink)]">Dividends</h1>
           <p className="text-[11px] text-[var(--ink-4)] mt-0.5">
-            {loading ? 'Loading…' : `${holdings.length} NGX positions · ${upcomingCount} upcoming`}
+            {loading
+              ? 'Loading…'
+              : `${marketHoldings.length} ${market.toUpperCase()} positions · ${upcomingCount} upcoming`}
           </p>
         </div>
         <button
@@ -434,6 +449,29 @@ export default function DividendsPage() {
         </button>
       </div>
 
+      {/* ── Market tabs ── */}
+      <div className="flex items-center gap-1 border-b border-[var(--border)] pb-0">
+        {(
+          [
+            ['ngx', `NGX (${ngxCount})`],
+            ['us', `US (${usCount})`],
+          ] as [Market, string][]
+        ).map(([m, label]) => (
+          <button
+            key={m}
+            onClick={() => { setMarket(m); setFilter('all'); }}
+            className={[
+              'px-4 py-2 text-[11px] font-semibold transition-all duration-150 border-b-2 -mb-px',
+              market === m
+                ? 'text-[var(--ink)] border-[var(--ink)]'
+                : 'text-[var(--ink-4)] border-transparent hover:text-[var(--ink-3)]',
+            ].join(' ')}
+          >
+            {label}
+          </button>
+        ))}
+      </div>
+
       {/* ── KPI strip ── */}
       {(loading || resp) && (
         <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
@@ -442,20 +480,28 @@ export default function DividendsPage() {
           ) : (
             <>
               {/* Total projected payout */}
-              <div className="kpi-animate card flex flex-col gap-1 px-4 py-3.5">
-                <div className="flex items-center gap-1.5">
-                  <span className="w-1.5 h-1.5 rounded-full shrink-0 bg-[var(--gain)]" />
-                  <span className="text-[10px] font-semibold uppercase tracking-[0.07em] text-[var(--ink-4)]">
-                    Total Payout
-                  </span>
-                </div>
-                <span className="font-mono text-[18px] font-semibold leading-tight mt-0.5 text-[var(--gain)]">
-                  {resp?.total_projected_payout ? fmtNGN(resp.total_projected_payout) : '—'}
-                </span>
-                <span className="text-[10px] text-[var(--ink-4)] font-mono mt-0.5">
-                  from upcoming divs
-                </span>
-              </div>
+              {(() => {
+                const totalPayout = market === 'ngx'
+                  ? resp?.total_projected_payout
+                  : marketHoldings.reduce((s, h) => s + (h.projected_payout ?? 0), 0) || null;
+                const fmtPayout = market === 'us' ? fmtUSD : fmtNGN;
+                return (
+                  <div className="kpi-animate card flex flex-col gap-1 px-4 py-3.5">
+                    <div className="flex items-center gap-1.5">
+                      <span className="w-1.5 h-1.5 rounded-full shrink-0 bg-[var(--gain)]" />
+                      <span className="text-[10px] font-semibold uppercase tracking-[0.07em] text-[var(--ink-4)]">
+                        Total Payout
+                      </span>
+                    </div>
+                    <span className="font-mono text-[18px] font-semibold leading-tight mt-0.5 text-[var(--gain)]">
+                      {totalPayout ? fmtPayout(totalPayout) : '—'}
+                    </span>
+                    <span className="text-[10px] text-[var(--ink-4)] font-mono mt-0.5">
+                      from upcoming divs
+                    </span>
+                  </div>
+                );
+              })()}
 
               {/* Positions paying */}
               <div
@@ -469,10 +515,10 @@ export default function DividendsPage() {
                   </span>
                 </div>
                 <span className="font-mono text-[18px] font-semibold leading-tight mt-0.5 text-[var(--accent)]">
-                  {holdings.filter((h) => h.dividend).length}
+                  {marketHoldings.filter((h) => h.dividend).length}
                   <span className="text-[13px] text-[var(--ink-4)] font-normal">
                     {' '}
-                    / {holdings.length}
+                    / {marketHoldings.length}
                   </span>
                 </span>
                 <span className="text-[10px] text-[var(--ink-4)] font-mono mt-0.5">
@@ -482,7 +528,7 @@ export default function DividendsPage() {
 
               {/* Next pay date */}
               {(() => {
-                const next = holdings.find(
+                const next = marketHoldings.find(
                   (h) => h.dividend?.pay_date && (daysUntil(h.dividend.pay_date) ?? -1) >= 0,
                 );
                 const days = next ? daysUntil(next.dividend!.pay_date) : null;
@@ -509,7 +555,7 @@ export default function DividendsPage() {
 
               {/* Highest yield-on-cost */}
               {(() => {
-                const top = [...holdings]
+                const top = [...marketHoldings]
                   .filter((h) => h.yield_on_cost != null)
                   .sort((a, b) => (b.yield_on_cost ?? 0) - (a.yield_on_cost ?? 0))[0];
                 return (
@@ -536,7 +582,7 @@ export default function DividendsPage() {
               {/* Received this year */}
               {(() => {
                 const currentYear = new Date().getFullYear();
-                const receivedThisYear = holdings
+                const receivedThisYear = marketHoldings
                   .filter((h) => {
                     if (!h.dividend?.pay_date || h.qualified === false) return false;
                     const payDate = new Date(h.dividend.pay_date);
@@ -551,6 +597,7 @@ export default function DividendsPage() {
                       h.dividend!.cash_amount != null ? h.dividend!.cash_amount * h.shares : 0;
                     return sum + amt;
                   }, 0);
+                const fmtReceived = market === 'us' ? fmtUSD : fmtNGN;
                 return (
                   <div
                     className="kpi-animate card flex flex-col gap-1 px-4 py-3.5"
@@ -563,7 +610,7 @@ export default function DividendsPage() {
                       </span>
                     </div>
                     <span className="font-mono text-[18px] font-semibold leading-tight mt-0.5 text-[var(--purple,#8b5cf6)]">
-                      {receivedThisYear > 0 ? fmtNGN(receivedThisYear) : '—'}
+                      {receivedThisYear > 0 ? fmtReceived(receivedThisYear) : '—'}
                     </span>
                     <span className="text-[10px] text-[var(--ink-4)] font-mono mt-0.5">
                       paid out this year
@@ -576,8 +623,9 @@ export default function DividendsPage() {
         </div>
       )}
 
-      {/* ── DRIP Projection ── */}
+      {/* ── DRIP Projection (NGX only) ── */}
       {!loading &&
+        market === 'ngx' &&
         resp?.portfolio_drip &&
         (() => {
           const d = resp.portfolio_drip;
@@ -626,13 +674,13 @@ export default function DividendsPage() {
         })()}
 
       {/* ── Timeline ── */}
-      {!loading && <Timeline holdings={holdings} />}
+      {!loading && <Timeline holdings={marketHoldings} />}
 
       {/* ── Filter tabs ── */}
       <div className="flex items-center gap-1 border-b border-[var(--border)] pb-0">
         {(
           [
-            ['all', `All (${holdings.length})`],
+            ['all', `All (${marketHoldings.length})`],
             ['upcoming', `Upcoming (${upcomingCount})`],
             ['missed', `Missed (${missedCount})`],
             ['no-data', `Upcoming ex-date (${noDataCount})`],
