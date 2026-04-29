@@ -13,3 +13,4 @@ slowapi>=0.1.9
 alembic==1.13.1
 psycopg[binary]>=3.1
 anthropic>=0.40.0
+yfinance>=0.2.50

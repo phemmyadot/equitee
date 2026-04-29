@@ -1,11 +1,11 @@
 """
 Yahoo Finance Service
 =====================
-Fetches real-time US stock prices and fundamentals from Yahoo Finance public APIs.
+Fetches real-time US stock prices and fundamentals from Yahoo Finance.
 
 Endpoints used:
   Chart (price + history): https://query1.finance.yahoo.com/v8/finance/chart/{ticker}
-  Fundamentals:            https://query1.finance.yahoo.com/v10/finance/quoteSummary/{ticker}
+  Fundamentals:            yfinance library (handles crumb/cookie auth automatically)
 
 No API key required.
 """
@@ -116,21 +116,10 @@ def cache_age() -> Optional[int]:
 
 # ── Fundamentals ───────────────────────────────────────────────────────────────
 
-def _rv(obj: dict, key: str):
-    """Extract raw numeric value from Yahoo's {raw: X, fmt: Y} wrapper."""
-    v = obj.get(key)
-    if v is None:
-        return None
-    if isinstance(v, dict):
-        return v.get("raw")
-    return v
-
-
 def get_fundamentals(ticker: str) -> Optional[dict]:
     """
-    Fetch fundamentals from Yahoo quoteSummary.
-    Returns a dict with 'profile', 'overview', and 'performance' sub-dicts
-    matching the TickerFullResponse shape used by the NGX profile endpoint.
+    Fetch fundamentals via the yfinance library (handles Yahoo auth automatically).
+    Returns a dict with 'profile', 'overview', and 'performance' sub-dicts.
     Cached for FUND_TTL seconds.
     """
     now = time.time()
@@ -138,105 +127,107 @@ def get_fundamentals(ticker: str) -> Optional[dict]:
     if cached and (now - cached["ts"]) < FUND_TTL:
         return cached["data"]
 
-    modules = "summaryProfile,defaultKeyStatistics,financialData,summaryDetail"
-    url = f"https://query1.finance.yahoo.com/v10/finance/quoteSummary/{ticker}?modules={modules}"
     try:
-        body = _req(url, timeout=12)
-        result = (body.get("quoteSummary", {}).get("result") or [None])[0]
-        if not result:
-            log.warning(f"[Yahoo fundamentals] {ticker}: empty result")
-            return None
+        import yfinance as yf
+        info = yf.Ticker(ticker).info or {}
     except Exception as exc:
         log.warning(f"[Yahoo fundamentals] {ticker} failed: {exc}")
         return None
 
-    sp = result.get("summaryProfile") or {}
-    ks = result.get("defaultKeyStatistics") or {}
-    fd = result.get("financialData") or {}
-    sd = result.get("summaryDetail") or {}
-    financial_currency = fd.get("financialCurrency") or sd.get("currency")
+    if not info or info.get("trailingPE") is None and info.get("marketCap") is None:
+        log.warning(f"[Yahoo fundamentals] {ticker}: empty or stub info")
 
-    # ── Profile ────────────────────────────────────────────────────────────
+    def _pct(key: str) -> Optional[float]:
+        """Convert a decimal fraction to percentage (0.35 → 35.0)."""
+        v = info.get(key)
+        return round(float(v) * 100, 4) if v is not None else None
+
+    def _val(key: str):
+        v = info.get(key)
+        return float(v) if v is not None else None
+
+    def _ex_date() -> Optional[str]:
+        ts = info.get("exDividendDate")
+        if not ts:
+            return None
+        try:
+            return datetime.fromtimestamp(int(ts), tz=timezone.utc).strftime("%Y-%m-%d")
+        except Exception:
+            return None
+
+    city = info.get("city") or ""
+    country = info.get("country") or ""
+    hq = f"{city}, {country}".strip(", ") or None
+
     profile = {
         "symbol": ticker,
-        "name": None,  # filled by price endpoint
-        "sector": sp.get("sector"),
-        "industry": sp.get("industry"),
-        "website": sp.get("website"),
-        "description": sp.get("longBusinessSummary"),
-        "headquarters": f"{sp.get('city', '')}, {sp.get('country', '')}".strip(", ") or None,
+        "name": info.get("longName") or info.get("shortName"),
+        "sector": info.get("sector"),
+        "industry": info.get("industry"),
+        "website": info.get("website"),
+        "description": info.get("longBusinessSummary"),
+        "headquarters": hq,
         "founded": None,
-        "employees": str(sp["fullTimeEmployees"]) if sp.get("fullTimeEmployees") else None,
+        "employees": str(info["fullTimeEmployees"]) if info.get("fullTimeEmployees") else None,
     }
 
-    def pct(key_obj, key):
-        """Extract a Yahoo decimal fraction and convert to percentage (0.35 → 35)."""
-        v = _rv(key_obj, key)
-        return round(v * 100, 4) if v is not None else None
-
-    # ── Overview (fundamentals) ────────────────────────────────────────────
-    mc = _rv(sd, "marketCap") or _rv(ks, "enterpriseValue")
     overview = {
-        "market_cap": mc,
-        "pe_ratio": _rv(sd, "trailingPE") or _rv(ks, "forwardPE"),
-        "eps": _rv(ks, "trailingEps"),
-        "dividend_yield": pct(sd, "dividendYield"),   # 0.0047 → 0.47 %
-        "roe": pct(fd, "returnOnEquity"),              # 1.47  → 147 %
-        "debt_to_equity": _rv(fd, "debtToEquity"),    # already %-like (195)
-        "book_value": _rv(ks, "bookValue"),
-        "current_ratio": _rv(fd, "currentRatio"),
-        "gross_margin": pct(fd, "grossMargins"),       # 0.458 → 45.8 %
-        "net_margin": pct(fd, "profitMargins"),        # 0.231 → 23.1 %
-        "revenue": _rv(fd, "totalRevenue"),
-        "net_income": _rv(fd, "netIncomeToCommon"),
-        # Extra fields useful for US signal + display
-        "forward_pe": _rv(sd, "forwardPE"),
-        "payout_ratio": pct(sd, "payoutRatio"),        # 0.15 → 15 %
-        "dividend_rate": _rv(sd, "dividendRate"),
-        "ex_dividend_date": (sd.get("exDividendDate") or {}).get("fmt"),
-        "quick_ratio": _rv(fd, "quickRatio"),
-        "operating_margin": pct(fd, "operatingMargins"),
-        "ebitda_margin": pct(fd, "ebitdaMargins"),
-        "total_cash": _rv(fd, "totalCash"),
-        "total_debt": _rv(fd, "totalDebt"),
-        "free_cash_flow": _rv(fd, "freeCashflow"),
-        "operating_cash_flow": _rv(fd, "operatingCashflow"),
-        "recommendation": fd.get("recommendationKey"),
-        "analyst_count": _rv(fd, "numberOfAnalystOpinions"),
-        "target_mean": _rv(fd, "targetMeanPrice"),
-        "target_high": _rv(fd, "targetHighPrice"),
-        "target_low": _rv(fd, "targetLowPrice"),
-        "enterprise_value": _rv(ks, "enterpriseValue"),
-        "ev_ebitda": _rv(ks, "enterpriseToEbitda"),
-        "ev_revenue": _rv(ks, "enterpriseToRevenue"),
-        "price_to_book": _rv(ks, "priceToBook"),
-        "shares_outstanding": _rv(ks, "sharesOutstanding"),
-        "revenue_growth": pct(fd, "revenueGrowth"),    # 0.04 → 4 %
-        "earnings_growth": pct(fd, "earningsGrowth"),  # 0.10 → 10 %
-        "roa": pct(fd, "returnOnAssets"),              # 0.22 → 22 %
+        "market_cap": _val("marketCap"),
+        "pe_ratio": _val("trailingPE"),
+        "eps": _val("trailingEps"),
+        "dividend_yield": _pct("dividendYield"),      # 0.007 → 0.7 %
+        "roe": _pct("returnOnEquity"),                 # 0.25 → 25 %
+        "debt_to_equity": _val("debtToEquity"),
+        "book_value": _val("bookValue"),
+        "current_ratio": _val("currentRatio"),
+        "gross_margin": _pct("grossMargins"),
+        "net_margin": _pct("profitMargins"),
+        "revenue": _val("totalRevenue"),
+        "net_income": _val("netIncomeToCommon"),
+        "forward_pe": _val("forwardPE"),
+        "payout_ratio": _pct("payoutRatio"),
+        "dividend_rate": _val("dividendRate"),
+        "ex_dividend_date": _ex_date(),
+        "quick_ratio": _val("quickRatio"),
+        "operating_margin": _pct("operatingMargins"),
+        "ebitda_margin": _pct("ebitdaMargins"),
+        "total_cash": _val("totalCash"),
+        "total_debt": _val("totalDebt"),
+        "free_cash_flow": _val("freeCashflow"),
+        "operating_cash_flow": _val("operatingCashflow"),
+        "recommendation": info.get("recommendationKey"),
+        "analyst_count": _val("numberOfAnalystOpinions"),
+        "target_mean": _val("targetMeanPrice"),
+        "target_high": _val("targetHighPrice"),
+        "target_low": _val("targetLowPrice"),
+        "enterprise_value": _val("enterpriseValue"),
+        "ev_ebitda": _val("enterpriseToEbitda"),
+        "ev_revenue": _val("enterpriseToRevenue"),
+        "price_to_book": _val("priceToBook"),
+        "shares_outstanding": _val("sharesOutstanding"),
+        "revenue_growth": _pct("revenueGrowth"),
+        "earnings_growth": _pct("earningsGrowth"),
+        "roa": _pct("returnOnAssets"),
     }
 
-    # ── Performance (returns / technical) ─────────────────────────────────
-    w52h = _rv(sd, "fiftyTwoWeekHigh") or _rv(ks, "fiftyTwoWeekHigh")
-    w52l = _rv(sd, "fiftyTwoWeekLow") or _rv(ks, "fiftyTwoWeekLow")
     performance = {
-        "beta": _rv(ks, "beta"),
-        "week_52_high": w52h,
-        "week_52_low": w52l,
-        "week_52_change": pct(ks, "52WeekChange"),     # 0.35 → 35 %
-        "ma_50": _rv(sd, "fiftyDayAverage"),
-        "ma_200": _rv(sd, "twoHundredDayAverage"),
-        "return_1y": pct(ks, "52WeekChange"),          # same as week_52_change
+        "beta": _val("beta"),
+        "week_52_high": _val("fiftyTwoWeekHigh"),
+        "week_52_low": _val("fiftyTwoWeekLow"),
+        "week_52_change": _pct("fiftyTwoWeekChange"),  # fraction → %
+        "ma_50": _val("fiftyDayAverage"),
+        "ma_200": _val("twoHundredDayAverage"),
+        "return_1y": _pct("fiftyTwoWeekChange"),
     }
 
     data = {
         "profile": profile,
         "overview": overview,
         "performance": performance,
-        "financial_currency": financial_currency,
+        "financial_currency": info.get("financialCurrency"),
     }
     _fund_cache[ticker] = {"data": data, "ts": now}
-    log.info(f"[Yahoo fundamentals] {ticker} cached")
+    log.info(f"[Yahoo fundamentals] {ticker} cached via yfinance")
     return data
 
 

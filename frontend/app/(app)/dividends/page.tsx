@@ -140,7 +140,7 @@ function DividendCard({ h, sector }: { h: DividendHolding; sector?: string }) {
           <div>
             <div className="flex items-center gap-2 flex-wrap">
               <Link
-                href={`/ngx/profile?ticker=${h.ticker}`}
+                href={`/${h.currency === 'USD' ? 'us' : 'ngx'}/profile?ticker=${h.ticker}`}
                 className="font-mono font-bold text-[13px] text-[var(--ink)] hover:text-[var(--accent)] transition-colors"
               >
                 {h.ticker}
@@ -249,7 +249,7 @@ function DividendCard({ h, sector }: { h: DividendHolding; sector?: string }) {
         <p className="text-[11px] text-[var(--ink-4)] pt-2 border-t border-[var(--border)]">
           No upcoming dividend found for {h.ticker}.
           <Link
-            href={`/ngx/profile?ticker=${h.ticker}`}
+            href={`/${h.currency === 'USD' ? 'us' : 'ngx'}/profile?ticker=${h.ticker}`}
             className="ml-1.5 text-[var(--accent)] hover:underline"
           >
             View profile →
@@ -309,7 +309,7 @@ function Timeline({ holdings }: { holdings: DividendHolding[] }) {
                 <div className="flex-1 flex items-center justify-between gap-3 min-w-0">
                   <div className="flex items-center gap-2 min-w-0">
                     <Link
-                      href={`/ngx/profile?ticker=${h.ticker}`}
+                      href={`/${h.currency === 'USD' ? 'us' : 'ngx'}/profile?ticker=${h.ticker}`}
                       className="font-mono font-bold text-[12px] text-[var(--ink)] hover:text-[var(--accent)] transition-colors shrink-0"
                     >
                       {h.ticker}

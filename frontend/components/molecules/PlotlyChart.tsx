@@ -18,6 +18,8 @@ const Plot = dynamic(() => import('react-plotly.js'), {
   layout: Partial<Plotly.Layout>;
   config: Partial<Plotly.Config>;
   style: React.CSSProperties;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  onClick?: (event: any) => void;
 }>;
 
 interface PlotlyChartProps {
@@ -26,10 +28,23 @@ interface PlotlyChartProps {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   layout?: Record<string, any>;
   height?: number;
+  onClickPoint?: (x: string) => void;
 }
 
-export default function PlotlyChart({ data, layout = {}, height = 320 }: PlotlyChartProps) {
+export default function PlotlyChart({ data, layout = {}, height = 320, onClickPoint }: PlotlyChartProps) {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const handleClick = onClickPoint ? (event: any) => {
+    const x = event?.points?.[0]?.x;
+    if (x != null) onClickPoint(String(x));
+  } : undefined;
+
   return (
-    <Plot data={data} layout={layout} config={PLOTLY_CONFIG} style={{ width: '100%', height }} />
+    <Plot
+      data={data}
+      layout={layout}
+      config={PLOTLY_CONFIG}
+      style={{ width: '100%', height }}
+      onClick={handleClick}
+    />
   );
 }

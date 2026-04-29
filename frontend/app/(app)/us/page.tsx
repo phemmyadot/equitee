@@ -1,6 +1,8 @@
 'use client';
 
 import { useState, useEffect, useRef, useCallback } from 'react';
+import { useRouter } from 'next/navigation';
+import Link from 'next/link';
 import { usePortfolio } from '@/context/PortfolioContext';
 import { fetchUSHome } from '@/services/api';
 import KPICard from '@/components/molecules/KPICard';
@@ -26,6 +28,11 @@ export default function USPortfolioPage() {
   const [loading, setLoading] = useState(true);
   const hasFetched = useRef(false);
   const { refreshKey } = usePortfolio();
+  const router = useRouter();
+
+  const goToTicker = useCallback((ticker: string) => {
+    router.push(`/us/profile?ticker=${ticker}`);
+  }, [router]);
 
   const load = useCallback(() => {
     setLoading(true);
@@ -139,7 +146,12 @@ export default function USPortfolioPage() {
       key: 'Ticker',
       label: 'Ticker',
       render: (v) => (
-        <span className="font-mono font-semibold text-[var(--ink)] text-[11px]">{v}</span>
+        <Link
+          href={`/us/profile?ticker=${v}`}
+          className="font-mono font-semibold text-[var(--accent)] hover:underline text-[11px]"
+        >
+          {v}
+        </Link>
       ),
     },
     {
@@ -363,6 +375,7 @@ export default function USPortfolioPage() {
             data={[equityBar]}
             layout={plotlyLayout({ margin: { t: 8, b: 56, l: 60, r: 8 } })}
             height={280}
+            onClickPoint={goToTicker}
           />
         </ChartCard>
         <ChartCard title="Sector Allocation" loading={isFirstLoad} height={280}>
@@ -387,6 +400,7 @@ export default function USPortfolioPage() {
               yaxis: { ticksuffix: '%', zerolinecolor: COLORS['border-strong'] },
             })}
             height={280}
+            onClickPoint={goToTicker}
           />
         </ChartCard>
         <ChartCard title="Cost Basis vs Value" loading={isFirstLoad} height={280}>
@@ -394,6 +408,7 @@ export default function USPortfolioPage() {
             data={costBasisBar}
             layout={plotlyLayout({ barmode: 'stack', margin: { t: 8, b: 56, l: 60, r: 8 } })}
             height={280}
+            onClickPoint={goToTicker}
           />
         </ChartCard>
       </div>
